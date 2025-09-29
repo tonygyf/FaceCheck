@@ -1,6 +1,9 @@
 package com.example.facecheck.activities;
 
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -13,6 +16,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.facecheck.R;
+import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.CryptoUtils;
 
 public class RegisterActivity extends AppCompatActivity {
 
@@ -20,11 +25,15 @@ public class RegisterActivity extends AppCompatActivity {
     private Button registerButton;
     private TextView loginTextView;
     private ProgressBar progressBar;
+    private DatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
+
+        // 初始化数据库
+        dbHelper = new DatabaseHelper(this);
 
         // 初始化视图
         nameEditText = findViewById(R.id.nameEditText);
@@ -95,24 +104,54 @@ public class RegisterActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         registerButton.setEnabled(false);
 
-        // 模拟注册过程（这里应该连接到你的后端API）
-        // 模拟网络请求延迟
-        new android.os.Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                // 隐藏进度条
-                progressBar.setVisibility(View.GONE);
-                registerButton.setEnabled(true);
-                
-                // 注册成功
-                Toast.makeText(RegisterActivity.this, "注册成功！请登录", Toast.LENGTH_SHORT).show();
-                
-                // 返回登录页面
-                Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                finish();
-            }
-        }, 2000); // 2秒延迟模拟网络请求
+        // 检查邮箱是否已注册
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor cursor = db.query(
+            "Teacher",
+            new String[]{"id"},
+            "email = ?",
+            new String[]{email},
+            null, null, null);
+
+        if (cursor != null && cursor.moveToFirst()) {
+            cursor.close();
+            progressBar.setVisibility(View.GONE);
+            registerButton.setEnabled(true);
+            emailEditText.setError("该邮箱已注册");
+            return;
+        }
+        if (cursor != null) {
+            cursor.close();
+        }
+
+        // 生成 WebDAV 密钥
+        String davKey = CryptoUtils.generateRandomKey();
+        String davKeyEnc = CryptoUtils.encryptWithPassword(davKey, password);
+
+        // 创建新用户
+        ContentValues values = new ContentValues();
+        values.put("name", name);
+        values.put("email", email);
+        values.put("davUrl", "");  // 初始为空
+        values.put("davUser", "");  // 初始为空
+        values.put("davKeyEnc", davKeyEnc);
+
+        long teacherId = dbHelper.getWritableDatabase().insert("Teacher", null, values);
+        if (teacherId != -1) {
+            // 注册成功
+            progressBar.setVisibility(View.GONE);
+            Toast.makeText(RegisterActivity.this, "注册成功！请登录", Toast.LENGTH_SHORT).show();
+            
+            // 返回登录页面
+            Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            finish();
+        } else {
+            // 注册失败
+            progressBar.setVisibility(View.GONE);
+            registerButton.setEnabled(true);
+            Toast.makeText(RegisterActivity.this, "注册失败，请重试", Toast.LENGTH_SHORT).show();
+        }
     }
 }

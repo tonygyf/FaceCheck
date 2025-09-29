@@ -1,6 +1,7 @@
 package com.example.facecheck.activities;
 
 import android.content.Intent;
+import android.database.Cursor;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -13,6 +14,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.facecheck.R;
+import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.CryptoUtils;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -20,11 +23,15 @@ public class LoginActivity extends AppCompatActivity {
     private Button loginButton;
     private TextView registerTextView;
     private ProgressBar progressBar;
+    private DatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+
+        // 初始化数据库
+        dbHelper = new DatabaseHelper(this);
 
         // 初始化视图
         emailEditText = findViewById(R.id.emailEditText);
@@ -76,23 +83,47 @@ public class LoginActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         loginButton.setEnabled(false);
 
-        // 模拟登录过程（这里应该连接到你的后端API）
-        // 暂时使用简单的验证逻辑
-        if (email.equals("test@example.com") && password.equals("123456")) {
-            // 登录成功
-            progressBar.setVisibility(View.GONE);
-            Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
+        // 查询数据库验证用户
+        Cursor cursor = dbHelper.getReadableDatabase().query(
+            "Teacher",
+            new String[]{"id", "name", "email", "davKeyEnc"},
+            "email = ?",
+            new String[]{email},
+            null, null, null);
+
+        if (cursor != null && cursor.moveToFirst()) {
+            long teacherId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+            String davKeyEnc = cursor.getString(cursor.getColumnIndexOrThrow("davKeyEnc"));
             
-            // 跳转到主页面
-            Intent intent = new Intent(LoginActivity.this, com.example.facecheck.MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
+            // 验证密码
+            String decryptedKey = CryptoUtils.decryptWithPassword(davKeyEnc, password);
+            if (decryptedKey != null) {
+                // 登录成功
+                cursor.close();
+                progressBar.setVisibility(View.GONE);
+                Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
+                
+                // 跳转到主页面
+                Intent intent = new Intent(LoginActivity.this, com.example.facecheck.JavaMainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.putExtra("teacher_id", teacherId);
+                startActivity(intent);
+                finish();
+            } else {
+                // 密码错误
+                cursor.close();
+                progressBar.setVisibility(View.GONE);
+                loginButton.setEnabled(true);
+                Toast.makeText(LoginActivity.this, "密码错误", Toast.LENGTH_SHORT).show();
+            }
         } else {
-            // 登录失败
+            // 用户不存在
+            if (cursor != null) {
+                cursor.close();
+            }
             progressBar.setVisibility(View.GONE);
             loginButton.setEnabled(true);
-            Toast.makeText(LoginActivity.this, "邮箱或密码错误", Toast.LENGTH_SHORT).show();
+            Toast.makeText(LoginActivity.this, "用户不存在", Toast.LENGTH_SHORT).show();
         }
     }
 }
