@@ -8,6 +8,7 @@ public class AttendanceResult {
     private float score;
     private String decidedBy; // AUTO, TEACHER
     private long decidedAt;
+    private Student student;
 
     public AttendanceResult() {
         this.decidedAt = System.currentTimeMillis();
@@ -20,6 +21,16 @@ public class AttendanceResult {
         this.status = status;
         this.score = score;
         this.decidedBy = decidedBy;
+    }
+
+    public AttendanceResult(long id, long sessionId, long studentId, String status, float score, String decidedBy, long decidedAt) {
+        this.id = id;
+        this.sessionId = sessionId;
+        this.studentId = studentId;
+        this.status = status;
+        this.score = score;
+        this.decidedBy = decidedBy;
+        this.decidedAt = decidedAt;
     }
 
     public long getId() {
@@ -76,5 +87,13 @@ public class AttendanceResult {
 
     public void setDecidedAt(long decidedAt) {
         this.decidedAt = decidedAt;
+    }
+
+    public Student getStudent() {
+        return student;
+    }
+
+    public void setStudent(Student student) {
+        this.student = student;
     }
 }

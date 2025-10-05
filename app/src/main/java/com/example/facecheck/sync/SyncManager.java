@@ -35,27 +35,25 @@ public class SyncManager {
         }
 
         // 2. 处理待同步的日志
-        List<Cursor> pendingLogs = dbHelper.getPendingSyncLogs();
-        for (Cursor cursor : pendingLogs) {
-            if (cursor.moveToFirst()) {
-                do {
-                    long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                    String entity = cursor.getString(cursor.getColumnIndexOrThrow("entity"));
-                    long entityId = cursor.getLong(cursor.getColumnIndexOrThrow("entityId"));
-                    String op = cursor.getString(cursor.getColumnIndexOrThrow("op"));
-                    
-                    // 根据实体类型和操作类型执行同步
-                    boolean success = syncEntity(entity, entityId, op);
-                    
-                    // 更新同步状态
-                    if (success) {
-                        dbHelper.updateSyncLogStatus(id, "COMPLETED");
-                    } else {
-                        dbHelper.updateSyncLogStatus(id, "FAILED");
-                    }
-                } while (cursor.moveToNext());
-            }
-            cursor.close();
+        Cursor pendingLogs = dbHelper.getPendingSyncLogs();
+        if (pendingLogs != null && pendingLogs.moveToFirst()) {
+            do {
+                long id = pendingLogs.getLong(pendingLogs.getColumnIndexOrThrow("id"));
+                String entity = pendingLogs.getString(pendingLogs.getColumnIndexOrThrow("entity"));
+                long entityId = pendingLogs.getLong(pendingLogs.getColumnIndexOrThrow("entityId"));
+                String op = pendingLogs.getString(pendingLogs.getColumnIndexOrThrow("op"));
+                
+                // 根据实体类型和操作类型执行同步
+                boolean success = syncEntity(entity, entityId, op);
+                
+                // 更新同步状态
+                if (success) {
+                    dbHelper.updateSyncLogStatus(id, "COMPLETED");
+                } else {
+                    dbHelper.updateSyncLogStatus(id, "FAILED");
+                }
+            } while (pendingLogs.moveToNext());
+            pendingLogs.close();
         }
 
         // 3. 同步数据库文件

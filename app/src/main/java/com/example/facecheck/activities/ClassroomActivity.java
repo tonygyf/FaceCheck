@@ -112,23 +112,21 @@ public class ClassroomActivity extends AppCompatActivity {
     }
 
     private void loadStudents() {
-        List<Cursor> cursors = dbHelper.getStudentsByClass(classroomId);
+        Cursor cursor = dbHelper.getStudentsByClass(classroomId);
         List<Student> students = new ArrayList<>();
         
-        for (Cursor cursor : cursors) {
-            if (cursor.moveToFirst()) {
-                do {
-                    long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                    String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                    String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
-                    String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
-                    String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                    long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
-                    
-                    Student student = new Student(id, classroomId, name, sid, gender, avatarUri, createdAt);
-                    students.add(student);
-                } while (cursor.moveToNext());
-            }
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
+                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
+                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
+                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                
+                Student student = new Student(id, classroomId, name, sid, gender, avatarUri, createdAt);
+                students.add(student);
+            } while (cursor.moveToNext());
             cursor.close();
         }
         
@@ -160,8 +158,7 @@ public class ClassroomActivity extends AppCompatActivity {
                    }
                    
                    String avatarUri = currentPhotoUri != null ? currentPhotoUri.toString() : "";
-                   long studentId = dbHelper.insertStudent(classroomId, name, sid, gender, avatarUri, 
-                       System.currentTimeMillis());
+                   long studentId = dbHelper.insertStudent(classroomId, name, sid, gender, avatarUri);
                    
                    if (studentId != -1) {
                        // 添加同步日志

@@ -115,8 +115,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void createAttendanceSession() {
         // 创建考勤会话
-        sessionId = dbHelper.insertAttendanceSession(classroomId, System.currentTimeMillis(), 
-            "", "", "");
+        sessionId = dbHelper.insertAttendanceSession(classroomId, "", "", "");
             
         if (sessionId != -1) {
             // 添加同步日志

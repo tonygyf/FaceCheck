@@ -111,21 +111,19 @@ public class TeacherActivity extends AppCompatActivity {
     }
 
     private void loadClassrooms() {
-        List<Cursor> cursors = dbHelper.getClassroomsByTeacher(teacherId);
+        Cursor cursor = dbHelper.getClassroomsByTeacher(teacherId);
         List<Classroom> classrooms = new ArrayList<>();
         
-        for (Cursor cursor : cursors) {
-            if (cursor.moveToFirst()) {
-                do {
-                    long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                    String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                    int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
-                    String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
-                    
-                    Classroom classroom = new Classroom(id, teacherId, name, year, meta);
-                    classrooms.add(classroom);
-                } while (cursor.moveToNext());
-            }
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
+                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
+                
+                Classroom classroom = new Classroom(id, teacherId, name, year, meta);
+                classrooms.add(classroom);
+            } while (cursor.moveToNext());
             cursor.close();
         }
         

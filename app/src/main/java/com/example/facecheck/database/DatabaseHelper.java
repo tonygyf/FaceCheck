@@ -95,7 +95,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.insert("Classroom", null, values);
     }
 
-    public List<Cursor> getClassroomsByTeacher(long teacherId) {
+    public Cursor getClassroomsByTeacher(long teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("Classroom", null, "teacherId = ?", 
             new String[]{String.valueOf(teacherId)}, null, null, "year DESC, name");
@@ -113,10 +113,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.insert("Student", null, values);
     }
 
-    public List<Cursor> getStudentsByClass(long classId) {
+    public Cursor getStudentsByClass(long classId) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("Student", null, "classId = ?", 
             new String[]{String.valueOf(classId)}, null, null, "name");
+    }
+
+    public Cursor getStudentById(long studentId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query("Student", null, "id = ?", 
+            new String[]{String.valueOf(studentId)}, null, null, null);
     }
 
     // 人脸特征相关操作
@@ -130,7 +136,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.insert("FaceEmbedding", null, values);
     }
 
-    public List<Cursor> getFaceEmbeddingsByStudent(long studentId) {
+    public Cursor getFaceEmbeddingsByStudent(long studentId) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("FaceEmbedding", null, "studentId = ?", 
             new String[]{String.valueOf(studentId)}, null, null, "quality DESC");
@@ -170,6 +176,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             new String[]{String.valueOf(id)}) > 0;
     }
 
+    public Cursor getAttendanceResultsBySession(long sessionId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query("AttendanceResult", null, "sessionId = ?", 
+            new String[]{String.valueOf(sessionId)}, null, null, "decidedAt DESC");
+    }
+
     // 照片资源相关操作
     public long insertPhotoAsset(long sessionId, String type, String uri, String meta) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -193,7 +205,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.insert("SyncLog", null, values);
     }
 
-    public List<Cursor> getPendingSyncLogs() {
+    public Cursor getPendingSyncLogs() {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("SyncLog", null, "status = ?", 
             new String[]{"PENDING"}, null, null, "ts ASC");

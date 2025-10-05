@@ -89,7 +89,9 @@ public class WebDavManager {
             }
 
             FileInputStream fis = new FileInputStream(localFile);
-            sardine.put(serverUrl + remotePath, fis);
+            byte[] data = new byte[(int) localFile.length()];
+            fis.read(data);
+            sardine.put(serverUrl + remotePath, data, "application/octet-stream");
             fis.close();
             return true;
         } catch (IOException e) {

@@ -1,8 +1,10 @@
 package com.example.facecheck.activities;
 
 import android.app.AlertDialog;
+import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -292,10 +294,11 @@ public class UserProfileActivity extends AppCompatActivity {
         // 当前仅显示新头像，不保存到数据库
         
         // 同步到WebDAV（如果启用）
-        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-            // 同步头像文件到WebDAV
-            syncProfileImageToWebDav();
-        }
+        // Teacher模型没有头像字段，不同步头像文件
+        // if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
+        //     // 同步头像文件到WebDAV
+        //     syncProfileImageToWebDav();
+        // }
     }
 
     private void showChangeUsernameDialog() {
@@ -407,7 +410,7 @@ public class UserProfileActivity extends AppCompatActivity {
             statusTextView.setText("正在测试连接...");
             
             // 创建临时WebDAV管理器进行测试
-            WebDavManager tempManager = new WebDavManager(url, username, password, "facecheck");
+            WebDavManager tempManager = new WebDavManager(this, url, username, password);
             
             // 在后台线程中测试连接
             new Thread(() -> {
@@ -432,7 +435,7 @@ public class UserProfileActivity extends AppCompatActivity {
         cancelButton.setOnClickListener(v -> {
             dialog.dismiss();
             // 如果是首次启用WebDAV但取消了配置，将开关切回关闭状态
-            if (!currentUser.isWebDavEnabled()) {
+            if (currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty()) {
                 webDavSwitch.setChecked(false);
             }
         });
@@ -486,10 +489,10 @@ public class UserProfileActivity extends AppCompatActivity {
             currentTeacher.getDavUser() != null && !currentTeacher.getDavUser().isEmpty() &&
             currentTeacher.getDavKeyEnc() != null && !currentTeacher.getDavKeyEnc().isEmpty()) {
             webDavManager = new WebDavManager(
+                this,
                 currentTeacher.getDavUrl(),
                 currentTeacher.getDavUser(),
-                currentTeacher.getDavKeyEnc(),
-                "facecheck"
+                currentTeacher.getDavKeyEnc()
             );
         }
     }
@@ -509,7 +512,7 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void syncWithWebDav() {
-        if (webDavManager == null || !currentUser.isWebDavEnabled()) {
+        if (webDavManager == null || currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty()) {
             Toast.makeText(this, "WebDAV未配置", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -524,7 +527,7 @@ public class UserProfileActivity extends AppCompatActivity {
             // 测试连接
             if (webDavManager.testConnection()) {
                 // 初始化文件夹结构
-                if (webDavManager.initializeFolderStructure()) {
+                if (webDavManager.initializeDirectoryStructure()) {
                     // 同步数据库文件
                     // 这里需要实现数据库同步逻辑
                     // ...
