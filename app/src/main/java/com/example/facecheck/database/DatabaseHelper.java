@@ -8,52 +8,118 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
-    private static final String DATABASE_NAME = "facecheck.db";
+    private static final String DATABASE_NAME = "fc.db";
     private static final int DATABASE_VERSION = 1;
-    
-    private final Context context;
+    private Context context;
 
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         this.context = context;
+        
+        // 检查数据库是否存在，如果不存在则从assets复制
+        File dbFile = context.getDatabasePath(DATABASE_NAME);
+        if (!dbFile.exists()) {
+            copyDatabaseFromAssets();
+        }
+    }
+    
+    private boolean copyDatabaseFromAssets() {
+        try {
+            // 创建目标目录
+            File dbDir = context.getDatabasePath(DATABASE_NAME).getParentFile();
+            if (!dbDir.exists()) {
+                dbDir.mkdirs();
+            }
+            
+            // 尝试从assets复制fc.db
+            try {
+                InputStream inputStream = context.getAssets().open(DATABASE_NAME);
+                File outFile = context.getDatabasePath(DATABASE_NAME);
+                FileOutputStream outputStream = new FileOutputStream(outFile);
+                
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, length);
+                }
+                
+                outputStream.flush();
+                outputStream.close();
+                inputStream.close();
+                return true;
+            } catch (IOException e) {
+                // 如果fc.db不存在，则回退到使用schema.sql创建数据库
+                Log.e(TAG, "复制fc.db失败，将使用schema.sql创建数据库", e);
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "初始化数据库失败", e);
+            return false;
+        }
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         try {
-            // 从assets中读取schema.sql文件
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(context.getAssets().open("schema.sql"))
-            );
+            // 复制assets中的fc.db到应用数据库
+            android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(":memory:", null).close();
+            context.getDatabasePath(DATABASE_NAME).getParentFile().mkdirs();
             
-            StringBuilder sql = new StringBuilder();
-            String line;
-            
-            // 读取文件内容
-            while ((line = reader.readLine()) != null) {
-                // 跳过注释和空行
-                if (line.startsWith("--") || line.trim().isEmpty()) {
-                    continue;
+            // 如果数据库不存在，则从assets复制
+            if (!context.getDatabasePath(DATABASE_NAME).exists()) {
+                java.io.InputStream inputStream = context.getAssets().open("fc.db");
+                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(context.getDatabasePath(DATABASE_NAME));
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, length);
                 }
-                sql.append(line);
-                
-                // 如果是完整的SQL语句，则执行
-                if (line.trim().endsWith(";")) {
-                    db.execSQL(sql.toString());
-                    sql.setLength(0);
-                }
+                outputStream.flush();
+                outputStream.close();
+                inputStream.close();
+                Log.d(TAG, "Database copied from assets");
             }
-            
-            reader.close();
         } catch (IOException e) {
-            Log.e(TAG, "Error reading schema.sql", e);
+            // 如果复制失败，则使用schema.sql创建
+            Log.e(TAG, "Error copying database, falling back to schema.sql", e);
+            try {
+                // 从assets中读取schema.sql文件
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(context.getAssets().open("schema.sql"))
+                );
+                
+                StringBuilder sql = new StringBuilder();
+                String line;
+                
+                // 读取文件内容
+                while ((line = reader.readLine()) != null) {
+                    // 跳过注释和空行
+                    if (line.startsWith("--") || line.trim().isEmpty()) {
+                        continue;
+                    }
+                    sql.append(line);
+                    
+                    // 如果是完整的SQL语句，则执行
+                    if (line.trim().endsWith(";")) {
+                        db.execSQL(sql.toString());
+                        sql.setLength(0);
+                    }
+                }
+                
+                reader.close();
+            } catch (IOException ex) {
+                Log.e(TAG, "Error reading schema.sql", ex);
+            }
         }
     }
 
