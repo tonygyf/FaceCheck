@@ -26,7 +26,7 @@ import androidx.core.content.FileProvider;
 import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.User;
+import com.example.facecheck.models.Teacher;
 import com.example.facecheck.webdav.WebDavManager;
 
 import java.io.File;
@@ -57,7 +57,7 @@ public class UserProfileActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private DatabaseHelper dbHelper;
-    private User currentUser;
+    private Teacher currentTeacher;
     private WebDavManager webDavManager;
     private String currentPhotoPath;
 
@@ -95,38 +95,49 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void loadUserData() {
-        // 这里假设我们有一个方法来获取当前登录的用户ID
-        // 在实际应用中，这可能来自SharedPreferences或其他会话管理机制
-        int userId = 1; // 默认用户ID，实际应用中应该从登录会话获取
+        // 获取教师ID从Intent
+        long teacherId = getIntent().getLongExtra("teacher_id", -1);
+        if (teacherId == -1) {
+            Toast.makeText(this, "教师信息无效", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
         
-        currentUser = dbHelper.getUserById(userId);
-        if (currentUser != null) {
-            // 显示用户信息
-            usernameTextView.setText("用户名: " + currentUser.getUsername());
-            emailTextView.setText("邮箱: " + currentUser.getEmail());
+        // 从数据库查询教师信息
+        Cursor cursor = dbHelper.getReadableDatabase().query(
+            "Teacher",
+            new String[]{"id", "name", "email", "davUrl", "davUser", "davKeyEnc"},
+            "id = ?",
+            new String[]{String.valueOf(teacherId)},
+            null, null, null);
             
-            // 加载用户头像
-            if (!TextUtils.isEmpty(currentUser.getProfileImagePath())) {
-                Glide.with(this)
-                    .load(new File(currentUser.getProfileImagePath()))
-                    .placeholder(R.drawable.ic_person_placeholder)
-                    .error(R.drawable.ic_person_placeholder)
-                    .into(profileImageView);
-            }
+        if (cursor != null && cursor.moveToFirst()) {
+            currentTeacher = new Teacher();
+            currentTeacher.setId(cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+            currentTeacher.setName(cursor.getString(cursor.getColumnIndexOrThrow("name")));
+            currentTeacher.setEmail(cursor.getString(cursor.getColumnIndexOrThrow("email")));
+            currentTeacher.setDavUrl(cursor.getString(cursor.getColumnIndexOrThrow("davUrl")));
+            currentTeacher.setDavUser(cursor.getString(cursor.getColumnIndexOrThrow("davUser")));
+            currentTeacher.setDavKeyEnc(cursor.getString(cursor.getColumnIndexOrThrow("davKeyEnc")));
+            cursor.close();
             
-            // 设置WebDAV开关状态
-            webDavSwitch.setChecked(currentUser.isWebDavEnabled());
+            // 显示教师信息
+            usernameTextView.setText(currentTeacher.getName());
+            emailTextView.setText(currentTeacher.getEmail());
+            
+            // 设置WebDAV开关状态（基于davUrl是否为空）
+            webDavSwitch.setChecked(currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty());
             
             // 更新WebDAV状态显示
             updateWebDavStatus();
             
             // 如果WebDAV已启用，初始化WebDAV管理器
-            if (currentUser.isWebDavEnabled()) {
+            if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
                 initWebDavManager();
             }
         } else {
-            // 如果找不到用户，返回登录页面
-            Toast.makeText(this, "用户信息加载失败，请重新登录", Toast.LENGTH_SHORT).show();
+            // 如果找不到教师，返回登录页面
+            Toast.makeText(this, "教师信息加载失败，请重新登录", Toast.LENGTH_SHORT).show();
             navigateToLogin();
         }
     }
@@ -138,18 +149,27 @@ public class UserProfileActivity extends AppCompatActivity {
         // 修改用户名
         changeUsernameButton.setOnClickListener(v -> showChangeUsernameDialog());
         
-        // 修改密码
-        changePasswordButton.setOnClickListener(v -> showChangePasswordDialog());
+        // 修改密码（Teacher模型没有密码字段，暂时禁用此功能）
+        changePasswordButton.setEnabled(false);
+        changePasswordButton.setText("密码管理不可用");
         
         // WebDAV开关
         webDavSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked && !currentUser.isWebDavEnabled()) {
+            if (isChecked && (currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty())) {
                 // 如果开启WebDAV，显示配置对话框
                 showWebDavConfigDialog();
-            } else if (!isChecked && currentUser.isWebDavEnabled()) {
-                // 如果关闭WebDAV，更新用户设置
-                currentUser.setWebDavEnabled(false);
-                dbHelper.updateUser(currentUser);
+            } else if (!isChecked && currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
+                // 如果关闭WebDAV，更新教师设置
+                currentTeacher.setDavUrl(null);
+                currentTeacher.setDavUser(null);
+                currentTeacher.setDavKeyEnc(null);
+                
+                ContentValues values = new ContentValues();
+                values.putNull("davUrl");
+                values.putNull("davUser");
+                values.putNull("davKeyEnc");
+                dbHelper.updateTeacher(currentTeacher.getId(), values);
+                
                 updateWebDavStatus();
             }
         });
@@ -159,10 +179,10 @@ public class UserProfileActivity extends AppCompatActivity {
         
         // 立即同步
         syncNowButton.setOnClickListener(v -> {
-            if (currentUser.isWebDavEnabled() && webDavManager != null) {
+            if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
                 syncWithWebDav();
             } else {
-                Toast.makeText(this, "请先启用并配置WebDAV", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "请先启用WebDAV同步", Toast.LENGTH_SHORT).show();
             }
         });
         
@@ -267,16 +287,14 @@ public class UserProfileActivity extends AppCompatActivity {
             .load(new File(imagePath))
             .into(profileImageView);
         
-        // 更新用户数据
-        currentUser.setProfileImagePath(imagePath);
-        dbHelper.updateUser(currentUser);
+        // Teacher模型没有头像字段，这里仅显示新头像
+        // 如果需要头像功能，需要在Teacher模型中添加头像字段，或创建单独的头像管理功能
+        // 当前仅显示新头像，不保存到数据库
         
-        // 如果WebDAV已启用，同步头像
-        if (currentUser.isWebDavEnabled() && webDavManager != null && webDavManager.isConnected()) {
-            // 上传头像到WebDAV
-            File imageFile = new File(imagePath);
-            String fileName = imageFile.getName();
-            webDavManager.uploadFile(imagePath, fileName, "photos");
+        // 同步到WebDAV（如果启用）
+        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
+            // 同步头像文件到WebDAV
+            syncProfileImageToWebDav();
         }
     }
 
@@ -288,7 +306,7 @@ public class UserProfileActivity extends AppCompatActivity {
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_input, null);
         final EditText input = view.findViewById(R.id.et_input);
         input.setHint("新用户名");
-        input.setText(currentUser.getUsername());
+        input.setText(currentTeacher.getName());
         
         builder.setView(view);
         
@@ -297,11 +315,14 @@ public class UserProfileActivity extends AppCompatActivity {
             String newUsername = input.getText().toString().trim();
             if (!TextUtils.isEmpty(newUsername)) {
                 // 更新用户名
-                currentUser.setUsername(newUsername);
-                dbHelper.updateUser(currentUser);
-                
+                currentTeacher.setName(newUsername);
+
+                ContentValues values = new ContentValues();
+                values.put("name", newUsername);
+                dbHelper.updateTeacher(currentTeacher.getId(), values);
+
                 // 更新UI
-                usernameTextView.setText("用户名: " + newUsername);
+                usernameTextView.setText(newUsername);
                 Toast.makeText(UserProfileActivity.this, "用户名已更新", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(UserProfileActivity.this, "用户名不能为空", Toast.LENGTH_SHORT).show();
@@ -339,29 +360,8 @@ public class UserProfileActivity extends AppCompatActivity {
             String newPassword = newPasswordInput.getText().toString();
             String confirmPassword = confirmPasswordInput.getText().toString();
             
-            // 验证当前密码
-            if (!currentUser.getPassword().equals(currentPassword)) {
-                currentPasswordInput.setError("当前密码不正确");
-                return;
-            }
-            
-            // 验证新密码
-            if (TextUtils.isEmpty(newPassword)) {
-                newPasswordInput.setError("新密码不能为空");
-                return;
-            }
-            
-            // 验证确认密码
-            if (!newPassword.equals(confirmPassword)) {
-                confirmPasswordInput.setError("两次输入的密码不一致");
-                return;
-            }
-            
-            // 更新密码
-            currentUser.setPassword(newPassword);
-            dbHelper.updateUser(currentUser);
-            
-            Toast.makeText(UserProfileActivity.this, "密码已更新", Toast.LENGTH_SHORT).show();
+            // Teacher模型没有密码字段，此功能已禁用
+            Toast.makeText(UserProfileActivity.this, "密码管理功能暂不可用", Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         });
     }
@@ -380,10 +380,10 @@ public class UserProfileActivity extends AppCompatActivity {
         final TextView statusTextView = view.findViewById(R.id.tv_connection_status);
         
         // 如果已有WebDAV配置，填充现有数据
-        if (currentUser.isWebDavEnabled()) {
-            urlInput.setText(currentUser.getWebDavUrl());
-            usernameInput.setText(currentUser.getWebDavUsername());
-            passwordInput.setText(currentUser.getWebDavPassword());
+        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
+            urlInput.setText(currentTeacher.getDavUrl());
+            usernameInput.setText(currentTeacher.getDavUser());
+            // 密码字段保持为空，出于安全考虑不显示加密后的密码
         }
         
         builder.setView(view);
@@ -448,15 +448,17 @@ public class UserProfileActivity extends AppCompatActivity {
                 return;
             }
             
-            // 更新用户WebDAV配置
-            currentUser.setWebDavEnabled(true);
-            currentUser.setWebDavUrl(url);
-            currentUser.setWebDavUsername(username);
-            currentUser.setWebDavPassword(password);
-            currentUser.setWebDavRootPath("facecheck");
+            // 更新教师WebDAV配置
+            currentTeacher.setDavUrl(url);
+            currentTeacher.setDavUser(username);
+            currentTeacher.setDavKeyEnc(password); // 实际应用中应该加密存储
             
             // 保存到数据库
-            dbHelper.updateUser(currentUser);
+            ContentValues values = new ContentValues();
+            values.put("davUrl", url);
+            values.put("davUser", username);
+            values.put("davKeyEnc", password); // 实际应用中应该加密存储
+            dbHelper.updateTeacher(currentTeacher.getId(), values);
             
             // 初始化WebDAV管理器
             initWebDavManager();
@@ -480,18 +482,20 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void initWebDavManager() {
-        if (currentUser.isWebDavEnabled()) {
+        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty() &&
+            currentTeacher.getDavUser() != null && !currentTeacher.getDavUser().isEmpty() &&
+            currentTeacher.getDavKeyEnc() != null && !currentTeacher.getDavKeyEnc().isEmpty()) {
             webDavManager = new WebDavManager(
-                currentUser.getWebDavUrl(),
-                currentUser.getWebDavUsername(),
-                currentUser.getWebDavPassword(),
-                currentUser.getWebDavRootPath()
+                currentTeacher.getDavUrl(),
+                currentTeacher.getDavUser(),
+                currentTeacher.getDavKeyEnc(),
+                "facecheck"
             );
         }
     }
 
     private void updateWebDavStatus() {
-        if (currentUser.isWebDavEnabled()) {
+        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
             webDavStatusTextView.setText("WebDAV 状态: 已配置");
             webDavStatusTextView.setBackgroundResource(R.drawable.status_background_connected);
             webDavConfigButton.setEnabled(true);

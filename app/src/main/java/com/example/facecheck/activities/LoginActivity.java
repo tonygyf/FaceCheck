@@ -104,7 +104,7 @@ public class LoginActivity extends AppCompatActivity {
                 Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
                 
                 // 跳转到主页面
-                Intent intent = new Intent(LoginActivity.this, com.example.facecheck.JavaMainActivity.class);
+                Intent intent = new Intent(LoginActivity.this, com.example.facecheck.MainActivity.class);
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                 intent.putExtra("teacher_id", teacherId);
                 startActivity(intent);
