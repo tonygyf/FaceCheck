@@ -2,10 +2,8 @@
 CREATE TABLE IF NOT EXISTS Teacher (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    davUrl TEXT,
-    davUser TEXT,
-    davKeyEnc TEXT,  -- 加密存储的WebDAV密钥
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

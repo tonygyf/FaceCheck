@@ -16,10 +16,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.activities.AttendanceActivity;
+import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.database.DatabaseHelper;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.tooltip.TooltipCompat;
+import androidx.appcompat.widget.TooltipCompat;
+
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;

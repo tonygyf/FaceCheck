@@ -1,11 +1,14 @@
 package com.example.facecheck.database;
 
 import android.content.ContentValues;
+import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
+
+import com.example.facecheck.data.model.Teacher;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -68,58 +71,90 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    public Teacher getTeacherById(long id) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("Teacher", 
+            new String[]{"id", "name", "username", "password"},
+            "id = ?",
+            new String[]{String.valueOf(id)},
+            null, null, null);
+
+        Teacher teacher = null;
+        if (cursor != null && cursor.moveToFirst()) {
+            teacher = new Teacher(
+                cursor.getLong(cursor.getColumnIndexOrThrow("id")),
+                cursor.getString(cursor.getColumnIndexOrThrow("name")),
+                cursor.getString(cursor.getColumnIndexOrThrow("username")),
+                cursor.getString(cursor.getColumnIndexOrThrow("password")),
+                "", // email
+                "", // davUrl
+                "", // davUser
+                "", // davKeyEnc
+                System.currentTimeMillis(), // createdAt
+                System.currentTimeMillis()  // updatedAt
+            );
+            cursor.close();
+        }
+        return teacher;
+    }
+
+    public boolean addTeacher(Teacher teacher) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("name", teacher.getName());
+        values.put("username", teacher.getUsername());
+        values.put("password", teacher.getPassword());
+
+        long id = db.insert("Teacher", null, values);
+        return id != -1;
+    }
+
+    public boolean updateTeacher(Teacher teacher) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("name", teacher.getName());
+        values.put("username", teacher.getUsername());
+        values.put("password", teacher.getPassword());
+
+        int rowsAffected = db.update("Teacher", values,
+            "id = ?", new String[]{String.valueOf(teacher.getId())});
+        return rowsAffected > 0;
+    }
+
     @Override
     public void onCreate(SQLiteDatabase db) {
         try {
-            // 复制assets中的fc.db到应用数据库
-            android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(":memory:", null).close();
-            context.getDatabasePath(DATABASE_NAME).getParentFile().mkdirs();
+            // 从schema.sql创建数据库表
+            Log.d(TAG, "Creating database tables from schema.sql");
+            // 从assets中读取schema.sql文件
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(context.getAssets().open("schema.sql"))
+            );
             
-            // 如果数据库不存在，则从assets复制
-            if (!context.getDatabasePath(DATABASE_NAME).exists()) {
-                java.io.InputStream inputStream = context.getAssets().open("fc.db");
-                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(context.getDatabasePath(DATABASE_NAME));
-                byte[] buffer = new byte[1024];
-                int length;
-                while ((length = inputStream.read(buffer)) > 0) {
-                    outputStream.write(buffer, 0, length);
+            StringBuilder sql = new StringBuilder();
+            String line;
+            
+            // 读取文件内容
+            while ((line = reader.readLine()) != null) {
+                // 跳过注释和空行
+                if (line.startsWith("--") || line.trim().isEmpty()) {
+                    continue;
                 }
-                outputStream.flush();
-                outputStream.close();
-                inputStream.close();
-                Log.d(TAG, "Database copied from assets");
-            }
-        } catch (IOException e) {
-            // 如果复制失败，则使用schema.sql创建
-            Log.e(TAG, "Error copying database, falling back to schema.sql", e);
-            try {
-                // 从assets中读取schema.sql文件
-                BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(context.getAssets().open("schema.sql"))
-                );
+                sql.append(line);
+                sql.append(" ");
                 
-                StringBuilder sql = new StringBuilder();
-                String line;
-                
-                // 读取文件内容
-                while ((line = reader.readLine()) != null) {
-                    // 跳过注释和空行
-                    if (line.startsWith("--") || line.trim().isEmpty()) {
-                        continue;
-                    }
-                    sql.append(line);
-                    
-                    // 如果是完整的SQL语句，则执行
-                    if (line.trim().endsWith(";")) {
-                        db.execSQL(sql.toString());
-                        sql.setLength(0);
-                    }
+                // 如果是完整的SQL语句，则执行
+                if (line.trim().endsWith(";")) {
+                    db.execSQL(sql.toString());
+                    sql.setLength(0);
                 }
-                
-                reader.close();
-            } catch (IOException ex) {
-                Log.e(TAG, "Error reading schema.sql", ex);
             }
+            
+            reader.close();
+            Log.d(TAG, "Successfully created database tables from schema.sql");
+        } catch (IOException ex) {
+            Log.e(TAG, "Error reading schema.sql", ex);
+            throw new RuntimeException("Failed to create database from schema.sql", ex);
         }
     }
 
@@ -129,25 +164,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     // 教师相关操作
-    public long insertTeacher(String name, String email, String davUrl, String davUser, String davKeyEnc) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("name", name);
-        values.put("email", email);
-        values.put("davUrl", davUrl);
-        values.put("davUser", davUser);
-        values.put("davKeyEnc", davKeyEnc);
-        return db.insert("Teacher", null, values);
-    }
-
-    public boolean updateTeacher(long id, ContentValues values) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        return db.update("Teacher", values, "id = ?", new String[]{String.valueOf(id)}) > 0;
-    }
-
-    public Cursor getTeacherByEmail(String email) {
+    public Cursor getTeacherByUsername(String username) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("Teacher", null, "email = ?", new String[]{email}, null, null, null);
+        return db.query("Teacher", null, "username = ?", new String[]{username}, null, null, null);
     }
 
     // 班级相关操作

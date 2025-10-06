@@ -15,6 +15,8 @@ import com.example.facecheck.fragments.AttendanceFragment;
 import com.example.facecheck.fragments.ClassroomFragment;
 import com.example.facecheck.fragments.HomeFragment;
 import com.example.facecheck.fragments.ProfileFragment;
+import com.example.facecheck.fragments.StudentFragment;
+import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.utils.WebDAVSyncHelper;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 

@@ -1,8 +1,10 @@
-package com.example.facecheck.models;
+package com.example.facecheck.data.model;
 
 public class Teacher {
     private long id;
     private String name;
+    private String username;
+    private String password;
     private String email;
     private String davUrl;
     private String davUser;
@@ -21,9 +23,11 @@ public class Teacher {
         this.email = email;
     }
 
-    public Teacher(long id, String name, String email, String davUrl, String davUser, String davKeyEnc, long createdAt, long updatedAt) {
+    public Teacher(long id, String name, String username, String password, String email, String davUrl, String davUser, String davKeyEnc, long createdAt, long updatedAt) {
         this.id = id;
         this.name = name;
+        this.username = username;
+        this.password = password;
         this.email = email;
         this.davUrl = davUrl;
         this.davUser = davUser;
@@ -46,6 +50,24 @@ public class Teacher {
 
     public void setName(String name) {
         this.name = name;
+        this.updatedAt = System.currentTimeMillis();
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+        this.updatedAt = System.currentTimeMillis();
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
         this.updatedAt = System.currentTimeMillis();
     }
 

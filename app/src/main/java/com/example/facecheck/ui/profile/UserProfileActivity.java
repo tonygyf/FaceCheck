@@ -1,4 +1,4 @@
-package com.example.facecheck.activities;
+package com.example.facecheck.ui.profile;
 
 import android.app.AlertDialog;
 import android.content.ContentValues;
@@ -28,7 +28,8 @@ import androidx.core.content.FileProvider;
 import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.Teacher;
+import com.example.facecheck.data.model.Teacher;
+import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.webdav.WebDavManager;
 
 import java.io.File;
@@ -114,14 +115,21 @@ public class UserProfileActivity extends AppCompatActivity {
             null, null, null);
             
         if (cursor != null && cursor.moveToFirst()) {
-            currentTeacher = new Teacher();
-            currentTeacher.setId(cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-            currentTeacher.setName(cursor.getString(cursor.getColumnIndexOrThrow("name")));
-            currentTeacher.setEmail(cursor.getString(cursor.getColumnIndexOrThrow("email")));
-            currentTeacher.setDavUrl(cursor.getString(cursor.getColumnIndexOrThrow("davUrl")));
-            currentTeacher.setDavUser(cursor.getString(cursor.getColumnIndexOrThrow("davUser")));
-            currentTeacher.setDavKeyEnc(cursor.getString(cursor.getColumnIndexOrThrow("davKeyEnc")));
+            long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+            String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+            String email = cursor.getString(cursor.getColumnIndexOrThrow("email"));
+            String davUrl = cursor.getString(cursor.getColumnIndexOrThrow("davUrl"));
+            String davUser = cursor.getString(cursor.getColumnIndexOrThrow("davUser"));
+            String davKeyEnc = cursor.getString(cursor.getColumnIndexOrThrow("davKeyEnc"));
             cursor.close();
+            
+            currentTeacher = new Teacher();
+            currentTeacher.setId(id);
+            currentTeacher.setName(name);
+            currentTeacher.setEmail(email);
+            currentTeacher.setDavUrl(davUrl);
+            currentTeacher.setDavUser(davUser);
+            currentTeacher.setDavKeyEnc(davKeyEnc);
             
             // 显示教师信息
             usernameTextView.setText(currentTeacher.getName());
@@ -166,11 +174,8 @@ public class UserProfileActivity extends AppCompatActivity {
                 currentTeacher.setDavUser(null);
                 currentTeacher.setDavKeyEnc(null);
                 
-                ContentValues values = new ContentValues();
-                values.putNull("davUrl");
-                values.putNull("davUser");
-                values.putNull("davKeyEnc");
-                dbHelper.updateTeacher(currentTeacher.getId(), values);
+                // 更新教师对象
+                dbHelper.updateTeacher(currentTeacher);
                 
                 updateWebDavStatus();
             }
@@ -320,9 +325,8 @@ public class UserProfileActivity extends AppCompatActivity {
                 // 更新用户名
                 currentTeacher.setName(newUsername);
 
-                ContentValues values = new ContentValues();
-                values.put("name", newUsername);
-                dbHelper.updateTeacher(currentTeacher.getId(), values);
+                // 更新教师对象
+                dbHelper.updateTeacher(currentTeacher);
 
                 // 更新UI
                 usernameTextView.setText(newUsername);
@@ -456,12 +460,8 @@ public class UserProfileActivity extends AppCompatActivity {
             currentTeacher.setDavUser(username);
             currentTeacher.setDavKeyEnc(password); // 实际应用中应该加密存储
             
-            // 保存到数据库
-            ContentValues values = new ContentValues();
-            values.put("davUrl", url);
-            values.put("davUser", username);
-            values.put("davKeyEnc", password); // 实际应用中应该加密存储
-            dbHelper.updateTeacher(currentTeacher.getId(), values);
+            // 更新教师对象
+            dbHelper.updateTeacher(currentTeacher);
             
             // 初始化WebDAV管理器
             initWebDavManager();

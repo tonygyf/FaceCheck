@@ -1,11 +1,10 @@
-package com.example.facecheck;
+package com.example.facecheck.fragments;
 
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -13,12 +12,12 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.facecheck.adapters.StudentAdapter;
-import com.example.facecheck.models.Student;
-import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.R;
 import com.example.facecheck.ui.student.StudentActivity;
+import com.example.facecheck.adapters.StudentAdapter;
+import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.models.Student;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import androidx.appcompat.widget.TooltipCompat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,14 +63,11 @@ public class StudentFragment extends Fragment {
         fabAddStudent.setOnClickListener(v -> {
             // 跳转到添加学生页面
             Intent intent = new Intent(getActivity(), StudentActivity.class);
-            intent.putExtra("class_id", -1); // 默认值，实际使用时应传入当前选中的班级ID
+            intent.putExtra("teacher_id", teacherId);
             startActivity(intent);
         });
         
-        // 添加Tooltip提示 (使用兼容性更好的TooltipCompat)
-        TooltipCompat.setTooltipText(fabAddStudent, "添加新学生");
-        
-        // 加载学生数据
+        // 加载数据
         loadStudents();
         
         return view;
@@ -85,16 +81,16 @@ public class StudentFragment extends Fragment {
     }
     
     private void loadStudents() {
-        // TODO: 从数据库加载学生数据
-        // 这里暂时使用模拟数据
+        // 清空列表
         studentList.clear();
         
-        // 模拟数据
-        studentList.add(new Student(1, 1, "张三", "20210001", "男", "", System.currentTimeMillis()));
-        studentList.add(new Student(2, 1, "李四", "20210002", "女", "", System.currentTimeMillis()));
-        studentList.add(new Student(3, 2, "王五", "20210003", "男", "", System.currentTimeMillis()));
+        // TODO: 从数据库加载学生数据
+        // 这里先添加一些测试数据
+        studentList.add(new Student(1, "张三", "S001", "男"));
+        studentList.add(new Student(2, "李四", "S002", "女"));
+        studentList.add(new Student(3, "王五", "S003", "男"));
         
-        // 通知适配器数据已更新
+        // 通知适配器数据已更改
         adapter.notifyDataSetChanged();
     }
 }

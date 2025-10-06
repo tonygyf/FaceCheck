@@ -16,7 +16,7 @@ import androidx.fragment.app.Fragment;
 
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
-import com.google.android.material.tooltip.TooltipCompat;
+import androidx.appcompat.widget.TooltipCompat;
 
 public class HomeFragment extends Fragment {
     

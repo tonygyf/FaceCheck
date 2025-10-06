@@ -1,4 +1,4 @@
-package com.example.facecheck.activities;
+package com.example.facecheck.ui.attendance;
 
 import android.content.Intent;
 import android.graphics.Bitmap;

@@ -16,12 +16,13 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.activities.ClassroomActivity;
+import com.example.facecheck.ui.classroom.ClassroomActivity;
 import com.example.facecheck.adapters.ClassroomAdapter;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.models.Classroom;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.tooltip.TooltipCompat;
+import androidx.appcompat.widget.TooltipCompat;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,7 +95,8 @@ public class ClassroomFragment extends Fragment {
         //     cursor.close();
         // }
         
-        adapter = new ClassroomAdapter(classroomList, classroom -> {
+        adapter = new ClassroomAdapter(classroomList);
+        adapter.setOnItemClickListener(classroom -> {
             // 班级点击事件
             Intent intent = new Intent(getActivity(), ClassroomActivity.class);
             intent.putExtra("classroom_id", classroom.getId());

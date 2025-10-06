@@ -12,7 +12,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.example.facecheck.R;
-import com.example.facecheck.activities.UserProfileActivity;
+import com.example.facecheck.ui.profile.UserProfileActivity;
 
 public class ProfileFragment extends Fragment {
 

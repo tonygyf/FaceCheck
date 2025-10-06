@@ -25,7 +25,7 @@
         android:requestLegacyExternalStorage="true"
         tools:targetApi="31">
         <activity
-            android:name=".activities.LoginActivity"
+            android:name=".ui.auth.LoginActivity"
             android:exported="true"
             android:theme="@style/Theme.FaceCheck">
             <intent-filter>
@@ -35,12 +35,12 @@
         </activity>
         
         <activity
-            android:name=".activities.RegisterActivity"
+            android:name=".ui.auth.RegisterActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
-            android:name=".activities.UserProfileActivity"
+            android:name=".ui.profile.UserProfileActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
             
@@ -51,17 +51,17 @@
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
-            android:name=".activities.TeacherActivity"
+            android:name=".ui.teacher.TeacherActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
-            android:name=".activities.ClassroomActivity"
+            android:name=".ui.classroom.ClassroomActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
-            android:name=".activities.AttendanceActivity"
+            android:name=".ui.attendance.AttendanceActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
             

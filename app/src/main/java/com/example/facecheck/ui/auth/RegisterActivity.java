@@ -1,4 +1,4 @@
-package com.example.facecheck.activities;
+package com.example.facecheck.ui.auth;
 
 import android.content.ContentValues;
 import android.content.Intent;
@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.CryptoUtils;
+import com.example.facecheck.ui.auth.LoginActivity;
 
 public class RegisterActivity extends AppCompatActivity {
 
