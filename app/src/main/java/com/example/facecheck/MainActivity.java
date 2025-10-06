@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
             WebDAVSyncHelper syncHelper = new WebDAVSyncHelper(this);
             if (syncHelper.isEnabled()) {
                 // 显示同步开始的提示
-                Toast.makeText(this, "开始备份数据库...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "开始同步数据库...", Toast.LENGTH_SHORT).show();
                 
                 syncHelper.setOnSyncListener(new WebDAVSyncHelper.OnSyncListener() {
                     @Override
@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
                 syncHelper.syncDatabase();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "备份初始化失败", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "同步初始化失败", Toast.LENGTH_SHORT).show();
         }
     }
 

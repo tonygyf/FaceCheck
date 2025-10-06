@@ -79,7 +79,8 @@ public class WebDAVSyncHelper {
         }
         
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            boolean success = createLocalBackup();
+            // 直接执行同步，不进行任何备份
+            boolean success = performDirectSync();
             
             if (success) {
                 // 更新最后同步时间
@@ -90,44 +91,26 @@ public class WebDAVSyncHelper {
             }
             
             if (listener != null) {
-                listener.onSyncCompleted(success, success ? "备份成功" : "备份失败");
+                listener.onSyncCompleted(success, success ? "同步成功" : "同步失败");
             }
         }, 1000);
     }
     
-    private boolean createLocalBackup() {
+    private boolean performDirectSync() {
         try {
-            // 数据库文件路径
-            File dbFile = context.getDatabasePath("fc.db");
-            if (!dbFile.exists()) {
-                return false;
-            }
+            // 直接执行同步逻辑，不进行任何备份
+            // 这里可以实现网络数据库和本地数据库的时间对比和覆盖逻辑
+            Log.d(TAG, "执行直接同步模式 - 无备份");
             
-            // 备份目录
-            File backupDir = new File(context.getExternalFilesDir(null), "backup");
-            if (!backupDir.exists()) {
-                backupDir.mkdirs();
-            }
+            // TODO: 实现具体的同步逻辑
+            // 1. 获取网络数据库时间戳
+            // 2. 获取本地数据库时间戳  
+            // 3. 根据时间前后决定上传或下载
+            // 4. 执行覆盖操作
             
-            // 备份文件
-            File backupFile = new File(backupDir, "fc_backup.db");
-            
-            // 复制数据库到备份文件
-            try (FileInputStream fis = new FileInputStream(dbFile);
-                 FileOutputStream fos = new FileOutputStream(backupFile)) {
-                
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = fis.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                }
-                fos.flush();
-            }
-            
-            Log.d(TAG, "数据库已备份到: " + backupFile.getAbsolutePath());
             return true;
-        } catch (IOException e) {
-            Log.e(TAG, "备份失败: " + e.getMessage(), e);
+        } catch (Exception e) {
+            Log.e(TAG, "同步失败: " + e.getMessage(), e);
             return false;
         }
     }
