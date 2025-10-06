@@ -343,8 +343,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put("email", "admin@example.com");
             values.put("phone", "13800138000");
             
-            long id = db.insert("Teacher", null, values);
-            Log.d(TAG, "默认管理员教师插入成功，ID: " + id);
+            long adminId = db.insert("Teacher", null, values);
+            Log.d(TAG, "默认管理员教师插入成功，ID: " + adminId);
             
             // 再插入一个测试教师
             values.clear();
@@ -354,11 +354,79 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put("email", "li@example.com");
             values.put("phone", "13900139000");
             
-            id = db.insert("Teacher", null, values);
-            Log.d(TAG, "测试教师插入成功，ID: " + id);
+            long teacherId = db.insert("Teacher", null, values);
+            Log.d(TAG, "测试教师插入成功，ID: " + teacherId);
+            
+            // 插入测试班级数据
+            insertDefaultClassrooms(db, adminId);
+            insertDefaultClassrooms(db, teacherId);
             
         } catch (Exception e) {
             Log.e(TAG, "插入默认教师数据失败", e);
+        }
+    }
+    
+    /**
+     * 插入默认班级数据（用于测试）
+     */
+    private void insertDefaultClassrooms(SQLiteDatabase db, long teacherId) {
+        try {
+            ContentValues values = new ContentValues();
+            values.put("teacherId", teacherId);
+            values.put("name", "计算机科学2024级1班");
+            values.put("year", 2024);
+            values.put("semester", "秋季学期");
+            values.put("courseName", "软件工程");
+            values.put("meta", "{\"building\":\"教学楼A\",\"room\":\"A101\",\"capacity\":45}");
+            
+            long classId1 = db.insert("Classroom", null, values);
+            Log.d(TAG, "测试班级1插入成功，ID: " + classId1);
+            
+            values.clear();
+            values.put("teacherId", teacherId);
+            values.put("name", "计算机科学2024级2班");
+            values.put("year", 2024);
+            values.put("semester", "秋季学期");
+            values.put("courseName", "数据结构");
+            values.put("meta", "{\"building\":\"教学楼B\",\"room\":\"B201\",\"capacity\":50}");
+            
+            long classId2 = db.insert("Classroom", null, values);
+            Log.d(TAG, "测试班级2插入成功，ID: " + classId2);
+            
+            // 插入测试学生数据
+            insertDefaultStudents(db, classId1);
+            insertDefaultStudents(db, classId2);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "插入默认班级数据失败", e);
+        }
+    }
+    
+    /**
+     * 插入默认学生数据（用于测试）
+     */
+    private void insertDefaultStudents(SQLiteDatabase db, long classId) {
+        try {
+            String[] names = {"张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
+            String[] sids = {"2024001", "2024002", "2024003", "2024004", "2024005", "2024006", "2024007", "2024008"};
+            
+            for (int i = 0; i < names.length; i++) {
+                ContentValues values = new ContentValues();
+                values.put("classId", classId);
+                values.put("name", names[i]);
+                values.put("sid", sids[i]);
+                values.put("gender", i % 2 == 0 ? "M" : "F");
+                values.put("birthDate", "2002-01-" + String.format("%02d", i + 1));
+                values.put("email", sids[i] + "@student.edu.cn");
+                values.put("phone", "1500000000" + i);
+                values.put("status", "ACTIVE");
+                
+                long studentId = db.insert("Student", null, values);
+                Log.d(TAG, "测试学生插入成功，ID: " + studentId + ", 姓名: " + names[i]);
+            }
+            
+        } catch (Exception e) {
+            Log.e(TAG, "插入默认学生数据失败", e);
         }
     }
 
