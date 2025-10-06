@@ -34,6 +34,7 @@ public class ClassroomFragment extends Fragment {
     private List<Classroom> classroomList;
     private DatabaseHelper dbHelper;
     private FloatingActionButton fabAddClassroom;
+    private long teacherId;
 
     @Nullable
     @Override
@@ -42,6 +43,9 @@ public class ClassroomFragment extends Fragment {
         
         // 初始化数据库
         dbHelper = new DatabaseHelper(getContext());
+        
+        // 获取教师ID
+        teacherId = getActivity().getSharedPreferences("user_prefs", 0).getLong("teacher_id", -1);
         
         // 初始化视图
         recyclerView = view.findViewById(R.id.recycler_classrooms);
@@ -73,27 +77,20 @@ public class ClassroomFragment extends Fragment {
     private void loadClassrooms() {
         classroomList = new ArrayList<>();
         
-        // 模拟数据，实际应从数据库加载
-        classroomList.add(new Classroom(1, 1, "计算机科学与技术1班", 2023, ""));
-        classroomList.add(new Classroom(2, 1, "软件工程2班", 2023, ""));
-        classroomList.add(new Classroom(3, 1, "人工智能3班", 2023, ""));
-        classroomList.add(new Classroom(4, 1, "数据科学4班", 2023, ""));
-        classroomList.add(new Classroom(5, 1, "网络工程5班", 2023, ""));
-        
-        // TODO: 从数据库加载实际班级数据
-        // Cursor cursor = dbHelper.getClassroomsByTeacher(1);
-        // if (cursor != null && cursor.moveToFirst()) {
-        //     do {
-        //         long id = cursor.getLong(cursor.getColumnIndex("id"));
-        //         long teacherId = cursor.getLong(cursor.getColumnIndex("teacherId"));
-        //         String name = cursor.getString(cursor.getColumnIndex("name"));
-        //         int year = cursor.getInt(cursor.getColumnIndex("year"));
-        //         String meta = cursor.getString(cursor.getColumnIndex("meta"));
-        //         
-        //         classroomList.add(new Classroom(id, teacherId, name, year, meta));
-        //     } while (cursor.moveToNext());
-        //     cursor.close();
-        // }
+        // 从数据库加载实际班级数据
+        Cursor cursor = dbHelper.getClassroomsByTeacher(teacherId);
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                long teacherId = cursor.getLong(cursor.getColumnIndexOrThrow("teacherId"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
+                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
+                
+                classroomList.add(new Classroom(id, teacherId, name, year, meta));
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
         
         adapter = new ClassroomAdapter(classroomList);
         adapter.setOnItemClickListener(classroom -> {
