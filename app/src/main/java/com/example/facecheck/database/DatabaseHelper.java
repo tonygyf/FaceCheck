@@ -19,7 +19,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 2; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 3; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
