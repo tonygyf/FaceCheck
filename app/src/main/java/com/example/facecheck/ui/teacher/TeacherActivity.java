@@ -36,7 +36,7 @@ public class TeacherActivity extends AppCompatActivity {
 
         // 初始化视图
         etName = findViewById(R.id.et_name);
-        etEmail = findViewById(R.id.et_username); // 使用email字段，但UI保持username标签
+        etEmail = findViewById(R.id.et_username); // 使用username字段
         btnSave = findViewById(R.id.btn_save);
 
         // 获取教师ID
@@ -54,15 +54,15 @@ public class TeacherActivity extends AppCompatActivity {
         Teacher teacher = dbHelper.getTeacherById(teacherId);
         if (teacher != null) {
             etName.setText(teacher.getName());
-            etEmail.setText(teacher.getUsername()); // 显示username作为email
+            etEmail.setText(teacher.getUsername());
         }
     }
 
     private void saveTeacher() {
         String name = etName.getText().toString().trim();
-        String email = etEmail.getText().toString().trim();
+        String username = etEmail.getText().toString().trim();
 
-        if (name.isEmpty() || email.isEmpty()) {
+        if (name.isEmpty() || username.isEmpty()) {
             Toast.makeText(this, "请填写所有字段", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -70,8 +70,7 @@ public class TeacherActivity extends AppCompatActivity {
         Teacher teacher = new Teacher();
         teacher.setId(teacherId);
         teacher.setName(name);
-        teacher.setUsername(email); // 使用email作为username
-        teacher.setPassword(""); // 空密码，后续可以添加密码字段
+        teacher.setUsername(username);
         
         boolean success;
         

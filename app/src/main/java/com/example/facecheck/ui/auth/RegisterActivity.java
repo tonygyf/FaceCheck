@@ -17,12 +17,11 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.utils.CryptoUtils;
 import com.example.facecheck.ui.auth.LoginActivity;
 
 public class RegisterActivity extends AppCompatActivity {
 
-    private EditText nameEditText, emailEditText, passwordEditText, confirmPasswordEditText;
+    private EditText nameEditText, usernameEditText, passwordEditText, confirmPasswordEditText;
     private Button registerButton;
     private TextView loginTextView;
     private ProgressBar progressBar;
@@ -38,7 +37,7 @@ public class RegisterActivity extends AppCompatActivity {
 
         // 初始化视图
         nameEditText = findViewById(R.id.nameEditText);
-        emailEditText = findViewById(R.id.emailEditText);
+        usernameEditText = findViewById(R.id.usernameEditText);
         passwordEditText = findViewById(R.id.passwordEditText);
         confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
         registerButton = findViewById(R.id.registerButton);
@@ -65,7 +64,7 @@ public class RegisterActivity extends AppCompatActivity {
 
     private void registerUser() {
         String name = nameEditText.getText().toString().trim();
-        String email = emailEditText.getText().toString().trim();
+        String username = usernameEditText.getText().toString().trim();
         String password = passwordEditText.getText().toString().trim();
         String confirmPassword = confirmPasswordEditText.getText().toString().trim();
 
@@ -75,14 +74,8 @@ public class RegisterActivity extends AppCompatActivity {
             return;
         }
 
-        if (TextUtils.isEmpty(email)) {
-            emailEditText.setError("请输入邮箱");
-            return;
-        }
-
-        // 简单的邮箱格式验证
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            emailEditText.setError("请输入有效的邮箱地址");
+        if (TextUtils.isEmpty(username)) {
+            usernameEditText.setError("请输入用户名");
             return;
         }
 
@@ -105,37 +98,33 @@ public class RegisterActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         registerButton.setEnabled(false);
 
-        // 检查邮箱是否已注册
+        // 检查用户名是否已注册
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor cursor = db.query(
             "Teacher",
             new String[]{"id"},
-            "email = ?",
-            new String[]{email},
+            "username = ?",
+            new String[]{username},
             null, null, null);
 
         if (cursor != null && cursor.moveToFirst()) {
             cursor.close();
             progressBar.setVisibility(View.GONE);
             registerButton.setEnabled(true);
-            emailEditText.setError("该邮箱已注册");
+            usernameEditText.setError("该用户名已注册");
             return;
         }
         if (cursor != null) {
             cursor.close();
         }
 
-        // 生成 WebDAV 密钥
-        String davKey = CryptoUtils.generateRandomKey();
-        String davKeyEnc = CryptoUtils.encryptWithPassword(davKey, password);
-
         // 创建新用户
         ContentValues values = new ContentValues();
         values.put("name", name);
-        values.put("email", email);
-        values.put("davUrl", "");  // 初始为空
-        values.put("davUser", "");  // 初始为空
-        values.put("davKeyEnc", davKeyEnc);
+        values.put("username", username);
+        values.put("password", password);
+        values.put("createdAt", System.currentTimeMillis());
+        values.put("updatedAt", System.currentTimeMillis());
 
         long teacherId = dbHelper.getWritableDatabase().insert("Teacher", null, values);
         if (teacherId != -1) {

@@ -94,7 +94,7 @@ public class AttendanceActivity extends AppCompatActivity {
                         ivPreview.setImageBitmap(bitmap);
                         
                         // 保存照片资源记录
-                        long photoId = dbHelper.insertPhotoAsset(sessionId, "RAW", 
+                        long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW", 
                             currentPhotoUri.toString(), "");
                             
                         if (photoId != -1) {
@@ -115,7 +115,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void createAttendanceSession() {
         // 创建考勤会话
-        sessionId = dbHelper.insertAttendanceSession(classroomId, "", "", "");
+        sessionId = dbHelper.insertAttendanceSession(classroomId, 1L, "", "", ""); // 默认使用ID为1的教师
             
         if (sessionId != -1) {
             // 添加同步日志

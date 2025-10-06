@@ -30,7 +30,7 @@ import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.ui.auth.LoginActivity;
-import com.example.facecheck.webdav.WebDavManager;
+// import com.example.facecheck.webdav.WebDavManager; // WebDAV功能已移除
 
 import java.io.File;
 import java.io.IOException;
@@ -61,7 +61,7 @@ public class UserProfileActivity extends AppCompatActivity {
 
     private DatabaseHelper dbHelper;
     private Teacher currentTeacher;
-    private WebDavManager webDavManager;
+    // private WebDavManager webDavManager; // WebDAV功能已移除
     private String currentPhotoPath;
 
     @Override
@@ -109,7 +109,7 @@ public class UserProfileActivity extends AppCompatActivity {
         // 从数据库查询教师信息
         Cursor cursor = dbHelper.getReadableDatabase().query(
             "Teacher",
-            new String[]{"id", "name", "email", "davUrl", "davUser", "davKeyEnc"},
+            new String[]{"id", "name", "username", "password", "createdAt", "updatedAt"},
             "id = ?",
             new String[]{String.valueOf(teacherId)},
             null, null, null);
@@ -117,34 +117,30 @@ public class UserProfileActivity extends AppCompatActivity {
         if (cursor != null && cursor.moveToFirst()) {
             long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
             String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-            String email = cursor.getString(cursor.getColumnIndexOrThrow("email"));
-            String davUrl = cursor.getString(cursor.getColumnIndexOrThrow("davUrl"));
-            String davUser = cursor.getString(cursor.getColumnIndexOrThrow("davUser"));
-            String davKeyEnc = cursor.getString(cursor.getColumnIndexOrThrow("davKeyEnc"));
+            String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
+            String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
+            long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+            long updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"));
             cursor.close();
             
             currentTeacher = new Teacher();
             currentTeacher.setId(id);
             currentTeacher.setName(name);
-            currentTeacher.setEmail(email);
-            currentTeacher.setDavUrl(davUrl);
-            currentTeacher.setDavUser(davUser);
-            currentTeacher.setDavKeyEnc(davKeyEnc);
+            currentTeacher.setUsername(username);
+            currentTeacher.setPassword(password);
+            currentTeacher.setCreatedAt(createdAt);
+            currentTeacher.setUpdatedAt(updatedAt);
             
             // 显示教师信息
             usernameTextView.setText(currentTeacher.getName());
-            emailTextView.setText(currentTeacher.getEmail());
+            emailTextView.setText(currentTeacher.getUsername()); // 使用username代替email
             
-            // 设置WebDAV开关状态（基于davUrl是否为空）
-            webDavSwitch.setChecked(currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty());
+            // WebDAV功能已移除
+            webDavSwitch.setChecked(false);
+            webDavSwitch.setEnabled(false);
             
-            // 更新WebDAV状态显示
+            // 更新状态显示
             updateWebDavStatus();
-            
-            // 如果WebDAV已启用，初始化WebDAV管理器
-            if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-                initWebDavManager();
-            }
         } else {
             // 如果找不到教师，返回登录页面
             Toast.makeText(this, "教师信息加载失败，请重新登录", Toast.LENGTH_SHORT).show();
@@ -163,35 +159,17 @@ public class UserProfileActivity extends AppCompatActivity {
         changePasswordButton.setEnabled(false);
         changePasswordButton.setText("密码管理不可用");
         
-        // WebDAV开关
-        webDavSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked && (currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty())) {
-                // 如果开启WebDAV，显示配置对话框
-                showWebDavConfigDialog();
-            } else if (!isChecked && currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-                // 如果关闭WebDAV，更新教师设置
-                currentTeacher.setDavUrl(null);
-                currentTeacher.setDavUser(null);
-                currentTeacher.setDavKeyEnc(null);
-                
-                // 更新教师对象
-                dbHelper.updateTeacher(currentTeacher);
-                
-                updateWebDavStatus();
-            }
-        });
+        // WebDAV功能已移除
+        webDavSwitch.setOnCheckedChangeListener(null);
+        webDavSwitch.setEnabled(false);
         
-        // WebDAV配置
-        webDavConfigButton.setOnClickListener(v -> showWebDavConfigDialog());
+        // WebDAV配置按钮已禁用
+        webDavConfigButton.setEnabled(false);
+        webDavConfigButton.setText("WebDAV功能已移除");
         
-        // 立即同步
-        syncNowButton.setOnClickListener(v -> {
-            if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-                syncWithWebDav();
-            } else {
-                Toast.makeText(this, "请先启用WebDAV同步", Toast.LENGTH_SHORT).show();
-            }
-        });
+        // 同步按钮已禁用
+        syncNowButton.setEnabled(false);
+        syncNowButton.setText("同步功能已移除");
         
         // 退出登录
         logoutButton.setOnClickListener(v -> {
@@ -298,12 +276,7 @@ public class UserProfileActivity extends AppCompatActivity {
         // 如果需要头像功能，需要在Teacher模型中添加头像字段，或创建单独的头像管理功能
         // 当前仅显示新头像，不保存到数据库
         
-        // 同步到WebDAV（如果启用）
-        // Teacher模型没有头像字段，不同步头像文件
-        // if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-        //     // 同步头像文件到WebDAV
-        //     syncProfileImageToWebDav();
-        // }
+        // 头像更新功能已简化，不再同步到WebDAV
     }
 
     private void showChangeUsernameDialog() {
@@ -373,182 +346,29 @@ public class UserProfileActivity extends AppCompatActivity {
         });
     }
 
+    // WebDAV功能已移除，此方法不再需要
     private void showWebDavConfigDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        
-        // 设置对话框布局
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_webdav_config, null);
-        final EditText urlInput = view.findViewById(R.id.et_webdav_url);
-        final EditText usernameInput = view.findViewById(R.id.et_webdav_username);
-        final EditText passwordInput = view.findViewById(R.id.et_webdav_password);
-        final Button testButton = view.findViewById(R.id.btn_test_connection);
-        final Button cancelButton = view.findViewById(R.id.btn_cancel);
-        final Button saveButton = view.findViewById(R.id.btn_save);
-        final TextView statusTextView = view.findViewById(R.id.tv_connection_status);
-        
-        // 如果已有WebDAV配置，填充现有数据
-        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-            urlInput.setText(currentTeacher.getDavUrl());
-            usernameInput.setText(currentTeacher.getDavUser());
-            // 密码字段保持为空，出于安全考虑不显示加密后的密码
-        }
-        
-        builder.setView(view);
-        
-        AlertDialog dialog = builder.create();
-        
-        // 测试连接按钮
-        testButton.setOnClickListener(v -> {
-            String url = urlInput.getText().toString().trim();
-            String username = usernameInput.getText().toString().trim();
-            String password = passwordInput.getText().toString().trim();
-            
-            if (TextUtils.isEmpty(url) || TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
-                Toast.makeText(UserProfileActivity.this, "请填写完整的WebDAV信息", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            
-            // 显示进度条
-            progressBar.setVisibility(View.VISIBLE);
-            statusTextView.setVisibility(View.VISIBLE);
-            statusTextView.setText("正在测试连接...");
-            
-            // 创建临时WebDAV管理器进行测试
-            WebDavManager tempManager = new WebDavManager(this, url, username, password);
-            
-            // 在后台线程中测试连接
-            new Thread(() -> {
-                final boolean connected = tempManager.testConnection();
-                
-                // 在UI线程中更新结果
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    
-                    if (connected) {
-                        statusTextView.setText("连接成功！");
-                        statusTextView.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
-                    } else {
-                        statusTextView.setText("连接失败，请检查配置");
-                        statusTextView.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
-                    }
-                });
-            }).start();
-        });
-        
-        // 取消按钮
-        cancelButton.setOnClickListener(v -> {
-            dialog.dismiss();
-            // 如果是首次启用WebDAV但取消了配置，将开关切回关闭状态
-            if (currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty()) {
-                webDavSwitch.setChecked(false);
-            }
-        });
-        
-        // 保存按钮
-        saveButton.setOnClickListener(v -> {
-            String url = urlInput.getText().toString().trim();
-            String username = usernameInput.getText().toString().trim();
-            String password = passwordInput.getText().toString().trim();
-            
-            if (TextUtils.isEmpty(url) || TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
-                Toast.makeText(UserProfileActivity.this, "请填写完整的WebDAV信息", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            
-            // 更新教师WebDAV配置
-            currentTeacher.setDavUrl(url);
-            currentTeacher.setDavUser(username);
-            currentTeacher.setDavKeyEnc(password); // 实际应用中应该加密存储
-            
-            // 更新教师对象
-            dbHelper.updateTeacher(currentTeacher);
-            
-            // 初始化WebDAV管理器
-            initWebDavManager();
-            
-            // 更新UI
-            webDavSwitch.setChecked(true);
-            updateWebDavStatus();
-            
-            dialog.dismiss();
-            
-            // 询问是否立即同步
-            new AlertDialog.Builder(UserProfileActivity.this)
-                .setTitle("WebDAV配置已保存")
-                .setMessage("是否立即初始化WebDAV文件夹结构并同步数据？")
-                .setPositiveButton("是", (d, w) -> syncWithWebDav())
-                .setNegativeButton("稍后", null)
-                .show();
-        });
-        
-        dialog.show();
+        // WebDAV配置功能已禁用
+        Toast.makeText(this, "WebDAV功能已移除", Toast.LENGTH_SHORT).show();
     }
 
+    // WebDAV功能已移除，此方法不再需要
     private void initWebDavManager() {
-        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty() &&
-            currentTeacher.getDavUser() != null && !currentTeacher.getDavUser().isEmpty() &&
-            currentTeacher.getDavKeyEnc() != null && !currentTeacher.getDavKeyEnc().isEmpty()) {
-            webDavManager = new WebDavManager(
-                this,
-                currentTeacher.getDavUrl(),
-                currentTeacher.getDavUser(),
-                currentTeacher.getDavKeyEnc()
-            );
-        }
+        // WebDAV管理器初始化已禁用
     }
 
     private void updateWebDavStatus() {
-        if (currentTeacher.getDavUrl() != null && !currentTeacher.getDavUrl().isEmpty()) {
-            webDavStatusTextView.setText("WebDAV 状态: 已配置");
-            webDavStatusTextView.setBackgroundResource(R.drawable.status_background_connected);
-            webDavConfigButton.setEnabled(true);
-            syncNowButton.setEnabled(true);
-        } else {
-            webDavStatusTextView.setText("WebDAV 状态: 未连接");
-            webDavStatusTextView.setBackgroundResource(R.drawable.status_background_disconnected);
-            webDavConfigButton.setEnabled(false);
-            syncNowButton.setEnabled(false);
-        }
+        // WebDAV功能已移除，显示简化状态
+        webDavStatusTextView.setText("同步功能: 已禁用");
+        webDavStatusTextView.setBackgroundResource(R.drawable.status_background_disconnected);
+        webDavConfigButton.setEnabled(false);
+        syncNowButton.setEnabled(false);
     }
 
+    // WebDAV功能已移除，此方法不再需要
     private void syncWithWebDav() {
-        if (webDavManager == null || currentTeacher.getDavUrl() == null || currentTeacher.getDavUrl().isEmpty()) {
-            Toast.makeText(this, "WebDAV未配置", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        // 显示进度条
-        progressBar.setVisibility(View.VISIBLE);
-        
-        // 在后台线程中执行同步
-        new Thread(() -> {
-            boolean success = false;
-            
-            // 测试连接
-            if (webDavManager.testConnection()) {
-                // 初始化文件夹结构
-                if (webDavManager.initializeDirectoryStructure()) {
-                    // 同步数据库文件
-                    // 这里需要实现数据库同步逻辑
-                    // ...
-                    
-                    success = true;
-                }
-            }
-            
-            // 在UI线程中更新结果
-            final boolean finalSuccess = success;
-            runOnUiThread(() -> {
-                progressBar.setVisibility(View.GONE);
-                
-                if (finalSuccess) {
-                    Toast.makeText(UserProfileActivity.this, "同步成功", Toast.LENGTH_SHORT).show();
-                    updateWebDavStatus();
-                } else {
-                    Toast.makeText(UserProfileActivity.this, "同步失败，请检查网络和WebDAV配置", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }).start();
+        // WebDAV同步功能已禁用
+        Toast.makeText(this, "WebDAV同步功能已移除", Toast.LENGTH_SHORT).show();
     }
 
     private void navigateToLogin() {

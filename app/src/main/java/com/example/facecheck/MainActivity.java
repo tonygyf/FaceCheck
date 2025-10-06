@@ -3,13 +3,21 @@ package com.example.facecheck;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
+import androidx.annotation.NonNull;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.example.facecheck.R;
+import com.example.facecheck.fragments.HomeFragment;
+import com.example.facecheck.fragments.ClassroomFragment;
+import com.example.facecheck.fragments.AttendanceFragment;
+import com.example.facecheck.fragments.ProfileFragment;
 
 import com.example.facecheck.fragments.AttendanceFragment;
 import com.example.facecheck.fragments.ClassroomFragment;
@@ -22,8 +30,17 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "MainActivity";
     private BottomNavigationView bottomNavigationView;
     private long teacherId = -1;
+
+    public long getTeacherId() {
+        return teacherId;
+    }
+
+    public BottomNavigationView getBottomNavigationView() {
+        return bottomNavigationView;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,10 +56,14 @@ public class MainActivity extends AppCompatActivity {
         teacherId = getSharedPreferences("user_prefs", MODE_PRIVATE).getLong("teacher_id", -1);
         if (teacherId == -1) {
             // 如果没有登录，跳转到登录页面
-            startActivity(new Intent(this, LoginActivity.class));
+            Intent intent = new Intent(this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
             finish();
             return;
         }
+        
+        Log.d(TAG, "当前登录教师ID: " + teacherId);
 
         bottomNavigationView = findViewById(R.id.bottom_navigation);
         bottomNavigationView.setOnItemSelectedListener(navListener);
@@ -96,15 +117,19 @@ public class MainActivity extends AppCompatActivity {
                     if (itemId == R.id.nav_home) {
                         selectedFragment = new HomeFragment();
                         getSupportActionBar().setTitle("首页");
+                        Log.d(TAG, "切换到首页");
                     } else if (itemId == R.id.nav_classroom) {
                         selectedFragment = new ClassroomFragment();
                         getSupportActionBar().setTitle("课堂管理");
+                        Log.d(TAG, "切换到课堂");
                     } else if (itemId == R.id.nav_attendance) {
                         selectedFragment = new AttendanceFragment();
                         getSupportActionBar().setTitle("考勤管理");
+                        Log.d(TAG, "切换到考勤");
                     } else if (itemId == R.id.nav_profile) {
                         selectedFragment = new ProfileFragment();
                         getSupportActionBar().setTitle("个人资料");
+                        Log.d(TAG, "切换到我的");
                     }
 
                     if (selectedFragment != null) {

@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.example.facecheck.R;
 import com.example.facecheck.MainActivity;
+import android.content.SharedPreferences;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -73,10 +74,13 @@ public class LoginActivity extends AppCompatActivity {
             progressBar.setVisibility(View.GONE);
             Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
             
+            // 保存教师ID到SharedPreferences
+            SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+            prefs.edit().putLong("teacher_id", success.teacherId).apply();
+            
             // 跳转到主页面
             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            intent.putExtra("teacher_id", success.teacherId);
             startActivity(intent);
             finish();
         } else if (state instanceof LoginUiState.Error) {

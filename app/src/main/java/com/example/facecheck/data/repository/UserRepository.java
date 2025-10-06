@@ -34,7 +34,7 @@ public class UserRepository {
             
             if (password.equals(storedPassword)) {
                 teacher = new Teacher(teacherId, teacherName, teacherUsername, storedPassword, 
-                                   "", "", "", "", System.currentTimeMillis(), System.currentTimeMillis());
+                                   System.currentTimeMillis(), System.currentTimeMillis());
             }
             cursor.close();
         }
@@ -65,7 +65,7 @@ public class UserRepository {
         
         // 插入新教师
         Teacher teacher = new Teacher(0, name, username, password, 
-                               "", "", "", "", System.currentTimeMillis(), System.currentTimeMillis());
+                               System.currentTimeMillis(), System.currentTimeMillis());
         return databaseHelper.addTeacher(teacher);
     }
     

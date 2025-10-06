@@ -15,6 +15,7 @@ import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 
 import com.example.facecheck.R;
+import com.example.facecheck.MainActivity;
 import com.example.facecheck.database.DatabaseHelper;
 import androidx.appcompat.widget.TooltipCompat;
 
@@ -77,9 +78,10 @@ public class HomeFragment extends Fragment {
     
     private void navigateToClassroom() {
         // 切换到班级管理页面
-        getActivity().getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new ClassroomFragment())
-                .commit();
+        if (getActivity() != null && getActivity() instanceof MainActivity) {
+            MainActivity mainActivity = (MainActivity) getActivity();
+            mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_classroom);
+        }
     }
     
     private void navigateToStudents() {
@@ -89,9 +91,10 @@ public class HomeFragment extends Fragment {
     
     private void navigateToAttendance() {
         // 切换到考勤管理页面
-        getActivity().getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new AttendanceFragment())
-                .commit();
+        if (getActivity() != null && getActivity() instanceof MainActivity) {
+            MainActivity mainActivity = (MainActivity) getActivity();
+            mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_attendance);
+        }
     }
     
     private void syncDatabase() {
