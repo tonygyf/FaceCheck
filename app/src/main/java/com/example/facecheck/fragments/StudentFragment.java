@@ -16,7 +16,7 @@ import com.example.facecheck.R;
 import com.example.facecheck.ui.student.StudentActivity;
 import com.example.facecheck.adapters.StudentAdapter;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.Student;
+import com.example.facecheck.data.model.Student;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;

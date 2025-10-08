@@ -9,7 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.models.AttendanceResult;
+import com.example.facecheck.data.model.AttendanceResult;
 
 import java.util.List;
 

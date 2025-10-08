@@ -19,7 +19,7 @@ import com.example.facecheck.R;
 import com.example.facecheck.ui.classroom.ClassroomActivity;
 import com.example.facecheck.adapters.ClassroomAdapter;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.Classroom;
+import com.example.facecheck.data.model.Classroom;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import androidx.appcompat.widget.TooltipCompat;
 

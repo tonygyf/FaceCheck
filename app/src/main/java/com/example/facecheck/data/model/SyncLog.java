@@ -1,4 +1,4 @@
-package com.example.facecheck.models;
+package com.example.facecheck.data.model;
 
 public class SyncLog {
     private long id;

@@ -12,8 +12,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.facecheck.R;
 import com.example.facecheck.adapters.AttendanceResultAdapter;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.AttendanceResult;
-import com.example.facecheck.models.Student;
+import com.example.facecheck.data.model.AttendanceResult;
+import com.example.facecheck.data.model.Student;
 
 import java.util.ArrayList;
 import java.util.List;

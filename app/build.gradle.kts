@@ -60,6 +60,10 @@ dependencies {
     implementation(libs.androidx.sqlite)
     implementation(libs.glide)
     implementation(libs.circleimageview)
+    
+    // Google ML Kit 人脸检测
+    implementation("com.google.mlkit:face-detection:16.1.6")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

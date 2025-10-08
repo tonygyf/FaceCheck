@@ -1,4 +1,4 @@
-package com.example.facecheck.models;
+package com.example.facecheck.data.model;
 
 public class Classroom {
     private long id;

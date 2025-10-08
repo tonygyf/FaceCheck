@@ -23,7 +23,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.facecheck.R;
 import com.example.facecheck.adapters.StudentAdapter;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.models.Student;
+import com.example.facecheck.data.model.Student;
 import com.example.facecheck.sync.SyncManager;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;

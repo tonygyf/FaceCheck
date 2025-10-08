@@ -11,7 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.models.Student;
+import com.example.facecheck.data.model.Student;
 
 import java.util.List;
 

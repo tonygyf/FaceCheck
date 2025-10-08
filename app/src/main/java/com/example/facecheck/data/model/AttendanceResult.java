@@ -1,4 +1,4 @@
-package com.example.facecheck.models;
+package com.example.facecheck.data.model;
 
 public class AttendanceResult {
     private long id;
@@ -8,7 +8,7 @@ public class AttendanceResult {
     private float score;
     private String decidedBy; // AUTO, TEACHER
     private long decidedAt;
-    private Student student;
+    private com.example.facecheck.data.model.Student student;
 
     public AttendanceResult() {
         this.decidedAt = System.currentTimeMillis();
