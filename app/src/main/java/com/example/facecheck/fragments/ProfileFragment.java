@@ -31,6 +31,8 @@ import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.webdav.WebDavManager;
 import com.example.facecheck.sync.SyncManager;
+import com.example.facecheck.ui.settings.CacheSettingsActivity;
+import com.example.facecheck.utils.CacheManager;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -54,6 +56,10 @@ public class ProfileFragment extends Fragment {
     private Button webdavConfigButton;
     private Button syncNowButton;
     private TextView webdavStatusTextView;
+    
+    // 缓存设置相关视图
+    private Button cacheSettingsButton;
+    private TextView cacheStatusTextView;
     
     private DatabaseHelper dbHelper;
     private Teacher currentTeacher;
@@ -80,6 +86,9 @@ public class ProfileFragment extends Fragment {
         // 更新WebDAV状态
         updateWebDavStatus();
         
+        // 更新缓存状态
+        updateCacheStatus();
+        
         // 设置点击事件
         setupClickListeners();
         
@@ -101,6 +110,10 @@ public class ProfileFragment extends Fragment {
         webdavConfigButton = view.findViewById(R.id.btn_webdav_config);
         syncNowButton = view.findViewById(R.id.btn_sync_now);
         webdavStatusTextView = view.findViewById(R.id.tv_webdav_status);
+        
+        // 初始化缓存设置相关视图
+        cacheSettingsButton = view.findViewById(R.id.btn_cache_settings);
+        cacheStatusTextView = view.findViewById(R.id.tv_cache_status);
     }
     
     private void loadUserData() {
@@ -176,6 +189,12 @@ public class ProfileFragment extends Fragment {
         
         // 立即同步
         syncNowButton.setOnClickListener(v -> syncWithWebDav());
+        
+        // 缓存设置
+        cacheSettingsButton.setOnClickListener(v -> {
+            Intent intent = new Intent(getActivity(), CacheSettingsActivity.class);
+            startActivity(intent);
+        });
         
         // 退出登录
         logoutButton.setOnClickListener(v -> {
@@ -279,6 +298,44 @@ public class ProfileFragment extends Fragment {
             webdavConfigButton.setEnabled(false);
             syncNowButton.setEnabled(false);
         }
+    }
+    
+    private void updateCacheStatus() {
+        // 创建缓存管理器
+        CacheManager cacheManager = new CacheManager(getActivity());
+        
+        // 在后台线程获取缓存大小
+        new Thread(() -> {
+            cacheManager.getCacheSize(new CacheManager.CacheSizeCallback() {
+                @Override
+                public void onSizeCalculated(CacheManager.CacheSizeInfo sizeInfo) {
+                    getActivity().runOnUiThread(() -> {
+                        String cacheInfo = String.format("缓存: %s (图片: %s)", 
+                            formatFileSize(sizeInfo.totalSize),
+                            formatFileSize(sizeInfo.imageCacheSize));
+                        cacheStatusTextView.setText(cacheInfo);
+                        cacheManager.cleanup(); // 清理资源
+                    });
+                }
+                
+                @Override
+                public void onError(String error) {
+                    getActivity().runOnUiThread(() -> {
+                        cacheStatusTextView.setText("缓存: 获取失败");
+                        cacheManager.cleanup(); // 清理资源
+                    });
+                }
+            });
+        }).start();
+    }
+    
+    private String formatFileSize(long size) {
+        if (size <= 0) return "0 B";
+        
+        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
+        int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
+        
+        return new java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
     }
     
     private void showWebDavConfigDialog() {

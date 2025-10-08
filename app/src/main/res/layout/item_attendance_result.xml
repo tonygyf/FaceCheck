@@ -60,6 +60,17 @@
             android:textColor="@color/black"
             android:alpha="0.5"/>
 
+            <Button
+            android:id="@+id/btnCorrect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="修正"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:layout_marginTop="4dp"
+            android:backgroundTint="@color/colorAccent"
+            android:textColor="@color/white"/>
+
     </LinearLayout>
 
 </LinearLayout>

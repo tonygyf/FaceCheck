@@ -1,6 +1,7 @@
 package com.example.facecheck.ui.attendance;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -13,17 +14,21 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
+import android.widget.*;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.utils.FaceDetectionManager;
-import com.example.facecheck.utils.FaceImageProcessor;
+import com.example.facecheck.utils.*;
+
+import java.util.ArrayList;
+import com.example.facecheck.utils.ImageStorageManager;
+import com.example.facecheck.utils.CacheManager;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -39,6 +44,9 @@ public class AttendanceActivity extends AppCompatActivity {
     private Uri currentPhotoUri;
     private long sessionId;
     private FaceDetectionManager faceDetectionManager;
+    private FaceRecognitionManager faceRecognitionManager;
+    private ImageStorageManager imageStorageManager;
+    private CacheManager cacheManager;
     
     private ImageView ivPreview;
     private Button btnTakePhoto;
@@ -75,6 +83,9 @@ public class AttendanceActivity extends AppCompatActivity {
         
         // 初始化人脸检测管理器
         faceDetectionManager = new FaceDetectionManager(this);
+        faceRecognitionManager = new FaceRecognitionManager(this);
+        imageStorageManager = new ImageStorageManager(this);
+        cacheManager = new CacheManager(this);
         
         // 初始化视图
         initViews();
@@ -114,7 +125,7 @@ public class AttendanceActivity extends AppCompatActivity {
             }
         });
         
-        btnTakePhoto.setOnClickListener(v -> takePhoto());
+        btnTakePhoto.setOnClickListener(v -> checkCameraPermissionAndTakePhoto());
         btnStartRecognition.setOnClickListener(v -> startRecognition());
         
         // 初始状态
@@ -139,7 +150,7 @@ public class AttendanceActivity extends AppCompatActivity {
                             
                         if (photoId != -1) {
                             // 添加同步日志
-                            dbHelper.insertSyncLog("PhotoAsset", photoId, "UPSERT", 
+                            dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT", 
                                 System.currentTimeMillis(), "PENDING");
                                 
                             // 启用识别按钮
@@ -159,13 +170,36 @@ public class AttendanceActivity extends AppCompatActivity {
             
         if (sessionId != -1) {
             // 添加同步日志
-            dbHelper.insertSyncLog("AttendanceSession", sessionId, "UPSERT", 
+            dbHelper.insertSyncLog("AttendanceSession", sessionId, "INSERT", 
                 System.currentTimeMillis(), "PENDING");
         } else {
             Toast.makeText(this, "创建考勤会话失败", Toast.LENGTH_SHORT).show();
             finish();
         }
     }
+
+    private void checkCameraPermissionAndTakePhoto() {
+        // 检查相机权限
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) 
+                != PackageManager.PERMISSION_GRANTED) {
+            // 请求相机权限
+            requestCameraPermissionLauncher.launch(android.Manifest.permission.CAMERA);
+        } else {
+            // 已有权限，直接拍照
+            takePhoto();
+        }
+    }
+
+    private final ActivityResultLauncher<String> requestCameraPermissionLauncher = 
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                // 权限被授予，拍照
+                takePhoto();
+            } else {
+                // 权限被拒绝
+                Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
+            }
+        });
 
     private void takePhoto() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -215,8 +249,7 @@ public class AttendanceActivity extends AppCompatActivity {
                         Toast.makeText(AttendanceActivity.this, "未检测到人脸，请重新拍照", Toast.LENGTH_SHORT).show();
                     } else {
                         // 保存分割后的人脸图像
-                        String faceImagesDir = getExternalFilesDir("face_images") + "/" + sessionId;
-                        List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps, faceImagesDir);
+                        List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps, String.valueOf(sessionId));
                         
                         // 处理每个人脸
                         processDetectedFaces(faces, faceBitmaps, faceImagePaths);
@@ -269,21 +302,36 @@ public class AttendanceActivity extends AppCompatActivity {
      * 执行人脸识别比对
      */
     private void performFaceRecognition(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
-        // TODO: 实现人脸特征提取和比对逻辑
-        // 这里需要加载数据库中的学生人脸数据，进行特征比对
-        
         new Thread(() -> {
             try {
-                // 模拟识别过程
-                Thread.sleep(2000);
+                // 使用人脸识别管理器进行批量识别
+                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager.recognizeMultipleFaces(faceBitmaps, faces);
+                
+                // 统计识别结果
+                int recognizedCount = 0;
+                List<String> recognizedStudentNames = new ArrayList<>();
+                
+                for (FaceRecognitionManager.RecognitionResult result : results) {
+                    if (result.isSuccess()) {
+                        recognizedCount++;
+                        // 获取学生姓名
+                        String studentName = getStudentNameById(result.getStudentId());
+                        recognizedStudentNames.add(studentName);
+                    }
+                }
+                
+                final int finalRecognizedCount = recognizedCount;
+                final List<String> finalRecognizedNames = recognizedStudentNames;
                 
                 runOnUiThread(() -> {
-                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size() + " 个人脸");
+                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
                     
-                    // 跳转到结果界面
+                    // 跳转到结果界面，传递识别结果
                     Intent intent = new Intent(this, AttendanceResultActivity.class);
                     intent.putExtra("session_id", sessionId);
                     intent.putExtra("detected_faces", faces.size());
+                    intent.putExtra("recognized_faces", finalRecognizedCount);
+                    intent.putStringArrayListExtra("recognized_names", new ArrayList<>(finalRecognizedNames));
                     startActivity(intent);
                     finish();
                 });
@@ -297,5 +345,22 @@ public class AttendanceActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+    
+    /**
+     * 根据学生ID获取学生姓名
+     */
+    private String getStudentNameById(long studentId) {
+        // 从数据库获取学生信息
+        android.database.Cursor cursor = dbHelper.getStudentById(studentId);
+        if (cursor != null && cursor.moveToFirst()) {
+            String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+            cursor.close();
+            return name;
+        }
+        if (cursor != null) {
+            cursor.close();
+        }
+        return "未知学生";
     }
 }

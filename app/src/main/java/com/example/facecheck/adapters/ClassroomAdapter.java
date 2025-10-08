@@ -1,5 +1,6 @@
 package com.example.facecheck.adapters;
 
+import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
 import com.example.facecheck.data.model.Classroom;
+import com.example.facecheck.ui.attendance.AttendanceActivity;
 
 import java.util.List;
 
@@ -52,6 +54,29 @@ public class ClassroomAdapter extends RecyclerView.Adapter<ClassroomAdapter.View
             if (listener != null) {
                 listener.onItemClick(classroom);
             }
+        });
+        
+        // 添加长按事件，直接开始考勤
+        holder.itemView.setOnLongClickListener(v -> {
+            // 显示选项对话框
+            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(holder.itemView.getContext());
+            builder.setTitle("选择操作")
+                   .setItems(new String[]{"查看班级", "开始考勤"}, (dialog, which) -> {
+                       if (which == 0) {
+                           // 查看班级
+                           if (listener != null) {
+                               listener.onItemClick(classroom);
+                           }
+                       } else {
+                           // 开始考勤
+                           Intent intent = new Intent(holder.itemView.getContext(), 
+                               com.example.facecheck.ui.attendance.AttendanceActivity.class);
+                           intent.putExtra("classroom_id", classroom.getId());
+                           holder.itemView.getContext().startActivity(intent);
+                       }
+                   })
+                   .show();
+            return true;
         });
     }
 

@@ -59,9 +59,20 @@
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
+            android:name=".ui.classroom.ClassroomSelectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck" />
+            
+        <activity
             android:name=".ui.attendance.AttendanceActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck" />
+            
+        <activity
+            android:name=".ui.settings.CacheSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="缓存管理" />
             
         <!-- 文件提供者配置 -->
         <provider

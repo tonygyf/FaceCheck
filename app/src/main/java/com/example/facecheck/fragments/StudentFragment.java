@@ -84,23 +84,10 @@ public class StudentFragment extends Fragment {
         // 清空列表
         studentList.clear();
         
-        // 从数据库加载所有学生数据（不区分班级）
-        android.database.Cursor cursor = dbHelper.getReadableDatabase().rawQuery(
-            "SELECT * FROM Student ORDER BY name", null);
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            do {
-                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
-                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
-                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                
-                Student student = new Student(id, name, sid, gender);
-                student.setAvatarUri(avatarUri);
-                studentList.add(student);
-            } while (cursor.moveToNext());
-            cursor.close();
+        if (teacherId != -1) {
+            // 获取当前教师的所有学生
+            List<Student> students = dbHelper.getStudentsByTeacher(teacherId);
+            studentList.addAll(students);
         }
         
         // 通知适配器数据已更改

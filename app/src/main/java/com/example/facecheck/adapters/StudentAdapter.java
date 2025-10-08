@@ -10,6 +10,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
 import com.example.facecheck.data.model.Student;
 
@@ -51,9 +52,14 @@ public class StudentAdapter extends RecyclerView.Adapter<StudentAdapter.ViewHold
         holder.tvSid.setText(student.getSid());
         holder.tvGender.setText(student.getGender());
         
-        // 设置头像
+        // 设置头像 - 使用 Glide 处理 content:// URI，避免权限问题
         if (student.getAvatarUri() != null && !student.getAvatarUri().isEmpty()) {
-            holder.ivAvatar.setImageURI(Uri.parse(student.getAvatarUri()));
+            Glide.with(holder.itemView.getContext())
+                .load(Uri.parse(student.getAvatarUri()))
+                .placeholder(R.drawable.ic_person_placeholder)
+                .error(R.drawable.ic_person_placeholder)
+                .circleCrop()
+                .into(holder.ivAvatar);
         } else {
             holder.ivAvatar.setImageResource(R.drawable.ic_person_placeholder);
         }

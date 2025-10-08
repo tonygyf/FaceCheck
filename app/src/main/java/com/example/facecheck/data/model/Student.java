@@ -7,6 +7,8 @@ public class Student {
     private String sid;
     private String gender;
     private String avatarUri;
+    private String faceFeatures;  // 人脸特征向量
+    private String faceImagePath;   // 人脸图片路径
     private long createdAt;
 
     public Student() {
@@ -28,6 +30,18 @@ public class Student {
         this.sid = sid;
         this.gender = gender;
         this.avatarUri = avatarUri;
+        this.createdAt = createdAt;
+    }
+
+    public Student(long id, long classId, String name, String sid, String gender, String avatarUri, String faceFeatures, String faceImagePath, long createdAt) {
+        this.id = id;
+        this.classId = classId;
+        this.name = name;
+        this.sid = sid;
+        this.gender = gender;
+        this.avatarUri = avatarUri;
+        this.faceFeatures = faceFeatures;
+        this.faceImagePath = faceImagePath;
         this.createdAt = createdAt;
     }
 
@@ -85,5 +99,21 @@ public class Student {
 
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getFaceFeatures() {
+        return faceFeatures;
+    }
+
+    public void setFaceFeatures(String faceFeatures) {
+        this.faceFeatures = faceFeatures;
+    }
+
+    public String getFaceImagePath() {
+        return faceImagePath;
+    }
+
+    public void setFaceImagePath(String faceImagePath) {
+        this.faceImagePath = faceImagePath;
     }
 }

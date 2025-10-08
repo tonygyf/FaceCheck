@@ -30,6 +30,7 @@ public class FaceDetectionManager {
     private static final String TAG = "FaceDetectionManager";
     private final FaceDetector faceDetector;
     private final Context context;
+    private final ImageStorageManager storageManager;
     
     // 人脸检测结果回调
     public interface FaceDetectionCallback {
@@ -39,6 +40,7 @@ public class FaceDetectionManager {
     
     public FaceDetectionManager(Context context) {
         this.context = context;
+        this.storageManager = new ImageStorageManager(context);
         
         // 配置人脸检测器选项
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
@@ -148,31 +150,56 @@ public class FaceDetectionManager {
     }
     
     /**
-     * 保存人脸图片到本地
+     * 保存人脸图片到本地（使用ImageStorageManager）
      */
-    public List<String> saveFaceBitmaps(List<Bitmap> faceBitmaps, String baseDir) {
+    public List<String> saveFaceBitmaps(List<Bitmap> faceBitmaps, String sessionId) {
         List<String> faceImagePaths = new ArrayList<>();
-        File dir = new File(baseDir);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
         
         for (int i = 0; i < faceBitmaps.size(); i++) {
-            try {
-                String fileName = "face_" + System.currentTimeMillis() + "_" + i + ".jpg";
-                File file = new File(dir, fileName);
-                
-                FileOutputStream fos = new FileOutputStream(file);
-                faceBitmaps.get(i).compress(Bitmap.CompressFormat.JPEG, 90, fos);
-                fos.close();
-                
-                faceImagePaths.add(file.getAbsolutePath());
-            } catch (IOException e) {
-                e.printStackTrace();
+            String imagePath = storageManager.saveSegmentedFace(faceBitmaps.get(i), sessionId, i);
+            if (imagePath != null) {
+                faceImagePaths.add(imagePath);
             }
         }
         
         return faceImagePaths;
+    }
+    
+    /**
+     * 保存原始照片（使用ImageStorageManager）
+     */
+    public String saveOriginalPhoto(Bitmap originalBitmap, String sessionId) {
+        return storageManager.saveOriginalPhoto(originalBitmap, sessionId);
+    }
+    
+    /**
+     * 保存处理后的人脸（使用ImageStorageManager）
+     */
+    public List<String> saveProcessedFaces(List<Bitmap> processedFaces, String sessionId) {
+        List<String> processedImagePaths = new ArrayList<>();
+        
+        for (int i = 0; i < processedFaces.size(); i++) {
+            String imagePath = storageManager.saveProcessedFace(processedFaces.get(i), sessionId, i);
+            if (imagePath != null) {
+                processedImagePaths.add(imagePath);
+            }
+        }
+        
+        return processedImagePaths;
+    }
+    
+    /**
+     * 获取会话的所有图片
+     */
+    public List<String> getSessionImages(String sessionId) {
+        return storageManager.getSessionImages(sessionId);
+    }
+    
+    /**
+     * 删除会话的所有图片
+     */
+    public boolean deleteSessionImages(String sessionId) {
+        return storageManager.deleteSessionImages(sessionId);
     }
     
     /**

@@ -7,6 +7,11 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
+import com.example.facecheck.data.model.Student;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import com.example.facecheck.data.model.Teacher;
 
 import java.io.BufferedReader;
@@ -531,6 +536,103 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 new String[]{String.valueOf(studentId)}, null, null, null);
     }
 
+    /**
+     * 更新学生信息
+     */
+    public boolean updateStudent(long studentId, long classId, String name, String sid, String gender, String avatarUri) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("classId", classId);
+        values.put("name", name);
+        values.put("sid", sid);
+        values.put("gender", gender);
+        values.put("avatarUri", avatarUri);
+        
+        int result = db.update("Student", values, "id = ?", 
+                              new String[]{String.valueOf(studentId)});
+        return result > 0;
+    }
+
+    /**
+     * 删除学生
+     */
+    public boolean deleteStudent(long studentId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // 首先删除相关的考勤结果
+        db.delete("AttendanceResult", "studentId = ?", 
+                 new String[]{String.valueOf(studentId)});
+        
+        // 删除相关的人脸特征数据
+        db.delete("FaceEmbedding", "studentId = ?", 
+                 new String[]{String.valueOf(studentId)});
+        
+        // 删除相关的照片资源
+        db.delete("PhotoAsset", "studentId = ?", 
+                 new String[]{String.valueOf(studentId)});
+        
+        // 最后删除学生记录
+        int result = db.delete("Student", "id = ?", 
+                              new String[]{String.valueOf(studentId)});
+        
+        return result > 0;
+    }
+
+    public List<Student> getAllStudents() {
+        List<Student> students = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("Student", null, null, null, null, null, "name");
+        
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                long classId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
+                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
+                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
+                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                
+                Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
+                students.add(student);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+        
+        return students;
+    }
+
+    public List<Student> getStudentsByTeacher(long teacherId) {
+        List<Student> students = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        
+        // 通过班级表关联查询该教师的所有学生，按学号升序排列
+        String query = "SELECT s.* FROM Student s " +
+                      "INNER JOIN Classroom c ON s.classId = c.id " +
+                      "WHERE c.teacherId = ? " +
+                      "ORDER BY CAST(s.sid AS INTEGER) ASC";
+        
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+        
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                long classId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
+                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
+                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
+                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                
+                Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
+                students.add(student);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+        
+        return students;
+    }
+
     // ============= 人脸特征相关操作 =============
     
     public long insertFaceEmbedding(long studentId, String modelVer, byte[] vector, float quality) {
@@ -636,5 +738,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("status", status);
         return db.update("SyncLog", values, "id = ?", 
                 new String[]{String.valueOf(id)}) > 0;
+    }
+
+    /**
+     * 更新学生人脸数据
+     */
+    public boolean updateStudentFaceData(Student student) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("faceFeatures", student.getFaceFeatures());
+        values.put("faceImagePath", student.getFaceImagePath());
+        
+        int result = db.update("Student", values, "id = ?", 
+                              new String[]{String.valueOf(student.getId())});
+        db.close();
+        
+        return result > 0;
     }
 }
