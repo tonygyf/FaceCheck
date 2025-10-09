@@ -178,10 +178,13 @@ public class CacheManager {
         // 清理各种临时文件
         String[] tempExtensions = {".tmp", ".temp", ".cache", ".bak"};
         
-        File externalDir = context.getExternalFilesDir(null);
-        if (externalDir != null) {
-            freedSpace += deleteFilesByExtension(externalDir, tempExtensions);
-        }
+        // 清理内部存储中的临时文件
+        File internalDir = context.getFilesDir();
+        freedSpace += deleteFilesByExtension(internalDir, tempExtensions);
+        
+        // 清理照片存储目录中的临时文件
+        File photoDir = PhotoStorageManager.getAttendancePhotosDir(context);
+        freedSpace += deleteFilesByExtension(photoDir, tempExtensions);
         
         return freedSpace;
     }
@@ -194,10 +197,9 @@ public class CacheManager {
         
         String[] logExtensions = {".log", ".txt"};
         
-        File externalDir = context.getExternalFilesDir(null);
-        if (externalDir != null) {
-            freedSpace += deleteFilesByExtension(externalDir, logExtensions);
-        }
+        // 清理内部存储中的日志文件
+        File internalDir = context.getFilesDir();
+        freedSpace += deleteFilesByExtension(internalDir, logExtensions);
         
         return freedSpace;
     }
@@ -206,10 +208,13 @@ public class CacheManager {
      * 清理空目录
      */
     private void cleanEmptyDirectories() {
-        File externalDir = context.getExternalFilesDir(null);
-        if (externalDir != null) {
-            deleteEmptyDirectories(externalDir);
-        }
+        // 清理内部存储中的空目录
+        File internalDir = context.getFilesDir();
+        deleteEmptyDirectories(internalDir);
+        
+        // 清理照片存储目录中的空目录
+        File photoDir = PhotoStorageManager.getAttendancePhotosDir(context);
+        deleteEmptyDirectories(photoDir);
     }
     
     /**
@@ -235,10 +240,13 @@ public class CacheManager {
         
         String[] tempExtensions = {".tmp", ".temp", ".cache", ".bak"};
         
-        File externalDir = context.getExternalFilesDir(null);
-        if (externalDir != null) {
-            size += getFilesSizeByExtension(externalDir, tempExtensions);
-        }
+        // 计算内部存储中的临时文件大小
+        File internalDir = context.getFilesDir();
+        size += getFilesSizeByExtension(internalDir, tempExtensions);
+        
+        // 计算照片存储目录中的临时文件大小
+        File photoDir = PhotoStorageManager.getAttendancePhotosDir(context);
+        size += getFilesSizeByExtension(photoDir, tempExtensions);
         
         return size;
     }
@@ -251,10 +259,9 @@ public class CacheManager {
         
         String[] logExtensions = {".log", ".txt"};
         
-        File externalDir = context.getExternalFilesDir(null);
-        if (externalDir != null) {
-            size += getFilesSizeByExtension(externalDir, logExtensions);
-        }
+        // 计算内部存储中的日志文件大小
+        File internalDir = context.getFilesDir();
+        size += getFilesSizeByExtension(internalDir, logExtensions);
         
         return size;
     }

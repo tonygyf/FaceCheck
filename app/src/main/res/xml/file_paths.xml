@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外部存储路径 -->
     <external-files-path name="my_images" path="Pictures" />
     <external-path name="my_external_images" path="Pictures" />
     <external-path name="external_files" path="." />
+    
+    <!-- 应用内部文件路径 -->
+    <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+    
+    <!-- 数据库目录路径（用于存储头像和考勤照片）-->
+    <root-path name="databases" path="data/data/com.example.facecheck/databases/" />
 </paths>

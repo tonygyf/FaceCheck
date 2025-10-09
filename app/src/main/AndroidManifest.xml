@@ -69,6 +69,24 @@
             android:theme="@style/Theme.FaceCheck" />
             
         <activity
+            android:name=".ui.attendance.FaceSegmentationActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="人脸分割结果" />
+            
+        <activity
+            android:name=".ui.attendance.FaceCorrectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="人脸修正" />
+            
+        <activity
+            android:name=".ui.attendance.AttendanceResultActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="考勤结果" />
+            
+        <activity
             android:name=".ui.settings.CacheSettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"

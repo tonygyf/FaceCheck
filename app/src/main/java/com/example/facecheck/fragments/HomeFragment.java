@@ -2,6 +2,7 @@ package com.example.facecheck.fragments;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -80,10 +81,27 @@ public class HomeFragment extends Fragment {
     }
     
     private void loadStatistics() {
-        // TODO: 从数据库加载实际统计数据
-        tvClassCount.setText("5");
-        tvStudentCount.setText("120");
-        tvAttendanceCount.setText("350");
+        // 获取当前登录的教师ID
+        SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        long teacherId = prefs.getLong("teacher_id", -1);
+        
+        if (teacherId == -1) {
+            // 如果未登录，显示0
+            tvClassCount.setText("0");
+            tvStudentCount.setText("0");
+            tvAttendanceCount.setText("0");
+            return;
+        }
+        
+        // 从数据库获取真实统计数据
+        int classCount = dbHelper.getClassroomCountByTeacher(teacherId);
+        int studentCount = dbHelper.getStudentCountByTeacher(teacherId);
+        int attendanceCount = dbHelper.getAttendanceCountByTeacher(teacherId);
+        
+        // 更新UI
+        tvClassCount.setText(String.valueOf(classCount));
+        tvStudentCount.setText(String.valueOf(studentCount));
+        tvAttendanceCount.setText(String.valueOf(attendanceCount));
     }
     
     private void navigateToClassroom() {

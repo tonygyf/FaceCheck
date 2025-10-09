@@ -49,6 +49,7 @@ public class ClassroomActivity extends AppCompatActivity {
     private long classroomId;
     private Uri currentPhotoUri;
     private File currentPhotoFile;
+    private ImageView dialogAvatarImageView;
     
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
@@ -155,7 +156,9 @@ public class ClassroomActivity extends AppCompatActivity {
         EditText etSid = view.findViewById(R.id.etStudentId);
         EditText etGender = view.findViewById(R.id.etGender);
         ImageView ivAvatar = view.findViewById(R.id.ivAvatar);
-        
+        dialogAvatarImageView = ivAvatar; // 赋值给成员变量
+        dialogAvatarImageView = ivAvatar; // 赋值给成员变量
+
         // 设置头像点击事件
         ivAvatar.setOnClickListener(v -> showPhotoSourceDialog());
         
@@ -173,6 +176,10 @@ public class ClassroomActivity extends AppCompatActivity {
                    
                    String avatarUri = currentPhotoUri != null ? currentPhotoUri.toString() : "";
                    long studentId = dbHelper.insertStudent(classroomId, name, sid, gender, avatarUri);
+                   
+                   // 重置当前照片URI
+                   currentPhotoUri = null;
+                   currentPhotoFile = null;
                    
                    if (studentId != -1) {
                        // 添加同步日志
@@ -317,6 +324,15 @@ public class ClassroomActivity extends AppCompatActivity {
     private void processNewPhoto(Uri photoUri) {
         currentPhotoUri = photoUri;
         // 显示照片预览
+        if (dialogAvatarImageView != null) {
+            Glide.with(this)
+                .load(photoUri)
+                .placeholder(R.drawable.ic_person_placeholder)
+                .error(R.drawable.ic_person_placeholder)
+                .circleCrop()
+                .into(dialogAvatarImageView);
+        }
+
         if (currentStudent != null) {
             // 如果是编辑学生模式，显示确认对话框
             new AlertDialog.Builder(this)
@@ -357,6 +373,7 @@ public class ClassroomActivity extends AppCompatActivity {
         EditText etSid = view.findViewById(R.id.etStudentId);
         EditText etGender = view.findViewById(R.id.etGender);
         ImageView ivAvatar = view.findViewById(R.id.ivAvatar);
+        dialogAvatarImageView = ivAvatar; // 赋值给成员变量
         
         // 填充现有数据
         etName.setText(student.getName());
@@ -389,9 +406,16 @@ public class ClassroomActivity extends AppCompatActivity {
                        return;
                    }
                    
+                   // 获取新的头像URI，如果 currentPhotoUri 不为空则使用新的，否则使用学生原有的
+                   String newAvatarUri = currentPhotoUri != null ? currentPhotoUri.toString() : student.getAvatarUri();
+
                    // 更新学生信息
                     boolean success = dbHelper.updateStudent(student.getId(), student.getClassId(), 
-                        name, student.getSid(), gender, student.getAvatarUri());
+                        name, student.getSid(), gender, newAvatarUri);
+                   
+                   // 重置 currentPhotoUri 和 currentPhotoFile
+                   currentPhotoUri = null;
+                   currentPhotoFile = null;
                    
                    if (success) {
                        // 添加同步日志

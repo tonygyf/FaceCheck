@@ -5,6 +5,8 @@ import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
 
+import com.example.facecheck.utils.PhotoStorageManager;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -21,7 +23,7 @@ public class FileUtils {
         // 创建图片文件名
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         String imageFileName = prefix + "_" + timeStamp + "_";
-        File storageDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File storageDir = PhotoStorageManager.getAvatarPhotosDir(context);
         return File.createTempFile(imageFileName, ".jpg", storageDir);
     }
 

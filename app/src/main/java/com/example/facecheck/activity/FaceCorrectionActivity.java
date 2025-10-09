@@ -37,7 +37,7 @@ public class FaceCorrectionActivity extends AppCompatActivity implements Correct
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_face_correction);
+        setContentView(R.layout.activity_face_correction_management);
 
         initViews();
         setupToolbar();

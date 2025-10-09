@@ -24,7 +24,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 3; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 4; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -137,6 +137,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "enrollmentDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                 "status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'GRADUATED')), " +
                 "createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                 "FOREIGN KEY (classId) REFERENCES Classroom(id) ON DELETE CASCADE" +
                 ")";
         db.execSQL(sql);
@@ -547,6 +548,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("sid", sid);
         values.put("gender", gender);
         values.put("avatarUri", avatarUri);
+        values.put("updatedAt", System.currentTimeMillis());
         
         int result = db.update("Student", values, "id = ?", 
                               new String[]{String.valueOf(studentId)});
@@ -754,5 +756,56 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         
         return result > 0;
+    }
+
+    // ============= 统计相关操作 =============
+    
+    /**
+     * 获取指定教师的班级数量
+     */
+    public int getClassroomCountByTeacher(long teacherId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM Classroom WHERE teacherId = ?", 
+                                   new String[]{String.valueOf(teacherId)});
+        int count = 0;
+        if (cursor != null && cursor.moveToFirst()) {
+            count = cursor.getInt(0);
+            cursor.close();
+        }
+        return count;
+    }
+    
+    /**
+     * 获取指定教师的学生数量
+     */
+    public int getStudentCountByTeacher(long teacherId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT COUNT(*) FROM Student s " +
+                      "INNER JOIN Classroom c ON s.classId = c.id " +
+                      "WHERE c.teacherId = ?";
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+        int count = 0;
+        if (cursor != null && cursor.moveToFirst()) {
+            count = cursor.getInt(0);
+            cursor.close();
+        }
+        return count;
+    }
+    
+    /**
+     * 获取指定教师的考勤记录数量
+     */
+    public int getAttendanceCountByTeacher(long teacherId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT COUNT(*) FROM AttendanceResult ar " +
+                      "INNER JOIN AttendanceSession a ON ar.sessionId = a.id " +
+                      "WHERE a.teacherId = ?";
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+        int count = 0;
+        if (cursor != null && cursor.moveToFirst()) {
+            count = cursor.getInt(0);
+            cursor.close();
+        }
+        return count;
     }
 }

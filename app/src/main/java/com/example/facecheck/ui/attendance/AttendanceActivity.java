@@ -16,6 +16,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.*;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -25,6 +26,7 @@ import androidx.core.content.FileProvider;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.*;
+import com.example.facecheck.utils.PhotoStorageManager;
 
 import java.util.ArrayList;
 import com.example.facecheck.utils.ImageStorageManager;
@@ -203,7 +205,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void takePhoto() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        File photoFile = new File(getExternalFilesDir("attendance"), 
+        File photoFile = new File(PhotoStorageManager.getAttendancePhotosDir(this), 
             new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                 .format(new Date()) + ".jpg");
             
@@ -250,6 +252,9 @@ public class AttendanceActivity extends AppCompatActivity {
                     } else {
                         // 保存分割后的人脸图像
                         List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps, String.valueOf(sessionId));
+                        
+                        // 显示人脸分割结果
+                        showFaceSegmentationResults(faces, faceBitmaps, faceImagePaths);
                         
                         // 处理每个人脸
                         processDetectedFaces(faces, faceBitmaps, faceImagePaths);
@@ -345,6 +350,72 @@ public class AttendanceActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+    
+    /**
+     * 显示人脸分割结果
+     */
+    private void showFaceSegmentationResults(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
+        // 创建对话框显示分割结果
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("检测到 " + faces.size() + " 个人脸");
+        builder.setMessage("是否查看分割后的人脸照片或进行人脸修正？");
+        
+        builder.setPositiveButton("查看分割", (dialog, which) -> {
+            // 显示人脸分割结果界面
+            Intent intent = new Intent(this, FaceSegmentationActivity.class);
+            intent.putStringArrayListExtra("face_image_paths", new ArrayList<>(faceImagePaths));
+            intent.putExtra("face_count", faces.size());
+            startActivity(intent);
+        });
+        
+        builder.setNeutralButton("人脸修正", (dialog, which) -> {
+            // 显示人脸修正界面（选择第一个检测到的人脸）
+            if (!faceImagePaths.isEmpty()) {
+                Intent intent = new Intent(this, FaceCorrectionActivity.class);
+                intent.putExtra("image_path", faceImagePaths.get(0));
+                startActivity(intent);
+            }
+            dialog.dismiss();
+        });
+        
+        builder.setNegativeButton("继续识别", (dialog, which) -> {
+            // 用户选择继续识别流程，不显示分割结果
+            dialog.dismiss();
+        });
+        
+        builder.setOnCancelListener(dialog -> {
+            // 用户点击对话框外部，显示暂停选项
+            showPauseDialog();
+        });
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+    
+    /**
+     * 显示暂停对话框
+     */
+    private void showPauseDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("识别已暂停");
+        builder.setMessage("识别过程已暂停，您可以选择继续或取消");
+        
+        builder.setPositiveButton("继续识别", (dialog, which) -> {
+            // 继续识别流程
+            dialog.dismiss();
+        });
+        
+        builder.setNegativeButton("取消识别", (dialog, which) -> {
+            // 取消识别，重置状态
+            progressBar.setVisibility(View.GONE);
+            btnStartRecognition.setEnabled(true);
+            tvStatus.setText("识别已取消");
+            dialog.dismiss();
+        });
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
     
     /**
