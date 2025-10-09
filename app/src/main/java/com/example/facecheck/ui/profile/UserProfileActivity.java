@@ -110,7 +110,7 @@ public class UserProfileActivity extends AppCompatActivity {
         // 从数据库查询教师信息
         Cursor cursor = dbHelper.getReadableDatabase().query(
             "Teacher",
-            new String[]{"id", "name", "username", "password", "createdAt", "updatedAt"},
+            new String[]{"id", "name", "username", "password", "avatarUri", "createdAt", "updatedAt"},
             "id = ?",
             new String[]{String.valueOf(teacherId)},
             null, null, null);
@@ -120,6 +120,7 @@ public class UserProfileActivity extends AppCompatActivity {
             String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
             String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
             String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
+            String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
             long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
             long updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"));
             cursor.close();
@@ -129,12 +130,23 @@ public class UserProfileActivity extends AppCompatActivity {
             currentTeacher.setName(name);
             currentTeacher.setUsername(username);
             currentTeacher.setPassword(password);
+            currentTeacher.setAvatarUri(avatarUri);
             currentTeacher.setCreatedAt(createdAt);
             currentTeacher.setUpdatedAt(updatedAt);
             
             // 显示教师信息
             usernameTextView.setText(currentTeacher.getName());
             emailTextView.setText(currentTeacher.getUsername()); // 使用username代替email
+            
+            // 加载头像
+            if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
+                File avatarFile = new File(currentTeacher.getAvatarUri());
+                if (avatarFile.exists()) {
+                    Glide.with(this)
+                        .load(avatarFile)
+                        .into(profileImageView);
+                }
+            }
             
             // WebDAV功能已移除
             webDavSwitch.setChecked(false);
@@ -251,11 +263,12 @@ public class UserProfileActivity extends AppCompatActivity {
                 // 从相册选择返回
                 Uri selectedImage = data.getData();
                 try {
-                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), selectedImage);
-                    // 保存位图到文件
+                    // 创建目标文件
                     File photoFile = createImageFile();
-                    // 这里需要实现将位图保存到文件的代码
-                    // ...
+                    currentPhotoPath = photoFile.getAbsolutePath();
+                    
+                    // 复制选择的图片到应用存储
+                    copyUriToFile(selectedImage, photoFile);
                     
                     // 更新用户头像
                     updateProfileImage(currentPhotoPath);
@@ -267,17 +280,43 @@ public class UserProfileActivity extends AppCompatActivity {
         }
     }
 
+    private void copyUriToFile(Uri sourceUri, File destFile) {
+        try {
+            android.content.ContentResolver contentResolver = getContentResolver();
+            java.io.InputStream inputStream = contentResolver.openInputStream(sourceUri);
+            java.io.OutputStream outputStream = new java.io.FileOutputStream(destFile);
+            
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            
+            inputStream.close();
+            outputStream.close();
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error copying image file", e);
+            Toast.makeText(this, "复制图片失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void updateProfileImage(String imagePath) {
         // 更新UI
         Glide.with(this)
             .load(new File(imagePath))
             .into(profileImageView);
         
-        // Teacher模型没有头像字段，这里仅显示新头像
-        // 如果需要头像功能，需要在Teacher模型中添加头像字段，或创建单独的头像管理功能
-        // 当前仅显示新头像，不保存到数据库
+        // 更新Teacher对象的avatarUri字段
+        currentTeacher.setAvatarUri(imagePath);
         
-        // 头像更新功能已简化，不再同步到WebDAV
+        // 保存到数据库
+        boolean success = dbHelper.updateTeacher(currentTeacher);
+        if (success) {
+            Toast.makeText(this, "头像已更新", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "头像更新失败", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showChangeUsernameDialog() {

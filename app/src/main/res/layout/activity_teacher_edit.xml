@@ -21,6 +21,26 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- 教师头像 -->
+        <de.hdodenhof.circleimageview.CircleImageView
+            android:id="@+id/iv_teacher_avatar"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:layout_gravity="center_horizontal"
+            android:src="@drawable/ic_person_placeholder"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 更换头像按钮 -->
+        <Button
+            android:id="@+id/btn_change_avatar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="更换头像"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/purple_500" />
+
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

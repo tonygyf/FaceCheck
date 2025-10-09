@@ -124,8 +124,8 @@ public class FaceEnhancementActivity extends AppCompatActivity {
             return;
         }
         
-        // 显示进度
-        Toast.makeText(this, "正在修复人脸图像...", Toast.LENGTH_SHORT).show();
+        // 显示进度对话框
+        showLoading("正在修复人脸图像，请稍候...");
         
         // 在后台线程中处理
         new Thread(() -> {
@@ -135,26 +135,36 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                     // 修复第一个人脸（可以扩展为处理多个人脸）
                     enhancedBitmap = FaceImageProcessor.repairFaceImage(originalBitmap);
                     
-                    // 计算修复后的质量
-                    float enhancedQuality = FaceImageProcessor.calculateImageQuality(enhancedBitmap);
-                    
-                    runOnUiThread(() -> {
-                        // 显示修复结果
-                        ivEnhancedImage.setImageBitmap(enhancedBitmap);
-                        tvEnhancedQuality.setText(String.format("修复后质量: %.2f", enhancedQuality));
+                    if (enhancedBitmap != null) {
+                        // 计算修复后的质量
+                        float enhancedQuality = FaceImageProcessor.calculateImageQuality(enhancedBitmap);
                         
-                        // 显示对比视图
-                        comparisonView.setVisibility(View.VISIBLE);
-                        
-                        // 启用特征提取按钮
-                        btnExtractFeatures.setEnabled(true);
-                        
-                        Toast.makeText(this, "人脸修复完成", Toast.LENGTH_SHORT).show();
-                    });
+                        runOnUiThread(() -> {
+                            hideLoading();
+                            // 显示修复结果
+                            ivEnhancedImage.setImageBitmap(enhancedBitmap);
+                            tvEnhancedQuality.setText(String.format("修复后质量: %.2f", enhancedQuality));
+                            
+                            // 显示对比视图
+                            comparisonView.setVisibility(View.VISIBLE);
+                            
+                            // 启用特征提取按钮
+                            btnExtractFeatures.setEnabled(true);
+                            
+                            Toast.makeText(this, "人脸修复完成", Toast.LENGTH_SHORT).show();
+                        });
+                    } else {
+                        runOnUiThread(() -> {
+                            hideLoading();
+                            Toast.makeText(this, "修复失败：无法处理图像", Toast.LENGTH_SHORT).show();
+                        });
+                    }
                 }
             } catch (Exception e) {
                 runOnUiThread(() -> {
+                    hideLoading();
                     Toast.makeText(this, "修复失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("FaceEnhancement", "Face repair error", e);
                 });
             }
         }).start();

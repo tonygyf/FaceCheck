@@ -453,6 +453,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     cursor.getString(cursor.getColumnIndexOrThrow("name")),
                     cursor.getString(cursor.getColumnIndexOrThrow("username")),
                     cursor.getString(cursor.getColumnIndexOrThrow("password")),
+                    cursor.getString(cursor.getColumnIndexOrThrow("avatarUri")),
                     cursor.getLong(cursor.getColumnIndexOrThrow("createdAt")),
                     cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"))
             );
@@ -480,6 +481,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("name", teacher.getName());
         values.put("username", teacher.getUsername());
         values.put("password", teacher.getPassword());
+        values.put("avatarUri", teacher.getAvatarUri());
         values.put("updatedAt", System.currentTimeMillis());
 
         int rowsAffected = db.update("Teacher", values,

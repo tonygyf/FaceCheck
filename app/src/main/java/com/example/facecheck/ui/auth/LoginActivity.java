@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -24,6 +25,7 @@ public class LoginActivity extends AppCompatActivity {
     private TextView registerTextView;
     private ProgressBar progressBar;
     private LoginViewModel loginViewModel;
+    private CheckBox rememberPasswordCheckBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +41,7 @@ public class LoginActivity extends AppCompatActivity {
         loginButton = findViewById(R.id.loginButton);
         registerTextView = findViewById(R.id.registerTextView);
         progressBar = findViewById(R.id.progressBar);
+        rememberPasswordCheckBox = findViewById(R.id.rememberPasswordCheckBox);
 
         // 观察ViewModel状态
         loginViewModel.uiState.observe(this, this::handleUiState);
@@ -78,6 +81,21 @@ public class LoginActivity extends AppCompatActivity {
             SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
             prefs.edit().putLong("teacher_id", success.teacherId).apply();
             
+            // 记住密码逻辑
+            if (rememberPasswordCheckBox.isChecked()) {
+                prefs.edit()
+                    .putBoolean("remember_password", true)
+                    .putString("saved_username", emailEditText.getText().toString().trim())
+                    .putString("saved_password", passwordEditText.getText().toString().trim())
+                    .apply();
+            } else {
+                prefs.edit()
+                    .putBoolean("remember_password", false)
+                    .remove("saved_username")
+                    .remove("saved_password")
+                    .apply();
+            }
+            
             // 跳转到主页面
             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -106,7 +124,34 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
+        // 自动填充记住的用户名和密码
+        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+        boolean rememberPassword = prefs.getBoolean("remember_password", false);
+        if (rememberPassword) {
+            String savedUsername = prefs.getString("saved_username", "");
+            String savedPassword = prefs.getString("saved_password", "");
+            emailEditText.setText(savedUsername);
+            passwordEditText.setText(savedPassword);
+            rememberPasswordCheckBox.setChecked(true);
+        }
+
         // 调用ViewModel进行登录
         loginViewModel.login(username, password);
+    }
+    
+    @Override
+    protected void onStart() {
+        super.onStart();
+        // 自动登录逻辑
+        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+        boolean rememberPassword = prefs.getBoolean("remember_password", false);
+        long teacherId = prefs.getLong("teacher_id", -1);
+        if (rememberPassword && teacherId != -1) {
+            // 跳转到主页面
+            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            finish();
+        }
     }
 }

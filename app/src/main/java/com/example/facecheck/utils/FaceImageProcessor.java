@@ -76,7 +76,7 @@ public class FaceImageProcessor {
     }
     
     /**
-     * 增强图像对比度和亮度
+     * 增强图像对比度和亮度 - 优化版本
      */
     public static Bitmap enhanceImage(Bitmap bitmap, float contrast, float brightness) {
         if (bitmap == null) {
@@ -90,26 +90,30 @@ public class FaceImageProcessor {
         int width = enhancedBitmap.getWidth();
         int height = enhancedBitmap.getHeight();
         
-        // 遍历每个像素进行增强处理
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int pixel = enhancedBitmap.getPixel(x, y);
-                
-                // 提取RGB分量
-                int red = (pixel >> 16) & 0xFF;
-                int green = (pixel >> 8) & 0xFF;
-                int blue = pixel & 0xFF;
-                
-                // 应用对比度和亮度调整
-                red = adjustColorComponent(red, contrast, brightness);
-                green = adjustColorComponent(green, contrast, brightness);
-                blue = adjustColorComponent(blue, contrast, brightness);
-                
-                // 重新组合像素
-                int newPixel = (0xFF << 24) | (red << 16) | (green << 8) | blue;
-                enhancedBitmap.setPixel(x, y, newPixel);
-            }
+        // 使用更高效的批量处理方法
+        int[] pixels = new int[width * height];
+        enhancedBitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+        
+        // 批量处理像素
+        for (int i = 0; i < pixels.length; i++) {
+            int pixel = pixels[i];
+            
+            // 提取RGB分量
+            int red = (pixel >> 16) & 0xFF;
+            int green = (pixel >> 8) & 0xFF;
+            int blue = pixel & 0xFF;
+            
+            // 应用对比度和亮度调整
+            red = adjustColorComponent(red, contrast, brightness);
+            green = adjustColorComponent(green, contrast, brightness);
+            blue = adjustColorComponent(blue, contrast, brightness);
+            
+            // 重新组合像素
+            pixels[i] = (0xFF << 24) | (red << 16) | (green << 8) | blue;
         }
+        
+        // 一次性设置所有像素
+        enhancedBitmap.setPixels(pixels, 0, width, 0, 0, width, height);
         
         return enhancedBitmap;
     }
@@ -215,6 +219,19 @@ public class FaceImageProcessor {
             return null;
         }
         
+        // 限制图像尺寸以提高性能
+        int maxSize = 512; // 最大处理尺寸
+        Bitmap processedBitmap = faceBitmap;
+        
+        // 如果图像过大，先进行缩放
+        if (faceBitmap.getWidth() > maxSize || faceBitmap.getHeight() > maxSize) {
+            float scale = Math.min((float) maxSize / faceBitmap.getWidth(), 
+                                 (float) maxSize / faceBitmap.getHeight());
+            int newWidth = Math.round(faceBitmap.getWidth() * scale);
+            int newHeight = Math.round(faceBitmap.getHeight() * scale);
+            processedBitmap = Bitmap.createScaledBitmap(faceBitmap, newWidth, newHeight, true);
+        }
+        
         // 根据质量参数调整修复强度
         float contrastFactor = 1.0f + (quality * 0.5f); // 1.0-1.5
         float brightnessFactor = quality * 0.2f; // 0-0.2
@@ -222,7 +239,7 @@ public class FaceImageProcessor {
         float blurRadius = Math.max(0.5f, 2.0f - quality); // 2.0-0.5，质量越高，模糊越少
         
         // 步骤1：增强对比度和亮度（不干扰人脸特征）
-        Bitmap enhanced = enhanceImage(faceBitmap, contrastFactor, brightnessFactor);
+        Bitmap enhanced = enhanceImage(processedBitmap, contrastFactor, brightnessFactor);
         
         // 步骤2：应用轻度锐化（增强细节但不过度）
         Bitmap sharpened = sharpenImage(enhanced, sharpnessFactor);

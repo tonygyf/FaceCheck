@@ -5,6 +5,7 @@ public class Teacher {
     private String name;
     private String username;
     private String password;
+    private String avatarUri; // 头像图片路径
 
     private long createdAt;
     private long updatedAt;
@@ -14,13 +15,12 @@ public class Teacher {
         this.updatedAt = System.currentTimeMillis();
     }
 
-
-
-    public Teacher(long id, String name, String username, String password, long createdAt, long updatedAt) {
+    public Teacher(long id, String name, String username, String password, String avatarUri, long createdAt, long updatedAt) {
         this.id = id;
         this.name = name;
         this.username = username;
         this.password = password;
+        this.avatarUri = avatarUri;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -76,5 +76,14 @@ public class Teacher {
 
     public void setUpdatedAt(long updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getAvatarUri() {
+        return avatarUri;
+    }
+
+    public void setAvatarUri(String avatarUri) {
+        this.avatarUri = avatarUri;
+        this.updatedAt = System.currentTimeMillis();
     }
 }

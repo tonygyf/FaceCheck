@@ -19,10 +19,14 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.MediaStore;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
@@ -33,6 +37,17 @@ import com.example.facecheck.webdav.WebDavManager;
 import com.example.facecheck.sync.SyncManager;
 import com.example.facecheck.ui.settings.CacheSettingsActivity;
 import com.example.facecheck.utils.CacheManager;
+import com.example.facecheck.utils.PhotoStorageManager;
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.io.IOException;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -65,6 +80,7 @@ public class ProfileFragment extends Fragment {
     private Teacher currentTeacher;
     private WebDavManager webDavManager;
     private SyncManager syncManager;
+    private String currentPhotoPath;
     
     @Nullable
     @Override
@@ -130,7 +146,7 @@ public class ProfileFragment extends Fragment {
         // 从数据库查询教师信息
         Cursor cursor = dbHelper.getReadableDatabase().query(
             "Teacher",
-            new String[]{"id", "name", "username", "password", "createdAt", "updatedAt"},
+            new String[]{"id", "name", "username", "password", "avatarUri", "createdAt", "updatedAt"},
             "id = ?",
             new String[]{String.valueOf(teacherId)},
             null, null, null);
@@ -140,6 +156,7 @@ public class ProfileFragment extends Fragment {
             String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
             String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
             String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
+            String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
             long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
             long updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"));
             cursor.close();
@@ -149,12 +166,23 @@ public class ProfileFragment extends Fragment {
             currentTeacher.setName(name);
             currentTeacher.setUsername(username);
             currentTeacher.setPassword(password);
+            currentTeacher.setAvatarUri(avatarUri);
             currentTeacher.setCreatedAt(createdAt);
             currentTeacher.setUpdatedAt(updatedAt);
             
             // 显示教师信息
             usernameTextView.setText(currentTeacher.getName());
             emailTextView.setText(currentTeacher.getUsername()); // 使用username代替email
+            
+            // 加载头像
+            if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
+                File avatarFile = new File(currentTeacher.getAvatarUri());
+                if (avatarFile.exists()) {
+                    Glide.with(this)
+                        .load(avatarFile)
+                        .into(profileImageView);
+                }
+            }
             
         } else {
             // 如果找不到教师，返回登录页面
@@ -211,7 +239,7 @@ public class ProfileFragment extends Fragment {
         builder.setItems(options, (dialog, which) -> {
             if (which == 0) {
                 // 拍照
-                Toast.makeText(getActivity(), "拍照功能开发中", Toast.LENGTH_SHORT).show();
+                dispatchTakePictureIntent();
             } else {
                 // 从相册选择
                 Intent pickPhotoIntent = new Intent(Intent.ACTION_PICK, 
@@ -220,6 +248,38 @@ public class ProfileFragment extends Fragment {
             }
         });
         builder.show();
+    }
+    
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getActivity().getPackageManager()) != null) {
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+            if (photoFile != null) {
+                Uri photoURI = FileProvider.getUriForFile(getActivity(),
+                    "com.example.facecheck.fileprovider",
+                    photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+            }
+        }
+    }
+    
+    private File createImageFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = getActivity().getExternalFilesDir("Pictures");
+        File image = File.createTempFile(
+            imageFileName,
+            ".jpg",
+            storageDir
+        );
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
     }
     
     private void showChangeUsernameDialog() {
@@ -480,14 +540,79 @@ public class ProfileFragment extends Fragment {
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         
-        if (resultCode == getActivity().RESULT_OK && data != null) {
-            if (requestCode == REQUEST_PICK_IMAGE) {
+        if (resultCode == getActivity().RESULT_OK) {
+            if (requestCode == REQUEST_IMAGE_CAPTURE) {
+                // 处理拍照结果
+                if (currentPhotoPath != null) {
+                    updateProfileImage(currentPhotoPath);
+                }
+            } else if (requestCode == REQUEST_PICK_IMAGE && data != null) {
+                // 处理相册选择结果
                 Uri selectedImageUri = data.getData();
                 if (selectedImageUri != null) {
-                    // 显示选中的图片
-                    Glide.with(this).load(selectedImageUri).into(profileImageView);
-                    Toast.makeText(getActivity(), "头像更新成功", Toast.LENGTH_SHORT).show();
+                    String photoPath = copyUriToFile(selectedImageUri);
+                    if (photoPath != null) {
+                        updateProfileImage(photoPath);
+                    }
                 }
+            }
+        }
+    }
+    
+    private String copyUriToFile(Uri uri) {
+        try {
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            String imageFileName = "JPEG_" + timeStamp + "_";
+            File storageDir = getActivity().getExternalFilesDir("Pictures");
+            File image = File.createTempFile(
+                imageFileName,
+                ".jpg",
+                storageDir
+            );
+            
+            // 使用PhotoStorageManager的saveAvatar方法保存头像
+            PhotoStorageManager photoStorageManager = new PhotoStorageManager(getActivity());
+            String savedPath = photoStorageManager.saveAvatar(uri, currentTeacher.getId());
+            if (savedPath != null) {
+                return savedPath;
+            } else {
+                // 如果saveAvatar失败，使用手动复制
+                InputStream inputStream = getActivity().getContentResolver().openInputStream(uri);
+                FileOutputStream outputStream = new FileOutputStream(image);
+                
+                byte[] buffer = new byte[4096];
+                int length;
+                while ((length = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, length);
+                }
+                
+                inputStream.close();
+                outputStream.close();
+                
+                return image.getAbsolutePath();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    private void updateProfileImage(String photoPath) {
+        // 更新UI
+        Glide.with(this)
+            .load(photoPath)
+            .into(profileImageView);
+        
+        // 更新教师对象
+        if (currentTeacher != null) {
+            currentTeacher.setAvatarUri(photoPath);
+            
+            // 保存到数据库
+            boolean success = dbHelper.updateTeacher(currentTeacher);
+            if (success) {
+                Toast.makeText(getActivity(), "头像更新成功", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getActivity(), "头像更新失败", Toast.LENGTH_SHORT).show();
             }
         }
     }
