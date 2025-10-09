@@ -2,11 +2,26 @@ package com.example.facecheck.utils;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.renderscript.Allocation;
+import android.renderscript.Element;
+import android.renderscript.RenderScript;
+import android.renderscript.ScriptIntrinsicBlur;
+import android.renderscript.ScriptIntrinsicConvolve3x3;
+import android.util.Log;
 
 /**
  * 人脸图像处理工具类
- * 提供人脸图像的修正、旋转、缩放等功能
+ * 提供人脸图像的修正、旋转、缩放、增强等功能
  */
 public class FaceImageProcessor {
     
@@ -83,9 +98,26 @@ public class FaceImageProcessor {
             return null;
         }
         
-        // 这里可以实现更复杂的图像增强算法
-        // 目前返回原图，后续可以添加OpenCV等库进行高级处理
-        return bitmap;
+        Bitmap enhancedBitmap = Bitmap.createBitmap(
+                bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(enhancedBitmap);
+        
+        // 创建颜色矩阵
+        ColorMatrix cm = new ColorMatrix();
+        
+        // 设置对比度 (1.0 是正常值)
+        cm.set(new float[] {
+                contrast, 0, 0, 0, brightness * 255,
+                0, contrast, 0, 0, brightness * 255,
+                0, 0, contrast, 0, brightness * 255,
+                0, 0, 0, 1, 0
+        });
+        
+        Paint paint = new Paint();
+        paint.setColorFilter(new ColorMatrixColorFilter(cm));
+        canvas.drawBitmap(bitmap, 0, 0, paint);
+        
+        return enhancedBitmap;
     }
     
     /**
@@ -110,6 +142,121 @@ public class FaceImageProcessor {
             return 0.9f; // 质量良好
         } else {
             return 0.8f; // 质量较好但可能过大
+        }
+    }
+    
+    /**
+     * 应用高斯模糊
+     * @param context 上下文
+     * @param bitmap 原始图像
+     * @param radius 模糊半径 (1-25)
+     */
+    public static Bitmap applyGaussianBlur(Context context, Bitmap bitmap, float radius) {
+        if (bitmap == null || context == null) {
+            return null;
+        }
+        
+        Bitmap outputBitmap = Bitmap.createBitmap(
+                bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        
+        RenderScript rs = RenderScript.create(context);
+        ScriptIntrinsicBlur blurScript = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs));
+        
+        Allocation allIn = Allocation.createFromBitmap(rs, bitmap);
+        Allocation allOut = Allocation.createFromBitmap(rs, outputBitmap);
+        
+        blurScript.setRadius(radius);
+        blurScript.setInput(allIn);
+        blurScript.forEach(allOut);
+        
+        allOut.copyTo(outputBitmap);
+        rs.destroy();
+        
+        return outputBitmap;
+    }
+    
+    /**
+     * 应用锐化滤镜
+     * @param context 上下文
+     * @param bitmap 原始图像
+     */
+    public static Bitmap applySharpen(Context context, Bitmap bitmap) {
+        if (bitmap == null || context == null) {
+            return null;
+        }
+        
+        Bitmap outputBitmap = Bitmap.createBitmap(
+                bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        
+        RenderScript rs = RenderScript.create(context);
+        ScriptIntrinsicConvolve3x3 convolve = ScriptIntrinsicConvolve3x3.create(rs, Element.U8_4(rs));
+        
+        // 锐化卷积核
+        float[] sharpKernel = {
+                0, -1, 0,
+                -1, 5, -1,
+                0, -1, 0
+        };
+        
+        Allocation allIn = Allocation.createFromBitmap(rs, bitmap);
+        Allocation allOut = Allocation.createFromBitmap(rs, outputBitmap);
+        
+        convolve.setCoefficients(sharpKernel);
+        convolve.setInput(allIn);
+        convolve.forEach(allOut);
+        
+        allOut.copyTo(outputBitmap);
+        rs.destroy();
+        
+        return outputBitmap;
+    }
+    
+    /**
+     * 应用美颜效果
+     * @param context 上下文
+     * @param bitmap 原始图像
+     * @param smoothLevel 平滑级别 (0.0-1.0)
+     * @param brightLevel 亮度级别 (0.0-0.3)
+     */
+    public static Bitmap applyBeautify(Context context, Bitmap bitmap, float smoothLevel, float brightLevel) {
+        if (bitmap == null) {
+            return null;
+        }
+        
+        // 步骤1: 平滑皮肤 (轻度高斯模糊)
+        Bitmap smoothed = applyGaussianBlur(context, bitmap, smoothLevel * 10f);
+        
+        // 步骤2: 增强对比度和亮度
+        Bitmap enhanced = enhanceImage(smoothed, 1.1f, brightLevel);
+        
+        return enhanced;
+    }
+    
+    /**
+     * 应用完整的人脸修复/增强处理
+     * @param context 上下文
+     * @param faceBitmap 人脸图像
+     * @return 修复后的人脸图像
+     */
+    public static Bitmap repairAndEnhanceFace(Context context, Bitmap faceBitmap) {
+        if (faceBitmap == null || context == null) {
+            return null;
+        }
+        
+        try {
+            // 步骤1: 标准化人脸尺寸
+            Bitmap normalized = normalizeFaceImage(faceBitmap, 512);
+            
+            // 步骤2: 应用美颜效果
+            Bitmap beautified = applyBeautify(context, normalized, 0.3f, 0.1f);
+            
+            // 步骤3: 应用锐化增强细节
+            Bitmap sharpened = applySharpen(context, beautified);
+            
+            return sharpened;
+        } catch (Exception e) {
+            Log.e(TAG, "人脸修复失败", e);
+            return faceBitmap; // 出错时返回原图
         }
     }
     

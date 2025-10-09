@@ -37,6 +37,48 @@ public class FaceRecognitionManager {
     }
     
     /**
+     * 提取特征向量的回调接口
+     */
+    public interface FeatureExtractionCallback {
+        void onSuccess(float[] features);
+        void onFailure(Exception e);
+    }
+    
+    /**
+     * 从位图中提取特征向量
+     * @param faceBitmap 人脸位图
+     * @param callback 回调接口
+     */
+    public void extractFeatureVector(Bitmap faceBitmap, FeatureExtractionCallback callback) {
+        try {
+            // 使用FaceDetectionManager检测人脸
+            FaceDetectionManager faceDetectionManager = new FaceDetectionManager(context);
+            faceDetectionManager.detectFacesFromBitmap(faceBitmap, new FaceDetectionManager.FaceDetectionCallback() {
+                @Override
+                public void onSuccess(List<Face> faces, List<Bitmap> faceBitmaps) {
+                    if (faces.isEmpty()) {
+                        callback.onFailure(new Exception("未检测到人脸"));
+                        return;
+                    }
+                    
+                    // 使用第一个检测到的人脸
+                    Face face = faces.get(0);
+                    float[] features = extractFaceFeatures(faceBitmap, face);
+                    callback.onSuccess(features);
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    callback.onFailure(e);
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "提取特征向量失败", e);
+            callback.onFailure(e);
+        }
+    }
+    
+    /**
      * 提取人脸特征向量
      * 基于人脸的关键点和几何特征生成特征向量
      */
@@ -48,8 +90,6 @@ public class FaceRecognitionManager {
             // 获取左眼
             FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
             if (leftEye != null) landmarks.add(leftEye);
-            
-            // 获取右眼
             FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
             if (rightEye != null) landmarks.add(rightEye);
             

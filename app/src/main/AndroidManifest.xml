@@ -92,6 +92,12 @@
             android:theme="@style/Theme.FaceCheck"
             android:label="缓存管理" />
             
+        <activity
+            android:name=".activity.FaceEnhancementResultActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="人脸修复结果" />
+            
         <!-- 文件提供者配置 -->
         <provider
             android:name="androidx.core.content.FileProvider"

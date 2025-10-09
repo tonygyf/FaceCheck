@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.util.Log;
 
 import com.example.facecheck.utils.PhotoStorageManager;
 
@@ -33,6 +34,25 @@ public class ImageStorageManager {
     
     public ImageStorageManager(Context context) {
         this.context = context;
+    }
+    
+    /**
+     * 从文件路径加载位图
+     * @param filePath 文件路径
+     * @return 位图对象，如果加载失败则返回null
+     */
+    public Bitmap loadBitmapFromFile(String filePath) {
+        try {
+            File file = new File(filePath);
+            if (!file.exists()) {
+                Log.e(TAG, "文件不存在: " + filePath);
+                return null;
+            }
+            return MediaStore.Images.Media.getBitmap(context.getContentResolver(), Uri.fromFile(file));
+        } catch (IOException e) {
+            Log.e(TAG, "加载图片失败: " + e.getMessage());
+            return null;
+        }
     }
     
     /**
