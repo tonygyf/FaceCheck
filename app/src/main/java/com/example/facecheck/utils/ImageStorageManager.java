@@ -4,12 +4,12 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.MediaStore;
-import android.util.Log;
 
 import com.example.facecheck.utils.PhotoStorageManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -34,25 +34,6 @@ public class ImageStorageManager {
     
     public ImageStorageManager(Context context) {
         this.context = context;
-    }
-    
-    /**
-     * 从文件路径加载位图
-     * @param filePath 文件路径
-     * @return 位图对象，如果加载失败则返回null
-     */
-    public Bitmap loadBitmapFromFile(String filePath) {
-        try {
-            File file = new File(filePath);
-            if (!file.exists()) {
-                Log.e(TAG, "文件不存在: " + filePath);
-                return null;
-            }
-            return MediaStore.Images.Media.getBitmap(context.getContentResolver(), Uri.fromFile(file));
-        } catch (IOException e) {
-            Log.e(TAG, "加载图片失败: " + e.getMessage());
-            return null;
-        }
     }
     
     /**
@@ -99,6 +80,29 @@ public class ImageStorageManager {
             FileOutputStream fos = new FileOutputStream(file);
             bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos);
             fos.close();
+            
+            return file.getAbsolutePath();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    /**
+     * 保存文本文件
+     */
+    public String saveTextFile(String content, String fileName) {
+        try {
+            // 确保文件名以.txt结尾（如果没有指定扩展名）
+            if (!fileName.contains(".")) {
+                fileName += ".txt";
+            }
+            
+            File dir = getOriginalPhotosDir();
+            File file = new File(dir, fileName);
+            FileWriter writer = new FileWriter(file);
+            writer.write(content);
+            writer.close();
             
             return file.getAbsolutePath();
         } catch (IOException e) {

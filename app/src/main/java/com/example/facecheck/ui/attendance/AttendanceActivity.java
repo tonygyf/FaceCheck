@@ -15,6 +15,7 @@ import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.*;
+import android.util.Log;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.activity.result.ActivityResultLauncher;
@@ -27,6 +28,7 @@ import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.*;
 import com.example.facecheck.utils.PhotoStorageManager;
+import com.example.facecheck.ui.face.FaceEnhancementActivity;
 
 import java.util.ArrayList;
 import com.example.facecheck.utils.ImageStorageManager;
@@ -296,6 +298,14 @@ public class AttendanceActivity extends AppCompatActivity {
             if (quality < 0.6f) {
                 // 质量较差的人脸，进行增强处理
                 normalizedFace = FaceImageProcessor.enhanceImage(normalizedFace, 1.2f, 10f);
+                
+                // 保存增强后的图像用于后续对比
+                String enhancedImagePath = imageStorageManager.saveTempImage(normalizedFace, 
+                    "enhanced_face_" + sessionId + "_" + i + ".jpg");
+                
+                if (enhancedImagePath != null) {
+                    Log.d(TAG, "Enhanced face image saved: " + enhancedImagePath);
+                }
             }
             
             // 更新faceBitmaps中的图像
@@ -359,7 +369,7 @@ public class AttendanceActivity extends AppCompatActivity {
         // 创建对话框显示分割结果
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("检测到 " + faces.size() + " 个人脸");
-        builder.setMessage("是否查看分割后的人脸照片或进行人脸修正？");
+        builder.setMessage("是否查看分割后的人脸照片或进行人脸修正/增强？");
         
         builder.setPositiveButton("查看分割", (dialog, which) -> {
             // 显示人脸分割结果界面
@@ -373,6 +383,16 @@ public class AttendanceActivity extends AppCompatActivity {
             // 显示人脸修正界面（选择第一个检测到的人脸）
             if (!faceImagePaths.isEmpty()) {
                 Intent intent = new Intent(this, FaceCorrectionActivity.class);
+                intent.putExtra("image_path", faceImagePaths.get(0));
+                startActivity(intent);
+            }
+            dialog.dismiss();
+        });
+        
+        builder.setPositiveButton("人脸增强", (dialog, which) -> {
+            // 显示人脸增强界面（选择第一个检测到的人脸）
+            if (!faceImagePaths.isEmpty()) {
+                Intent intent = new Intent(this, FaceEnhancementActivity.class);
                 intent.putExtra("image_path", faceImagePaths.get(0));
                 startActivity(intent);
             }

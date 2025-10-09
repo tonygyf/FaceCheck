@@ -276,6 +276,37 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- 人脸修复增强卡片 -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/card_face_enhancement"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_face_enhancement"
+                    android:layout_gravity="center_vertical"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="人脸修复增强"
+                    android:textSize="16sp"
+                    android:layout_marginStart="16dp"
+                    android:layout_gravity="center_vertical"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
         <!-- 同步按钮 -->
         <Button
             android:id="@+id/btn_sync"

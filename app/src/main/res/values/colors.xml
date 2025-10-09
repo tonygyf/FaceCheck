@@ -23,4 +23,31 @@
     <color name="colorError">#FFB00020</color>
     <color name="colorOnError">@color/white</color>
     <color name="design_default_color_error">#FFB00020</color>
+    
+    <!-- 应用主题色 -->
+    <color name="primary">#2196F3</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="primary_light">#BBDEFB</color>
+    <color name="accent">#FF4081</color>
+    
+    <!-- 背景色 -->
+    <color name="background_light">#FAFAFA</color>
+    <color name="background_dark">#303030</color>
+    
+    <!-- 文本颜色 -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+    
+    <!-- 灰色系 -->
+    <color name="grey_200">#EEEEEE</color>
+    <color name="grey_400">#BDBDBD</color>
+    <color name="grey_500">#9E9E9E</color>
+    <color name="grey_600">#757575</color>
+    
+    <!-- 状态颜色 -->
+    <color name="success">#4CAF50</color>
+    <color name="warning">#FF9800</color>
+    <color name="error">#F44336</color>
+    <color name="info">#2196F3</color>
 </resources>

@@ -15,4 +15,11 @@
     <!-- Popup Overlay Theme -->
     <style name="Theme.FaceCheck.PopupOverlay" parent="ThemeOverlay.MaterialComponents.Light" />
     
+    <!-- NoActionBar Theme -->
+    <style name="Theme.FaceCheck.NoActionBar" parent="Theme.FaceCheck">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+    
 </resources>

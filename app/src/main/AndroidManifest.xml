@@ -71,8 +71,14 @@
         <activity
             android:name=".ui.attendance.FaceSegmentationActivity"
             android:exported="false"
-            android:theme="@style/Theme.FaceCheck"
-            android:label="人脸分割结果" />
+            android:theme="@style/Theme.FaceCheck.NoActionBar"
+            android:label="人脸分割" />
+        
+        <activity
+            android:name=".ui.face.FaceEnhancementActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck.NoActionBar"
+            android:label="人脸修复增强" />
             
         <activity
             android:name=".ui.attendance.FaceCorrectionActivity"
@@ -91,12 +97,6 @@
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"
             android:label="缓存管理" />
-            
-        <activity
-            android:name=".activity.FaceEnhancementResultActivity"
-            android:exported="false"
-            android:theme="@style/Theme.FaceCheck"
-            android:label="人脸修复结果" />
             
         <!-- 文件提供者配置 -->
         <provider

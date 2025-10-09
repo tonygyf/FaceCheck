@@ -32,6 +32,7 @@ public class FaceCorrectionActivity extends AppCompatActivity {
     private Bitmap originalBitmap;
     private Bitmap correctedBitmap;
     private boolean isCorrected = false;
+    private float repairQuality = 0.8f; // 默认修复质量（码率）
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,7 +61,7 @@ public class FaceCorrectionActivity extends AppCompatActivity {
         btnSave = findViewById(R.id.btnSave);
         btnCancel = findViewById(R.id.btnCancel);
         
-        btnCorrect.setOnClickListener(v -> performCorrection());
+        btnCorrect.setOnClickListener(v -> showQualitySelector());
         btnSave.setOnClickListener(v -> saveCorrectedImage());
         btnCancel.setOnClickListener(v -> finish());
         
@@ -116,10 +117,10 @@ public class FaceCorrectionActivity extends AppCompatActivity {
         try {
             // 显示进度
             tvCorrectionInfo.setVisibility(View.VISIBLE);
-            tvCorrectionInfo.setText("正在修正图像...");
+            tvCorrectionInfo.setText("正在修复图像...");
             
-            // 执行图像修正
-            correctedBitmap = FaceImageProcessor.enhanceImage(originalBitmap, 1.2f, 10f);
+            // 执行图像修复（不干扰人脸特征，根据码率调整）
+            correctedBitmap = FaceImageProcessor.repairFaceImage(originalBitmap, repairQuality);
             
             if (correctedBitmap != null) {
                 // 显示修正后的图片
@@ -128,21 +129,22 @@ public class FaceCorrectionActivity extends AppCompatActivity {
                 
                 // 重新评估质量
                 float correctedQuality = FaceImageProcessor.calculateImageQuality(correctedBitmap);
-                tvCorrectionInfo.setText(String.format("修正完成 - 新质量评分: %.2f/1.0", correctedQuality));
+                tvCorrectionInfo.setText(String.format("修复完成 - 修复质量: %.0f%% - 新质量评分: %.2f/1.0", 
+                    repairQuality * 100, correctedQuality));
                 
                 // 显示保存按钮
                 btnSave.setVisibility(View.VISIBLE);
                 isCorrected = true;
                 
-                Toast.makeText(this, "图像修正完成", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "图像修复完成", Toast.LENGTH_SHORT).show();
             } else {
-                tvCorrectionInfo.setText("修正失败");
-                Toast.makeText(this, "图像修正失败", Toast.LENGTH_SHORT).show();
+                tvCorrectionInfo.setText("修复失败");
+                Toast.makeText(this, "图像修复失败", Toast.LENGTH_SHORT).show();
             }
             
         } catch (Exception e) {
-            tvCorrectionInfo.setText("修正出错: " + e.getMessage());
-            Toast.makeText(this, "修正出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            tvCorrectionInfo.setText("修复出错: " + e.getMessage());
+            Toast.makeText(this, "修复出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
     
@@ -191,6 +193,23 @@ public class FaceCorrectionActivity extends AppCompatActivity {
         } else {
             super.onBackPressed();
         }
+    }
+    
+    /**
+     * 显示修复质量选择器
+     */
+    private void showQualitySelector() {
+        String[] qualityOptions = {"低质量修复 (50%)", "标准修复 (80%)", "高质量修复 (100%)"};
+        float[] qualityValues = {0.5f, 0.8f, 1.0f};
+        
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("选择修复质量");
+        builder.setItems(qualityOptions, (dialog, which) -> {
+            repairQuality = qualityValues[which];
+            performCorrection();
+        });
+        builder.setNegativeButton("取消", null);
+        builder.show();
     }
     
     @Override

@@ -3,7 +3,9 @@ package com.example.facecheck.fragments;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,6 +25,7 @@ import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.ui.classroom.ClassroomSelectionActivity;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.activity.FaceCorrectionActivity;
+import com.example.facecheck.ui.face.FaceEnhancementActivity;
 import androidx.appcompat.widget.TooltipCompat;
 
 public class HomeFragment extends Fragment {
@@ -31,6 +34,7 @@ public class HomeFragment extends Fragment {
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
     private CardView cardClassroom, cardStudents, cardAttendance, cardQuickAttendance, cardFaceCorrection;
     private Button btnSync;
+    private static final int PICK_IMAGE_REQUEST = 1001;
 
     @Nullable
     @Override
@@ -57,7 +61,17 @@ public class HomeFragment extends Fragment {
         cardStudents.setOnClickListener(v -> navigateToStudents());
         cardAttendance.setOnClickListener(v -> navigateToAttendance());
         cardQuickAttendance.setOnClickListener(v -> navigateToQuickAttendance());
-        cardFaceCorrection.setOnClickListener(v -> startActivity(new Intent(getActivity(), FaceCorrectionActivity.class)));
+        cardFaceCorrection.setOnClickListener(v -> openImagePicker());
+        
+        // 添加人脸修复功能入口
+        CardView cardFaceEnhancement = view.findViewById(R.id.card_face_enhancement);
+        if (cardFaceEnhancement != null) {
+            cardFaceEnhancement.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), FaceEnhancementActivity.class);
+                startActivity(intent);
+            });
+        }
+        
         btnSync.setOnClickListener(v -> syncDatabase());
         
         // 添加Tooltip提示
@@ -135,5 +149,51 @@ public class HomeFragment extends Fragment {
     private void syncDatabase() {
         // TODO: 实现WebDAV同步
         Toast.makeText(getContext(), "正在同步数据...", Toast.LENGTH_SHORT).show();
+    }
+    
+    /**
+     * 打开图片选择器
+     */
+    private void openImagePicker() {
+        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        intent.setType("image/*");
+        startActivityForResult(intent, PICK_IMAGE_REQUEST);
+    }
+    
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == getActivity().RESULT_OK && data != null) {
+            Uri selectedImageUri = data.getData();
+            if (selectedImageUri != null) {
+                // 获取图片的真实路径
+                String imagePath = getRealPathFromURI(selectedImageUri);
+                if (imagePath != null) {
+                    // 跳转到人脸修复界面
+                    Intent intent = new Intent(getActivity(), FaceCorrectionActivity.class);
+                    intent.putExtra("image_path", imagePath);
+                    startActivity(intent);
+                } else {
+                    Toast.makeText(getContext(), "无法获取图片路径", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+    }
+    
+    /**
+     * 从URI获取真实文件路径
+     */
+    private String getRealPathFromURI(Uri uri) {
+        String[] projection = {MediaStore.Images.Media.DATA};
+        android.database.Cursor cursor = getActivity().getContentResolver().query(uri, projection, null, null, null);
+        if (cursor != null) {
+            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            cursor.moveToFirst();
+            String path = cursor.getString(column_index);
+            cursor.close();
+            return path;
+        }
+        return null;
     }
 }
