@@ -13,7 +13,7 @@
 ## 📱 项目简介
 
 <div align="center">
-  <img src="app/src/main/res/drawable/facecheck.png" alt="FaceCheck Logo" width="80" height="80" style="vertical-align: middle; margin-right: 20px;"/>
+  
   <span style="font-size: 24px; font-weight: bold; vertical-align: middle;">FaceCheck 智能人脸识别考勤系统</span>
 </div>
 
