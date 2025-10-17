@@ -4,11 +4,12 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-orange.svg)](https://kotlinlang.org/)
 
-<div align="center">
-  <img src="app/src/main/res/drawable/facecheck.png" alt="FaceCheck Logo" width="120" height="120"/>
-  <br/>
-  <img src="app/src/main/res/drawable/fclogo.png" alt="FaceCheck" width="200" height="60"/>
-</div>
+<p align="center">
+  <img src="app/src/main/res/drawable/facecheck.png" alt="FaceCheck Logo" width="100" height="100"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="app/src/main/res/drawable/fclogo.png" alt="FaceCheck" width="220"/>
+</p>
+
 
 ## 📱 项目简介
 
