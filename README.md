@@ -7,7 +7,7 @@
 <p align="center">
   <img src="app/src/main/res/drawable/facecheck.png" alt="FaceCheck Logo" width="100" height="100"/>
   &nbsp;&nbsp;&nbsp;
-  <img src="app/src/main/res/drawable/fclogo.png" alt="FaceCheck" width="220"/>
+  <img src="app/src/main/res/drawable/fclogo.png" alt="FaceCheck" width="300" height="100"/>
 </p>
 
 
