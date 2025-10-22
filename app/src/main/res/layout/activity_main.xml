@@ -9,13 +9,18 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:theme="@style/Theme.FaceCheck.AppBarOverlay">
+        android:background="@color/toolbar_bg"
+        android:fitsSystemWindows="true">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:background="@color/toolbar_bg"
+            app:titleCentered="true"
+            app:titleTextColor="@color/colorOnSurface"
+            android:elevation="0dp"
+            app:contentInsetStartWithNavigation="0dp"
             app:popupTheme="@style/Theme.FaceCheck.PopupOverlay" />
 
     </com.google.android.material.appbar.AppBarLayout>
@@ -25,14 +30,106 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="?attr/actionBarSize"
-        android:layout_marginBottom="56dp" />
+        android:layout_marginBottom="80dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
+    <!-- 保留隐藏的 BottomNavigationView 以兼容现有调用 -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_navigation"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:visibility="gone"
         android:layout_gravity="bottom"
         android:background="?android:attr/windowBackground"
         app:menu="@menu/bottom_navigation_menu" />
+
+    <!-- 使用 BottomAppBar 提供真实凹槽，左右各两枚图标 -->
+    <com.google.android.material.bottomappbar.BottomAppBar
+        android:id="@+id/bottom_app_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:backgroundTint="@color/colorSurface"
+        app:hideOnScroll="true"
+        app:fabAlignmentMode="center"
+        app:menuAlignmentMode="auto"
+        app:fabCradleMargin="12dp"
+        app:fabCradleRoundedCornerRadius="28dp"
+        app:fabCradleVerticalOffset="6dp">
+
+        <!-- 左侧动作：首页、课堂；与凹槽、边缘保持间距 -->
+        <LinearLayout
+            android:id="@+id/left_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="start"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:layout_marginEnd="80dp">
+
+            <ImageButton
+                android:id="@+id/btn_nav_home"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="首页"
+                android:tint="@color/grey_600"
+                android:src="@android:drawable/ic_menu_compass" />
+
+            <ImageButton
+                android:id="@+id/btn_nav_classroom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="课堂"
+                android:tint="@color/grey_600"
+                android:src="@android:drawable/ic_menu_slideshow" />
+        </LinearLayout>
+
+        <!-- 右侧动作：考勤、我的；与凹槽、边缘保持间距 -->
+        <LinearLayout
+            android:id="@+id/right_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:gravity="center_vertical"
+            android:paddingEnd="16dp"
+            android:layout_marginStart="80dp">
+
+            <ImageButton
+                android:id="@+id/btn_nav_attendance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="考勤"
+                android:tint="@color/grey_600"
+                android:src="@android:drawable/ic_menu_camera" />
+
+            <ImageButton
+                android:id="@+id/btn_nav_profile"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="我的"
+                android:tint="@color/grey_600"
+                android:src="@android:drawable/ic_menu_myplaces" />
+        </LinearLayout>
+
+    </com.google.android.material.bottomappbar.BottomAppBar>
+
+    <!-- 居中拍照按钮，锚定到底部AppBar的凹槽 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabCameraPunch"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        app:layout_anchor="@id/bottom_app_bar"
+        app:layout_anchorGravity="center|top"
+        android:contentDescription="拍照打卡"
+        android:src="@drawable/ic_camera"
+        app:backgroundTint="@color/primary"
+        app:tint="@android:color/white"
+        app:layout_behavior="@string/hide_bottom_view_on_scroll_behavior" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

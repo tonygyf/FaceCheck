@@ -106,7 +106,7 @@
                         android:id="@+id/ivOriginalImage"
                         android:layout_width="match_parent"
                         android:layout_height="200dp"
-                        android:scaleType="centerInside"
+                        android:scaleType="centerCrop"
                         android:background="@color/grey_200"
                         android:contentDescription="原始图片" />
 
@@ -227,7 +227,7 @@
                         <ImageView
                             android:layout_width="match_parent"
                             android:layout_height="120dp"
-                            android:scaleType="centerInside"
+                            android:scaleType="centerCrop"
                             android:background="@color/grey_200"
                             android:src="@drawable/ic_image_placeholder"
                             android:contentDescription="修复前" />
@@ -254,7 +254,7 @@
                             android:id="@+id/ivEnhancedImage"
                             android:layout_width="match_parent"
                             android:layout_height="120dp"
-                            android:scaleType="centerInside"
+                            android:scaleType="centerCrop"
                             android:background="@color/grey_200"
                             android:contentDescription="修复后" />
 

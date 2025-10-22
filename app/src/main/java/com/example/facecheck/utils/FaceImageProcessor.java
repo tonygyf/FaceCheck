@@ -122,11 +122,15 @@ public class FaceImageProcessor {
      * 调整颜色分量
      */
     private static int adjustColorComponent(int component, float contrast, float brightness) {
+        // 限制增强因子，避免过度增强导致过亮
+        contrast = Math.min(1.2f, Math.max(0.9f, contrast));
+        brightness = Math.min(0.15f, Math.max(-0.1f, brightness));
+
         // 应用对比度调整
         float adjusted = (component - 128) * contrast + 128;
         // 应用亮度调整
         adjusted += brightness * 255;
-        
+
         // 确保值在0-255范围内
         return Math.max(0, Math.min(255, Math.round(adjusted)));
     }

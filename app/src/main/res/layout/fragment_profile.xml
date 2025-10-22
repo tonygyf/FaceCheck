@@ -7,9 +7,10 @@
     android:padding="16dp"
     android:background="@android:color/white">
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -96,7 +97,7 @@
                 android:background="@android:color/darker_gray"
                 android:layout_marginVertical="16dp" />
 
-            <!-- 缓存设置标题 -->
+            <!-- 缓存管理标题 -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -135,7 +136,7 @@
                 android:background="@android:color/darker_gray"
                 android:layout_marginVertical="16dp" />
 
-            <!-- WebDAV设置标题 -->
+            <!-- WebDAV 设置 -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -210,7 +211,7 @@
                 android:backgroundTint="@android:color/holo_red_dark" />
 
         </LinearLayout>
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <!-- 进度条 -->
     <ProgressBar

@@ -3,6 +3,7 @@ package com.example.facecheck.ui.attendance;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -72,16 +73,44 @@ public class FaceCorrectionActivity extends AppCompatActivity {
     }
     
     private void loadOriginalImage() {
-        File imageFile = new File(originalImagePath);
-        if (!imageFile.exists()) {
-            Toast.makeText(this, "图片文件不存在", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-        
-        originalBitmap = BitmapFactory.decodeFile(originalImagePath);
-        if (originalBitmap == null) {
-            Toast.makeText(this, "无法加载图片", Toast.LENGTH_SHORT).show();
+        try {
+            File imageFile = new File(originalImagePath);
+            if (!imageFile.exists()) {
+                Toast.makeText(this, "图片文件不存在", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+            
+            // 检查文件大小，避免加载过大的图片
+            long fileSize = imageFile.length();
+            if (fileSize > 10 * 1024 * 1024) { // 10MB限制
+                Toast.makeText(this, "图片文件过大，请选择小于10MB的图片", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+            
+            // 使用更安全的方式加载图片
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(originalImagePath, options);
+            
+            // 计算缩放比例
+            int scaleFactor = Math.max(options.outWidth / 1024, options.outHeight / 1024);
+            if (scaleFactor > 1) {
+                options.inSampleSize = scaleFactor;
+            }
+            
+            options.inJustDecodeBounds = false;
+            originalBitmap = BitmapFactory.decodeFile(originalImagePath, options);
+            
+            if (originalBitmap == null) {
+                Toast.makeText(this, "无法加载图片，可能是不支持的格式或文件损坏", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "加载图片出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Log.e("FaceCorrection", "Error loading image", e);
             finish();
             return;
         }
@@ -114,6 +143,16 @@ public class FaceCorrectionActivity extends AppCompatActivity {
             return;
         }
         
+        // 检查内存状态
+        Runtime runtime = Runtime.getRuntime();
+        long maxMemory = runtime.maxMemory();
+        long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+        
+        if (usedMemory > maxMemory * 0.8) {
+            Toast.makeText(this, "内存不足，无法执行修复操作", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         try {
             // 显示进度
             tvCorrectionInfo.setVisibility(View.VISIBLE);
@@ -142,9 +181,14 @@ public class FaceCorrectionActivity extends AppCompatActivity {
                 Toast.makeText(this, "图像修复失败", Toast.LENGTH_SHORT).show();
             }
             
+        } catch (OutOfMemoryError e) {
+            tvCorrectionInfo.setText("内存不足，无法完成修复");
+            Toast.makeText(this, "内存不足，请尝试使用更小的图片", Toast.LENGTH_SHORT).show();
+            Log.e("FaceCorrection", "Out of memory during repair", e);
         } catch (Exception e) {
             tvCorrectionInfo.setText("修复出错: " + e.getMessage());
             Toast.makeText(this, "修复出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Log.e("FaceCorrection", "Error during correction", e);
         }
     }
     

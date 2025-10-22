@@ -52,4 +52,8 @@
     <color name="warning">#FF9800</color>
     <color name="error">#F44336</color>
     <color name="info">#2196F3</color>
+
+    <!-- Toolbar/StatusBar 改为浅灰（无阴影感），便于与内容区区分 -->
+    <color name="toolbar_bg">#F2F2F2</color>
+    <color name="status_bar_bg">#F2F2F2</color>
 </resources>

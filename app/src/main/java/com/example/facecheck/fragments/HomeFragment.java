@@ -32,7 +32,7 @@ public class HomeFragment extends Fragment {
     
     private DatabaseHelper dbHelper;
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
-    private CardView cardClassroom, cardStudents, cardAttendance, cardQuickAttendance, cardFaceCorrection;
+    private CardView cardClassroom, cardStudents, cardAttendance, cardQuickAttendance;
     private Button btnSync;
     private static final int PICK_IMAGE_REQUEST = 1001;
 
@@ -53,7 +53,6 @@ public class HomeFragment extends Fragment {
         cardStudents = view.findViewById(R.id.card_students);
         cardAttendance = view.findViewById(R.id.card_attendance);
         cardQuickAttendance = view.findViewById(R.id.card_quick_attendance);
-        cardFaceCorrection = view.findViewById(R.id.card_face_correction);
         btnSync = view.findViewById(R.id.btn_sync);
         
         // 设置点击事件
@@ -61,9 +60,8 @@ public class HomeFragment extends Fragment {
         cardStudents.setOnClickListener(v -> navigateToStudents());
         cardAttendance.setOnClickListener(v -> navigateToAttendance());
         cardQuickAttendance.setOnClickListener(v -> navigateToQuickAttendance());
-        cardFaceCorrection.setOnClickListener(v -> openImagePicker());
         
-        // 添加人脸修复功能入口
+        // 人脸修复增强入口
         CardView cardFaceEnhancement = view.findViewById(R.id.card_face_enhancement);
         if (cardFaceEnhancement != null) {
             cardFaceEnhancement.setOnClickListener(v -> {

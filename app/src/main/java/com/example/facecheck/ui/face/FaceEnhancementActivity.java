@@ -15,6 +15,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.FileProvider;
 
 import com.example.facecheck.R;
 import com.example.facecheck.utils.FaceDetectionManager;
@@ -22,7 +23,8 @@ import com.example.facecheck.utils.FaceImageProcessor;
 import com.example.facecheck.utils.FaceRecognitionManager;
 import com.example.facecheck.utils.ImageStorageManager;
 import com.google.mlkit.vision.face.Face;
-
+ 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -47,6 +49,7 @@ public class FaceEnhancementActivity extends AppCompatActivity {
     private ImageStorageManager imageStorageManager;
     private List<Face> detectedFaces;
     private float[] extractedFeatures;
+    private Uri capturedImageUri;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,7 +115,17 @@ public class FaceEnhancementActivity extends AppCompatActivity {
     private void takePhotoWithCamera() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (intent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(intent, TAKE_PHOTO_REQUEST);
+            try {
+                File photoFile = createImageFile();
+                capturedImageUri = FileProvider.getUriForFile(this,
+                        "com.example.facecheck.fileprovider",
+                        photoFile);
+                intent.putExtra(MediaStore.EXTRA_OUTPUT, capturedImageUri);
+                intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivityForResult(intent, TAKE_PHOTO_REQUEST);
+            } catch (Exception e) {
+                Toast.makeText(this, "创建照片文件失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
         } else {
             Toast.makeText(this, "没有可用的相机应用", Toast.LENGTH_SHORT).show();
         }
@@ -122,6 +135,11 @@ public class FaceEnhancementActivity extends AppCompatActivity {
         if (originalBitmap == null || detectedFaces == null || detectedFaces.isEmpty()) {
             Toast.makeText(this, "请先选择包含人脸的图片", Toast.LENGTH_SHORT).show();
             return;
+        }
+        
+        // 确保原图已显示
+        if (ivOriginalImage.getDrawable() == null) {
+            ivOriginalImage.setImageBitmap(originalBitmap);
         }
         
         // 显示进度对话框
@@ -141,6 +159,11 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                         
                         runOnUiThread(() -> {
                             hideLoading();
+                            // 确保原图已显示
+                            if (ivOriginalImage.getDrawable() == null) {
+                                ivOriginalImage.setImageBitmap(originalBitmap);
+                            }
+                            
                             // 显示修复结果
                             ivEnhancedImage.setImageBitmap(enhancedBitmap);
                             tvEnhancedQuality.setText(String.format("修复后质量: %.2f", enhancedQuality));
@@ -171,44 +194,64 @@ public class FaceEnhancementActivity extends AppCompatActivity {
     }
     
     private void extractFaceFeatures() {
-        if (enhancedBitmap == null || detectedFaces == null || detectedFaces.isEmpty()) {
+        if (enhancedBitmap == null) {
             Toast.makeText(this, "请先修复人脸图像", Toast.LENGTH_SHORT).show();
             return;
         }
-        
-        // 显示进度
+
         Toast.makeText(this, "正在提取特征向量...", Toast.LENGTH_SHORT).show();
-        
-        // 在后台线程中处理
-        new Thread(() -> {
-            try {
-                // 提取第一个人脸的特征向量
-                extractedFeatures = faceRecognitionManager.extractFaceFeatures(enhancedBitmap, detectedFaces.get(0));
-                
-                runOnUiThread(() -> {
-                    if (extractedFeatures != null) {
-                        // 显示特征向量信息
-                        tvFeatureVector.setText(String.format("特征向量维度: %d", extractedFeatures.length));
-                        
-                        // 启用保存按钮
-                        btnSaveResult.setEnabled(true);
-                        
-                        Toast.makeText(this, "特征提取成功！", Toast.LENGTH_SHORT).show();
-                        
-                        // 记录日志
-                        Log.d("FaceEnhancement", "Feature extraction successful - Vector length: " + extractedFeatures.length);
-                    } else {
-                        Toast.makeText(this, "特征提取失败，请重试", Toast.LENGTH_SHORT).show();
-                        Log.e("FaceEnhancement", "Feature extraction failed - returned null");
+
+        faceDetectionManager.detectFacesFromBitmap(enhancedBitmap, new FaceDetectionManager.FaceDetectionCallback() {
+            @Override
+            public void onSuccess(List<Face> faces, List<Bitmap> faceBitmaps) {
+                detectedFaces = faces;
+                if (faces == null || faces.isEmpty()) {
+                    runOnUiThread(() -> Toast.makeText(FaceEnhancementActivity.this,
+                            "修复后的图片未检测到人脸，无法提取特征", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                new Thread(() -> {
+                    try {
+                        extractedFeatures = faceRecognitionManager.extractFaceFeatures(enhancedBitmap, faces.get(0));
+                        runOnUiThread(() -> {
+                            if (extractedFeatures != null && extractedFeatures.length > 0) {
+                                StringBuilder featureInfo = new StringBuilder();
+                                featureInfo.append(String.format("特征向量维度: %d\n", extractedFeatures.length));
+                                featureInfo.append("前5个特征值: ");
+                                for (int i = 0; i < Math.min(5, extractedFeatures.length); i++) {
+                                    featureInfo.append(String.format("%.3f", extractedFeatures[i]));
+                                    if (i < Math.min(4, extractedFeatures.length - 1)) {
+                                        featureInfo.append(", ");
+                                    }
+                                }
+                                if (extractedFeatures.length > 5) {
+                                    featureInfo.append("...");
+                                }
+                                tvFeatureVector.setText(featureInfo.toString());
+                                btnSaveResult.setEnabled(true);
+                                Toast.makeText(FaceEnhancementActivity.this, "特征提取成功！", Toast.LENGTH_SHORT).show();
+                                Log.d("FaceEnhancement", "Feature extraction successful - Vector length: " + extractedFeatures.length);
+                            } else {
+                                Toast.makeText(FaceEnhancementActivity.this, "特征提取失败，请重试", Toast.LENGTH_SHORT).show();
+                                Log.e("FaceEnhancement", "Feature extraction failed - returned null");
+                            }
+                        });
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(FaceEnhancementActivity.this, "特征提取错误: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            Log.e("FaceEnhancement", "Feature extraction error", e);
+                        });
                     }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "特征提取错误: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e("FaceEnhancement", "Feature extraction error", e);
-                });
+                }).start();
             }
-        }).start();
+
+            @Override
+            public void onFailure(Exception e) {
+                runOnUiThread(() -> Toast.makeText(FaceEnhancementActivity.this,
+                        "修复图人脸检测失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        });
     }
     
     private void saveEnhancedResult() {
@@ -282,7 +325,9 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                     break;
                     
                 case TAKE_PHOTO_REQUEST:
-                    if (data != null && data.getExtras() != null) {
+                    if (capturedImageUri != null) {
+                        processSelectedImage(capturedImageUri);
+                    } else if (data != null && data.getExtras() != null) {
                         Bundle extras = data.getExtras();
                         Bitmap photo = (Bitmap) extras.get("data");
                         if (photo != null) {
@@ -394,5 +439,13 @@ public class FaceEnhancementActivity extends AppCompatActivity {
             btnExtractFeatures.setEnabled(false);
             btnSaveResult.setEnabled(false);
         });
+    }
+
+    private File createImageFile() {
+        File storageDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
+        if (storageDir == null) {
+            storageDir = getFilesDir();
+        }
+        return new java.io.File(storageDir, "face_capture_" + System.currentTimeMillis() + ".jpg");
     }
 }
