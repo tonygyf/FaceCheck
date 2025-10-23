@@ -7,6 +7,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,6 +27,7 @@ import androidx.appcompat.widget.TooltipCompat;
 
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 public class ClassroomFragment extends Fragment {
@@ -52,11 +55,7 @@ public class ClassroomFragment extends Fragment {
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         
         fabAddClassroom = view.findViewById(R.id.fab_add_classroom);
-        fabAddClassroom.setOnClickListener(v -> {
-            Intent intent = new Intent(getActivity(), ClassroomActivity.class);
-            intent.putExtra("action", "add");
-            startActivity(intent);
-        });
+        fabAddClassroom.setOnClickListener(v -> showAddClassroomDialog());
         
         // 添加Tooltip提示
         TooltipCompat.setTooltipText(fabAddClassroom, "添加新班级");
@@ -102,5 +101,48 @@ public class ClassroomFragment extends Fragment {
         });
         
         recyclerView.setAdapter(adapter);
+    }
+    
+    private void showAddClassroomDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(getContext());
+        builder.setTitle("添加新班级");
+        
+        LinearLayout container = new LinearLayout(getContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding, padding, padding);
+        
+        final EditText etName = new EditText(getContext());
+        etName.setHint("班级名称");
+        final EditText etYear = new EditText(getContext());
+        etYear.setHint("年份(如 2024)");
+        etYear.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        
+        container.addView(etName);
+        container.addView(etYear);
+        
+        // 默认填入当前年份
+        Calendar calendar = Calendar.getInstance();
+        etYear.setText(String.valueOf(calendar.get(Calendar.YEAR)));
+        
+        builder.setView(container);
+        builder.setPositiveButton("添加", (d, which) -> {
+            String name = etName.getText().toString().trim();
+            String yearStr = etYear.getText().toString().trim();
+            int year = yearStr.isEmpty() ? calendar.get(Calendar.YEAR) : Integer.parseInt(yearStr);
+            if (name.isEmpty()) {
+                Toast.makeText(getContext(), "请输入班级名称", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            long id = dbHelper.insertClassroom(teacherId, name, year, null);
+            if (id != -1) {
+                Toast.makeText(getContext(), "班级创建成功", Toast.LENGTH_SHORT).show();
+                loadClassrooms();
+            } else {
+                Toast.makeText(getContext(), "班级创建失败", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("取消", null);
+        builder.show();
     }
 }

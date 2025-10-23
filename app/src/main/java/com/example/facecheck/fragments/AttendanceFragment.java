@@ -18,8 +18,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.facecheck.R;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.database.DatabaseHelper;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import androidx.appcompat.widget.TooltipCompat;
 
 
 import java.text.SimpleDateFormat;
@@ -32,7 +30,6 @@ public class AttendanceFragment extends Fragment {
     private CalendarView calendarView;
     private TextView tvSelectedDate;
     private RecyclerView recyclerView;
-    private FloatingActionButton fabNewAttendance;
     private DatabaseHelper dbHelper;
     private String selectedDate;
 
@@ -48,7 +45,6 @@ public class AttendanceFragment extends Fragment {
         calendarView = view.findViewById(R.id.calendar_view);
         tvSelectedDate = view.findViewById(R.id.tv_selected_date);
         recyclerView = view.findViewById(R.id.recycler_attendance);
-        fabNewAttendance = view.findViewById(R.id.fab_new_attendance);
         
         // 设置日历选择监听
         Calendar calendar = Calendar.getInstance();
@@ -65,16 +61,6 @@ public class AttendanceFragment extends Fragment {
         
         // 设置RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        
-        // 设置添加考勤按钮
-        fabNewAttendance.setOnClickListener(v -> {
-            Intent intent = new Intent(getActivity(), AttendanceActivity.class);
-            intent.putExtra("date", selectedDate);
-            startActivity(intent);
-        });
-        
-        // 添加Tooltip提示
-        TooltipCompat.setTooltipText(fabNewAttendance, "添加新考勤记录");
         
         // 加载当前日期的考勤数据
         loadAttendanceData(selectedDate);

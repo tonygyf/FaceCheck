@@ -53,7 +53,6 @@ public class ClassroomActivity extends AppCompatActivity {
     
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
-    private FloatingActionButton fabStartAttendance;
     
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickPhotoLauncher;
@@ -88,7 +87,6 @@ public class ClassroomActivity extends AppCompatActivity {
     private void initViews() {
         recyclerView = findViewById(R.id.recyclerViewStudents);
         fabAddStudent = findViewById(R.id.fabAddStudent);
-        fabStartAttendance = findViewById(R.id.fabStartAttendance);
         
         // 设置RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -97,7 +95,6 @@ public class ClassroomActivity extends AppCompatActivity {
         
         // 设置点击事件
         fabAddStudent.setOnClickListener(v -> showAddStudentDialog());
-        fabStartAttendance.setOnClickListener(v -> startAttendanceSession());
         
         // 设置学生点击事件
         studentAdapter.setOnItemClickListener(student -> showStudentDetailsDialog(student));
