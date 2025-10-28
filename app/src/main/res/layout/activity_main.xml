@@ -29,8 +29,6 @@
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="?attr/actionBarSize"
-        android:layout_marginBottom="80dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <!-- 保留隐藏的 BottomNavigationView 以兼容现有调用 -->
