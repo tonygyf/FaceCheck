@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.util.Log;
 
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
@@ -107,8 +108,14 @@ public class FaceDetectionManager {
             bottom = Math.min(originalBitmap.getHeight(), bottom + margin);
             
             try {
-                Bitmap faceBitmap = Bitmap.createBitmap(originalBitmap, left, top, 
-                    right - left, bottom - top);
+                int w = right - left;
+                int h = bottom - top;
+                if (w <= 0 || h <= 0) {
+                    Log.w(TAG, "skip invalid face bounds: " + (bounds != null ? bounds.toShortString() : "null")
+                            + ", computed w=" + w + ", h=" + h);
+                    continue;
+                }
+                Bitmap faceBitmap = Bitmap.createBitmap(originalBitmap, left, top, w, h);
                 faceBitmaps.add(faceBitmap);
             } catch (Exception e) {
                 // 如果提取失败，跳过这个人脸

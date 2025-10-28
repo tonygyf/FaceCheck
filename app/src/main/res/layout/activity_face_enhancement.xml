@@ -225,6 +225,7 @@
                             android:layout_marginBottom="4dp" />
 
                         <ImageView
+                            android:id="@+id/ivCompareBefore"
                             android:layout_width="match_parent"
                             android:layout_height="120dp"
                             android:scaleType="centerCrop"

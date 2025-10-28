@@ -13,6 +13,8 @@ import com.example.facecheck.data.model.Student;
 import com.google.mlkit.vision.face.Face;
 import com.google.mlkit.vision.face.FaceLandmark;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -45,70 +47,86 @@ public class FaceRecognitionManager {
      * 基于人脸几何特征、纹理特征和图像特征
      */
     public float[] extractFaceFeatures(Bitmap faceBitmap, Face face) {
-        // 输入有效性校验与基础调试日志
         if (faceBitmap == null) {
-            Log.e(TAG, "extractFaceFeatures: input bitmap is null");
+            Log.e(TAG, "extractFaceFeatures: faceBitmap == null");
             return null;
         }
-        if (faceBitmap.isRecycled()) {
-            Log.e(TAG, "extractFaceFeatures: input bitmap is recycled");
-            return null;
-        }
-        if (face == null) {
-            Log.e(TAG, "extractFaceFeatures: face is null");
-            return null;
-        }
-        if (faceBitmap.getWidth() <= 0 || faceBitmap.getHeight() <= 0) {
-            Log.e(TAG, "extractFaceFeatures: invalid bitmap size w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight());
-            return null;
-        }
-        Log.d(TAG, "extractFaceFeatures: bitmap w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight() +
-                ", euler=(" + face.getHeadEulerAngleX() + "," + face.getHeadEulerAngleY() + "," + face.getHeadEulerAngleZ() + ")");
         try {
-            // 1. 获取人脸关键点
-            List<FaceLandmark> landmarks = new ArrayList<>();
-            
-            // 获取左眼
-            FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
-            if (leftEye != null) landmarks.add(leftEye);
-            
-            // 获取右眼
-            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
-            if (rightEye != null) landmarks.add(rightEye);
-            
-            // 获取鼻子
-            FaceLandmark nose = face.getLandmark(FaceLandmark.NOSE_BASE);
-            if (nose != null) landmarks.add(nose);
-            
-            // 获取左嘴角
-            FaceLandmark leftMouth = face.getLandmark(FaceLandmark.MOUTH_LEFT);
-            if (leftMouth != null) landmarks.add(leftMouth);
-            
-            // 获取右嘴角
-            FaceLandmark rightMouth = face.getLandmark(FaceLandmark.MOUTH_RIGHT);
-            if (rightMouth != null) landmarks.add(rightMouth);
-            
-            // 获取额外的关键点以增强特征提取
-            FaceLandmark leftCheek = face.getLandmark(FaceLandmark.LEFT_CHEEK);
-            if (leftCheek != null) landmarks.add(leftCheek);
-            
-            FaceLandmark rightCheek = face.getLandmark(FaceLandmark.RIGHT_CHEEK);
-            if (rightCheek != null) landmarks.add(rightCheek);
-            
-            // 2. 基于关键点生成增强特征向量
-            float[] features = generateEnhancedFeatureVector(faceBitmap, landmarks, face);
-            if (features == null) {
-                Log.e(TAG, "extractFaceFeatures: generated features is null");
+            Log.d(TAG, "extractFaceFeatures: bitmap w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight()
+                    + ", euler=(" + face.getHeadEulerAngleX() + "," + face.getHeadEulerAngleY() + "," + face.getHeadEulerAngleZ() + ")");
+
+            final int MODEL_W = 112; // TODO: 根据你的模型实际输入替换
+            final int MODEL_H = 112;
+
+            Rect bbox = face.getBoundingBox();
+            if (bbox == null) {
+                Log.w(TAG, "no bounding box");
+                dumpBitmapForDebug(faceBitmap, "no_bbox");
                 return null;
             }
-            Log.d(TAG, "extractFaceFeatures: raw feature length=" + features.length);
-            
-            // 3. 归一化特征向量
+
+            int left = Math.max(0, bbox.left);
+            int top = Math.max(0, bbox.top);
+            int right = Math.min(faceBitmap.getWidth(), bbox.right);
+            int bottom = Math.min(faceBitmap.getHeight(), bbox.bottom);
+            int w = right - left, h = bottom - top;
+            if (w <= 0 || h <= 0) {
+                Log.w(TAG, "invalid crop box left=" + left + " top=" + top + " w=" + w + " h=" + h);
+                dumpBitmapForDebug(faceBitmap, "invalid_crop");
+                return null;
+            }
+
+            Bitmap crop = Bitmap.createBitmap(faceBitmap, left, top, w, h);
+            Bitmap input = Bitmap.createScaledBitmap(crop, MODEL_W, MODEL_H, true);
+
+            // 打印常见关键点状态
+            int present = 0;
+            int[] types = {FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.NOSE_BASE,
+                    FaceLandmark.MOUTH_LEFT, FaceLandmark.MOUTH_RIGHT};
+            for (int t : types) {
+                FaceLandmark lm = face.getLandmark(t);
+                if (lm != null) {
+                    present++;
+                    Log.d(TAG, "landmark " + t + " at " + lm.getPosition().x + "," + lm.getPosition().y);
+                } else {
+                    Log.w(TAG, "landmark missing " + t);
+                }
+            }
+            if (present < 2) {
+                Log.w(TAG, "too few landmarks: " + present);
+                dumpBitmapForDebug(input, "few_landmarks");
+                return null;
+            }
+
+            // 调用原来的特征生成（保持原有 generateEnhancedFeatureVector / normalizeVector）
+            float[] features = generateEnhancedFeatureVector(input, new ArrayList<>(), face);
+            if (features == null) {
+                Log.e(TAG, "generateEnhancedFeatureVector returned null");
+                dumpBitmapForDebug(input, "gen_null");
+                return null;
+            }
             return normalizeVector(features);
-            
         } catch (Exception e) {
             Log.e(TAG, "提取人脸特征失败: " + e.getMessage(), e);
+            dumpBitmapForDebug(faceBitmap, "exception");
             return null;
+        }
+    }
+
+    // 辅助：把调试图片写到 app-specific external dir
+    private void dumpBitmapForDebug(Bitmap b, String tag) {
+        try {
+            if (b == null) return;
+            File dir = context.getExternalFilesDir("face_debug");
+            if (dir == null) return;
+            if (!dir.exists()) dir.mkdirs();
+            File f = new File(dir, "dump_" + tag + "_" + System.currentTimeMillis() + ".png");
+            FileOutputStream fos = new FileOutputStream(f);
+            b.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.flush(); fos.close();
+            Log.d(TAG, "dumped debug bitmap to " + f.getAbsolutePath());
+        } catch (Exception ex) {
+            Log.e(TAG, "dumpBitmapForDebug failed", ex);
         }
     }
     

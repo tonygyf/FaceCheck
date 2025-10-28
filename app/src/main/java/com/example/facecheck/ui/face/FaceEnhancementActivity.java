@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.FileProvider;
 
+import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
 import com.example.facecheck.utils.FaceDetectionManager;
 import com.example.facecheck.utils.FaceImageProcessor;
@@ -38,6 +39,7 @@ public class FaceEnhancementActivity extends AppCompatActivity {
     private static final int TAKE_PHOTO_REQUEST = 2;
     
     private ImageView ivOriginalImage, ivEnhancedImage;
+    private ImageView ivCompareBefore;
     private TextView tvOriginalQuality, tvEnhancedQuality, tvFaceCount, tvFeatureVector;
     private Button btnSelectPhoto, btnTakePhoto, btnEnhanceFace, btnExtractFeatures, btnSaveResult;
     private View comparisonView;
@@ -65,6 +67,7 @@ public class FaceEnhancementActivity extends AppCompatActivity {
     private void initViews() {
         ivOriginalImage = findViewById(R.id.ivOriginalImage);
         ivEnhancedImage = findViewById(R.id.ivEnhancedImage);
+        ivCompareBefore = findViewById(R.id.ivCompareBefore);
         tvOriginalQuality = findViewById(R.id.tvOriginalQuality);
         tvEnhancedQuality = findViewById(R.id.tvEnhancedQuality);
         tvFaceCount = findViewById(R.id.tvFaceCount);
@@ -139,7 +142,7 @@ public class FaceEnhancementActivity extends AppCompatActivity {
         
         // 确保原图已显示
         if (ivOriginalImage.getDrawable() == null) {
-            ivOriginalImage.setImageBitmap(originalBitmap);
+            bindBeforeImage(ivOriginalImage, originalBitmap, null);
         }
         
         // 显示进度对话框
@@ -161,11 +164,15 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                             hideLoading();
                             // 确保原图已显示
                             if (ivOriginalImage.getDrawable() == null) {
-                                ivOriginalImage.setImageBitmap(originalBitmap);
+                                bindBeforeImage(ivOriginalImage, originalBitmap, null);
                             }
                             
                             // 显示修复结果
                             ivEnhancedImage.setImageBitmap(enhancedBitmap);
+                            // 修复前对比图绑定
+                            if (ivCompareBefore != null) {
+                                bindBeforeImage(ivCompareBefore, originalBitmap, null);
+                            }
                             // 缓存修复后的图片
                             File repairedCache = saveBitmapToInternalCache(enhancedBitmap, "repaired_face.jpg");
                             if (repairedCache != null) {
@@ -374,7 +381,7 @@ public class FaceEnhancementActivity extends AppCompatActivity {
         }
         
         // 显示原图
-        ivOriginalImage.setImageBitmap(bitmap);
+        bindBeforeImage(ivOriginalImage, bitmap, null);
         // 缓存原始图片
         File originalCache = saveBitmapToInternalCache(bitmap, "original_face.jpg");
         if (originalCache != null) {
@@ -449,6 +456,9 @@ public class FaceEnhancementActivity extends AppCompatActivity {
             
             ivOriginalImage.setImageResource(android.R.drawable.ic_menu_gallery);
             ivEnhancedImage.setImageResource(android.R.drawable.ic_menu_gallery);
+            if (ivCompareBefore != null) {
+                ivCompareBefore.setImageResource(android.R.drawable.ic_menu_gallery);
+            }
             tvOriginalQuality.setText("原图质量: --");
             tvEnhancedQuality.setText("修复后质量: --");
             tvFaceCount.setText("检测到 0 个人脸");
@@ -473,6 +483,23 @@ public class FaceEnhancementActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e("FaceEnhancement", "Failed to save bitmap to cache: " + e.getMessage());
             return null;
+        }
+    }
+
+    // UI 绑定：展示前做 null/占位保护并记录日志
+    private void bindBeforeImage(ImageView imageView, Bitmap bitmap, Uri uri) {
+        Log.d("UIBind", "bindBeforeImage bitmap=" + (bitmap != null) + " uri=" + uri + " viewVisible=" + imageView.getVisibility());
+        if (bitmap != null) {
+            imageView.setImageBitmap(bitmap);
+        } else if (uri != null) {
+            Glide.with(imageView.getContext())
+                    .load(uri)
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_delete)
+                    .into(imageView);
+        } else {
+            imageView.setImageResource(android.R.drawable.ic_menu_gallery);
+            Log.w("UIBind", "No image for before-picture");
         }
     }
 

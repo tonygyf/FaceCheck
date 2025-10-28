@@ -18,15 +18,7 @@
             android:orientation="vertical">
 
             <!-- 用户信息标题 -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="个人资料"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                android:textColor="@color/purple_500"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="24dp" />
+
 
             <!-- 用户头像 -->
             <de.hdodenhof.circleimageview.CircleImageView
