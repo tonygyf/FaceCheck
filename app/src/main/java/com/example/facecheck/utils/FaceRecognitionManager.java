@@ -45,6 +45,25 @@ public class FaceRecognitionManager {
      * 基于人脸几何特征、纹理特征和图像特征
      */
     public float[] extractFaceFeatures(Bitmap faceBitmap, Face face) {
+        // 输入有效性校验与基础调试日志
+        if (faceBitmap == null) {
+            Log.e(TAG, "extractFaceFeatures: input bitmap is null");
+            return null;
+        }
+        if (faceBitmap.isRecycled()) {
+            Log.e(TAG, "extractFaceFeatures: input bitmap is recycled");
+            return null;
+        }
+        if (face == null) {
+            Log.e(TAG, "extractFaceFeatures: face is null");
+            return null;
+        }
+        if (faceBitmap.getWidth() <= 0 || faceBitmap.getHeight() <= 0) {
+            Log.e(TAG, "extractFaceFeatures: invalid bitmap size w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight());
+            return null;
+        }
+        Log.d(TAG, "extractFaceFeatures: bitmap w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight() +
+                ", euler=(" + face.getHeadEulerAngleX() + "," + face.getHeadEulerAngleY() + "," + face.getHeadEulerAngleZ() + ")");
         try {
             // 1. 获取人脸关键点
             List<FaceLandmark> landmarks = new ArrayList<>();
@@ -78,6 +97,11 @@ public class FaceRecognitionManager {
             
             // 2. 基于关键点生成增强特征向量
             float[] features = generateEnhancedFeatureVector(faceBitmap, landmarks, face);
+            if (features == null) {
+                Log.e(TAG, "extractFaceFeatures: generated features is null");
+                return null;
+            }
+            Log.d(TAG, "extractFaceFeatures: raw feature length=" + features.length);
             
             // 3. 归一化特征向量
             return normalizeVector(features);

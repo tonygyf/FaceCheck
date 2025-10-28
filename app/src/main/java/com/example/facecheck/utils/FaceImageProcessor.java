@@ -3,6 +3,7 @@ package com.example.facecheck.utils;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
+import android.util.Log;
 
 /**
  * 人脸图像处理工具类
@@ -209,28 +210,47 @@ public class FaceImageProcessor {
      * @return 修复后的图像
      */
     public static Bitmap repairFaceImage(Bitmap faceBitmap) {
-        return repairFaceImage(faceBitmap, 0.8f); // 默认使用80%质量修复
-    }
-    
-    /**
-     * 综合人脸修复处理（带质量参数）
-     * @param faceBitmap 输入的人脸图像
-     * @param quality 修复质量 (0.0-1.0)，影响修复强度
-     * @return 修复后的图像
-     */
-    public static Bitmap repairFaceImage(Bitmap faceBitmap, float quality) {
+        // 新增：输入有效性校验与日志
         if (faceBitmap == null) {
+            Log.e(TAG, "repairFaceImage: input bitmap is null");
             return null;
         }
-        
+        if (faceBitmap.isRecycled()) {
+            Log.e(TAG, "repairFaceImage: input bitmap is recycled");
+            return null;
+        }
+        Bitmap result = repairFaceImage(faceBitmap, 0.8f);
+        if (result == null) {
+            Log.e(TAG, "repairFaceImage: result is null");
+            return null;
+        }
+        if (result.isRecycled()) {
+            Log.e(TAG, "repairFaceImage: result is recycled");
+            return null;
+        }
+        Log.d(TAG, "repairFaceImage: success width=" + result.getWidth() + ", height=" + result.getHeight());
+        return result;
+    }
+
+    public static Bitmap repairFaceImage(Bitmap faceBitmap, float quality) {
+        // 新增：输入有效性校验与日志
+        if (faceBitmap == null) {
+            Log.e(TAG, "repairFaceImage(q): input bitmap is null");
+            return null;
+        }
+        if (faceBitmap.isRecycled()) {
+            Log.e(TAG, "repairFaceImage(q): input bitmap is recycled");
+            return null;
+        }
+
         // 限制图像尺寸以提高性能
         int maxSize = 512; // 最大处理尺寸
         Bitmap processedBitmap = faceBitmap;
         
         // 如果图像过大，先进行缩放
         if (faceBitmap.getWidth() > maxSize || faceBitmap.getHeight() > maxSize) {
-            float scale = Math.min((float) maxSize / faceBitmap.getWidth(), 
-                                 (float) maxSize / faceBitmap.getHeight());
+            float scale = Math.min((float) maxSize / faceBitmap.getWidth(),
+                    (float) maxSize / faceBitmap.getHeight());
             int newWidth = Math.round(faceBitmap.getWidth() * scale);
             int newHeight = Math.round(faceBitmap.getHeight() * scale);
             processedBitmap = Bitmap.createScaledBitmap(faceBitmap, newWidth, newHeight, true);
@@ -251,6 +271,16 @@ public class FaceImageProcessor {
         // 步骤3：降噪处理（轻度模糊）
         Bitmap denoised = applyGaussianBlur(sharpened, blurRadius);
         
+        // 新增：输出有效性校验与日志
+        if (denoised == null) {
+            Log.e(TAG, "repairFaceImage(q): denoised result null");
+            return null;
+        }
+        if (denoised.isRecycled()) {
+            Log.e(TAG, "repairFaceImage(q): denoised bitmap recycled");
+            return null;
+        }
+        Log.d(TAG, "repairFaceImage(q): success width=" + denoised.getWidth() + ", height=" + denoised.getHeight());
         return denoised;
     }
     

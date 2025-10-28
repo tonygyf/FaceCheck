@@ -166,6 +166,11 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                             
                             // 显示修复结果
                             ivEnhancedImage.setImageBitmap(enhancedBitmap);
+                            // 缓存修复后的图片
+                            File repairedCache = saveBitmapToInternalCache(enhancedBitmap, "repaired_face.jpg");
+                            if (repairedCache != null) {
+                                Log.d("FaceEnhancement", "Repaired image saved to cache: " + repairedCache.getAbsolutePath());
+                            }
                             tvEnhancedQuality.setText(String.format("修复后质量: %.2f", enhancedQuality));
                             
                             // 显示对比视图
@@ -270,6 +275,16 @@ public class FaceEnhancementActivity extends AppCompatActivity {
                 // 保存增强后的图片
                 String enhancedPath = imageStorageManager.saveTempImage(enhancedBitmap, "enhanced");
                 
+                // 同步保存到内部缓存（用于快速预览/缓存规范）
+                File originalCache = saveBitmapToInternalCache(originalBitmap, "original_face.jpg");
+                File repairedCache = saveBitmapToInternalCache(enhancedBitmap, "repaired_face.jpg");
+                if (originalCache != null) {
+                    Log.d("FaceEnhancement", "Original image saved to cache: " + originalCache.getAbsolutePath());
+                }
+                if (repairedCache != null) {
+                    Log.d("FaceEnhancement", "Repaired image saved to cache: " + repairedCache.getAbsolutePath());
+                }
+                
                 // 保存特征向量数据（可选）
                 String embeddingPath = saveEmbeddingData(extractedFeatures);
                 
@@ -360,6 +375,11 @@ public class FaceEnhancementActivity extends AppCompatActivity {
         
         // 显示原图
         ivOriginalImage.setImageBitmap(bitmap);
+        // 缓存原始图片
+        File originalCache = saveBitmapToInternalCache(bitmap, "original_face.jpg");
+        if (originalCache != null) {
+            Log.d("FaceEnhancement", "Original image saved to cache: " + originalCache.getAbsolutePath());
+        }
         
         // 计算原图质量
         float originalQuality = FaceImageProcessor.calculateImageQuality(bitmap);
@@ -439,6 +459,21 @@ public class FaceEnhancementActivity extends AppCompatActivity {
             btnExtractFeatures.setEnabled(false);
             btnSaveResult.setEnabled(false);
         });
+    }
+
+    // 新增：保存Bitmap到内部缓存目录
+    private File saveBitmapToInternalCache(Bitmap bitmap, String filename) {
+        try {
+            File dir = getCacheDir();
+            File file = new File(dir, filename);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+            fos.close();
+            return file;
+        } catch (Exception e) {
+            Log.e("FaceEnhancement", "Failed to save bitmap to cache: " + e.getMessage());
+            return null;
+        }
     }
 
     private File createImageFile() {
