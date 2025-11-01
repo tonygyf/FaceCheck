@@ -24,7 +24,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 4; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 6; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -114,6 +114,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "courseName TEXT, " +
                 "meta TEXT, " +
                 "createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                 "FOREIGN KEY (teacherId) REFERENCES Teacher(id) ON DELETE CASCADE" +
                 ")";
         db.execSQL(sql);
@@ -363,9 +364,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             long teacherId = db.insert("Teacher", null, values);
             Log.d(TAG, "测试教师插入成功，ID: " + teacherId);
             
-            // 插入测试班级数据
-            insertDefaultClassrooms(db, adminId);
-            insertDefaultClassrooms(db, teacherId);
+            // 初始化指定班级与学生（从assets拷贝头像）
+            insertCustomClassroomsWithAssetPhotos(db, adminId);
+            insertCustomClassroomsWithAssetPhotos(db, teacherId);
             
         } catch (Exception e) {
             Log.e(TAG, "插入默认教师数据失败", e);
@@ -375,65 +376,161 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     /**
      * 插入默认班级数据（用于测试）
      */
-    private void insertDefaultClassrooms(SQLiteDatabase db, long teacherId) {
+    /**
+     * 插入指定班级并基于assets目录图片生成学生与头像
+     */
+    private void insertCustomClassroomsWithAssetPhotos(SQLiteDatabase db, long teacherId) {
         try {
-            ContentValues values = new ContentValues();
-            values.put("teacherId", teacherId);
-            values.put("name", "计算机科学2024级1班");
-            values.put("year", 2024);
-            values.put("semester", "秋季学期");
-            values.put("courseName", "软件工程");
-            values.put("meta", "{\"building\":\"教学楼A\",\"room\":\"A101\",\"capacity\":45}");
-            
-            long classId1 = db.insert("Classroom", null, values);
-            Log.d(TAG, "测试班级1插入成功，ID: " + classId1);
-            
-            values.clear();
-            values.put("teacherId", teacherId);
-            values.put("name", "计算机科学2024级2班");
-            values.put("year", 2024);
-            values.put("semester", "秋季学期");
-            values.put("courseName", "数据结构");
-            values.put("meta", "{\"building\":\"教学楼B\",\"room\":\"B201\",\"capacity\":50}");
-            
-            long classId2 = db.insert("Classroom", null, values);
-            Log.d(TAG, "测试班级2插入成功，ID: " + classId2);
-            
-            // 插入测试学生数据
-            insertDefaultStudents(db, classId1);
-            insertDefaultStudents(db, classId2);
-            
+            // 班级：北约峰会
+            long natoClassId = insertClassroomRecord(db, teacherId, "北约峰会", 2024,
+                    "{\"source\":\"assets\",\"folder\":\"北约峰会\"}");
+            seedStudentsFromAssets(db, natoClassId, "北约峰会", 1000);
+
+            // 班级：三巨头
+            long bigThreeClassId = insertClassroomRecord(db, teacherId, "三巨头", 2024,
+                    "{\"source\":\"assets\",\"folder\":\"三巨头\"}");
+            seedStudentsFromAssets(db, bigThreeClassId, "三巨头", 2000);
         } catch (Exception e) {
-            Log.e(TAG, "插入默认班级数据失败", e);
+            Log.e(TAG, "插入指定班级失败", e);
         }
+    }
+
+    private long insertClassroomRecord(SQLiteDatabase db, long teacherId, String name, int year, String meta) {
+        ContentValues values = new ContentValues();
+        values.put("teacherId", teacherId);
+        values.put("name", name);
+        values.put("year", year);
+        values.put("meta", meta);
+        return db.insert("Classroom", null, values);
     }
     
     /**
      * 插入默认学生数据（用于测试）
      */
-    private void insertDefaultStudents(SQLiteDatabase db, long classId) {
+    /**
+     * 读取assets/<assetFolder> 下图片，创建学生并复制头像到内部 avatars 目录
+     * @param db SQLiteDatabase
+     * @param classId 班级ID
+     * @param assetFolder 资产目录名称（如："北约峰会"、"三巨头"）
+     * @param sidBase 学号基数（如：1000、2000）
+     */
+    private void seedStudentsFromAssets(SQLiteDatabase db, long classId, String assetFolder, int sidBase) {
         try {
-            String[] names = {"张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十"};
-            String[] sids = {"2024001", "2024002", "2024003", "2024004", "2024005", "2024006", "2024007", "2024008"};
-            
-            for (int i = 0; i < names.length; i++) {
+            android.content.res.AssetManager am = context.getAssets();
+            String[] files = am.list(assetFolder);
+            if (files == null || files.length == 0) {
+                Log.w(TAG, "assets/" + assetFolder + " 目录为空，跳过学生初始化");
+                return;
+            }
+
+            java.io.File avatarsDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(context);
+            int index = 0;
+            for (String fileName : files) {
+                // 仅处理常见图片扩展名
+                String lower = fileName.toLowerCase();
+                if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png"))) {
+                    continue;
+                }
+
+                String baseName = fileName;
+                int dot = baseName.lastIndexOf('.');
+                if (dot > 0) baseName = baseName.substring(0, dot);
+
+                // 创建学生（先不写入avatarUri，待复制完成后更新）
                 ContentValues values = new ContentValues();
                 values.put("classId", classId);
-                values.put("name", names[i]);
-                values.put("sid", sids[i]);
-                values.put("gender", i % 2 == 0 ? "M" : "F");
-                values.put("birthDate", "2002-01-" + String.format("%02d", i + 1));
-                values.put("email", sids[i] + "@student.edu.cn");
-                values.put("phone", "1500000000" + i);
+                values.put("name", baseName);
+                values.put("sid", String.valueOf(sidBase + index + 1));
+                values.put("gender", "O");
                 values.put("status", "ACTIVE");
-                
+                // 使用毫秒时间戳，避免读取 createdAt 发生类型不匹配
+                values.put("createdAt", System.currentTimeMillis());
                 long studentId = db.insert("Student", null, values);
-                Log.d(TAG, "测试学生插入成功，ID: " + studentId + ", 姓名: " + names[i]);
+                index++;
+
+                if (studentId == -1) {
+                    Log.e(TAG, "插入学生失败: " + baseName);
+                    continue;
+                }
+
+                // 复制头像到内部存储 avatars 目录，以 studentId 命名
+                try (java.io.InputStream is = am.open(assetFolder + "/" + fileName);
+                     java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.File(avatarsDir, "avatar_" + studentId + ".jpg"))) {
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = is.read(buf)) != -1) {
+                        fos.write(buf, 0, r);
+                    }
+                } catch (IOException io) {
+                    Log.e(TAG, "复制头像失败: " + fileName, io);
+                }
+
+                // 更新学生的avatarUri字段
+                java.io.File avatarFile = new java.io.File(avatarsDir, "avatar_" + studentId + ".jpg");
+                if (avatarFile.exists()) {
+                    ContentValues update = new ContentValues();
+                    // 存储为 file:// 绝对路径，兼容 Glide 与 MediaStore 加载
+                    String fileUri = "file://" + avatarFile.getAbsolutePath();
+                    update.put("avatarUri", fileUri);
+                    db.update("Student", update, "id = ?", new String[]{String.valueOf(studentId)});
+                    Log.d(TAG, "学生头像更新完成: " + baseName + " -> " + fileUri);
+                }
             }
-            
         } catch (Exception e) {
-            Log.e(TAG, "插入默认学生数据失败", e);
+            Log.e(TAG, "从assets初始化学生失败: " + assetFolder, e);
         }
+    }
+
+    /**
+     * 为指定教师确保存在“北约峰会”“三巨头”班级，并按 assets 生成学生
+     * - 若班级不存在则创建
+     * - 若班级存在但学生为 0，则导入 assets 学生与头像
+     */
+    public void ensureAssetSeedForTeacher(long teacherId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ensureClassSeed(db, teacherId, "北约峰会", 2024, "北约峰会", 1000);
+        ensureClassSeed(db, teacherId, "三巨头", 2024, "三巨头", 2000);
+    }
+
+    private void ensureClassSeed(SQLiteDatabase db, long teacherId, String className, int year, String folder, int sidBase) {
+        long classId = findClassroomIdByName(db, teacherId, className);
+        if (classId == -1) {
+            classId = insertClassroomRecord(db, teacherId, className, year,
+                    "{\"source\":\"assets\",\"folder\":\"" + folder + "\"}");
+            Log.d(TAG, "已为教师 " + teacherId + " 创建班级: " + className + ", ID=" + classId);
+        }
+        int count = getStudentCountByClass(db, classId);
+        if (count == 0) {
+            Log.d(TAG, "班级 " + className + " 学生为空，开始从 assets 导入");
+            seedStudentsFromAssets(db, classId, folder, sidBase);
+        }
+    }
+
+    private long findClassroomIdByName(SQLiteDatabase db, long teacherId, String name) {
+        Cursor c = db.query("Classroom", new String[]{"id"},
+                "teacherId = ? AND name = ?",
+                new String[]{String.valueOf(teacherId), name}, null, null, null, "1");
+        long id = -1;
+        if (c != null && c.moveToFirst()) {
+            id = c.getLong(c.getColumnIndexOrThrow("id"));
+            c.close();
+        } else if (c != null) {
+            c.close();
+        }
+        return id;
+    }
+
+    private int getStudentCountByClass(SQLiteDatabase db, long classId) {
+        Cursor c = db.rawQuery("SELECT COUNT(*) FROM Student WHERE classId = ?",
+                new String[]{String.valueOf(classId)});
+        int count = 0;
+        if (c != null && c.moveToFirst()) {
+            count = c.getInt(0);
+            c.close();
+        } else if (c != null) {
+            c.close();
+        }
+        return count;
     }
 
     // ============= 教师相关操作 =============
@@ -511,6 +608,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("Classroom", null, "teacherId = ?", 
                 new String[]{String.valueOf(teacherId)}, null, null, "year DESC, name");
+    }
+
+    /**
+     * 更新班级名称
+     */
+    public boolean updateClassroomName(long classroomId, String newName) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put("name", newName);
+        values.put("updatedAt", System.currentTimeMillis());
+        int rows = db.update("Classroom", values, "id = ?", new String[]{String.valueOf(classroomId)});
+        return rows > 0;
     }
 
     // ============= 学生相关操作 =============
@@ -654,6 +763,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("FaceEmbedding", null, "studentId = ?", 
                 new String[]{String.valueOf(studentId)}, null, null, "quality DESC");
+    }
+
+    /**
+     * 更新指定ID的人脸特征记录
+     */
+    public boolean updateFaceEmbeddingById(long id, byte[] vector, float quality) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put("vector", vector);
+        values.put("quality", quality);
+        values.put("createdAt", System.currentTimeMillis());
+        int result = db.update("FaceEmbedding", values, "id = ?", new String[]{String.valueOf(id)});
+        return result > 0;
     }
 
     // ============= 考勤会话相关操作 =============

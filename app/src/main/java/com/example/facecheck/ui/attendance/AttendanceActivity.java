@@ -54,6 +54,7 @@ public class AttendanceActivity extends AppCompatActivity {
     
     private ImageView ivPreview;
     private Button btnTakePhoto;
+    private Button btnPickImage;
     private Button btnStartRecognition;
     private ProgressBar progressBar;
     private TextView tvStatus;
@@ -68,6 +69,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private String selectedModel = "Google ML Kit (推荐)";
     
     private ActivityResultLauncher<Intent> takePhotoLauncher;
+    private ActivityResultLauncher<String> pickImageLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,6 +106,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private void initViews() {
         ivPreview = findViewById(R.id.ivPreview);
         btnTakePhoto = findViewById(R.id.btnTakePhoto);
+        btnPickImage = findViewById(R.id.btnPickImage);
         btnStartRecognition = findViewById(R.id.btnStartRecognition);
         progressBar = findViewById(R.id.progressBar);
         tvStatus = findViewById(R.id.tvStatus);
@@ -130,6 +133,7 @@ public class AttendanceActivity extends AppCompatActivity {
         });
         
         btnTakePhoto.setOnClickListener(v -> checkCameraPermissionAndTakePhoto());
+        btnPickImage.setOnClickListener(v -> pickImageFromGallery());
         btnStartRecognition.setOnClickListener(v -> startRecognition());
         
         // 初始状态
@@ -166,6 +170,41 @@ public class AttendanceActivity extends AppCompatActivity {
                     }
                 }
             });
+
+        // 选择已有图片
+        pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    try {
+                        currentPhotoUri = uri;
+                        Bitmap bitmap = MediaStore.Images.Media.getBitmap(
+                            getContentResolver(), currentPhotoUri);
+                        ivPreview.setImageBitmap(bitmap);
+
+                        long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW",
+                            currentPhotoUri.toString(), "Imported from gallery");
+                        if (photoId != -1) {
+                            dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
+                                System.currentTimeMillis(), "PENDING");
+                            btnStartRecognition.setEnabled(true);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        Toast.makeText(this, "导入图片失败", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        );
+    }
+
+    private void pickImageFromGallery() {
+        try {
+            pickImageLauncher.launch("image/*");
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "无法打开图库", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void createAttendanceSession() {
@@ -220,7 +259,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void startRecognition() {
         if (currentPhotoUri == null) {
-            Toast.makeText(this, "请先拍照", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "请先拍照或导入图片", Toast.LENGTH_SHORT).show();
             return;
         }
         

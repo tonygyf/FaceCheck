@@ -49,6 +49,10 @@ public class ClassroomFragment extends Fragment {
         
         // 获取教师ID
         teacherId = getActivity().getSharedPreferences("user_prefs", 0).getLong("teacher_id", -1);
+        // 确保为当前教师生成两班与学生（从 assets 导入），避免学生列表未初始化
+        if (teacherId != -1) {
+            dbHelper.ensureAssetSeedForTeacher(teacherId);
+        }
         
         // 初始化视图
         recyclerView = view.findViewById(R.id.recycler_classrooms);

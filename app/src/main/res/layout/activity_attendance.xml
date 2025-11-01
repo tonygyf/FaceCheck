@@ -77,6 +77,16 @@
                 android:backgroundTint="@color/colorPrimary" />
 
             <Button
+                android:id="@+id/btnPickImage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="导入图片"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/colorPrimary" />
+
+            <Button
                 android:id="@+id/btnStartRecognition"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

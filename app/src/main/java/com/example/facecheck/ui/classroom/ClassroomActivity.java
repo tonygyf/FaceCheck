@@ -1,9 +1,12 @@
 package com.example.facecheck.ui.classroom;
 
 import com.example.facecheck.utils.FaceRecognitionManager;
+import com.example.facecheck.utils.FaceDetectionManager;
+import com.example.facecheck.utils.FaceImageProcessor;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -11,6 +14,7 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -33,11 +37,15 @@ import com.example.facecheck.sync.SyncManager;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.utils.PhotoStorageManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.BufferedWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,6 +61,14 @@ public class ClassroomActivity extends AppCompatActivity {
     
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
+    private Button btnExtractAll;
+
+    private FaceDetectionManager faceDetectionManager;
+    private FaceRecognitionManager faceRecognitionManager;
+
+    // 批量处理状态
+    private List<Student> studentsWithAvatar = new ArrayList<>();
+    private int processIndex = 0;
     
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickPhotoLauncher;
@@ -73,6 +89,10 @@ public class ClassroomActivity extends AppCompatActivity {
         
         // 初始化数据库
         dbHelper = new DatabaseHelper(this);
+
+        // 初始化人脸相关管理器
+        faceDetectionManager = new FaceDetectionManager(this);
+        faceRecognitionManager = new FaceRecognitionManager(this);
         
         // 初始化视图
         initViews();
@@ -87,6 +107,7 @@ public class ClassroomActivity extends AppCompatActivity {
     private void initViews() {
         recyclerView = findViewById(R.id.recyclerViewStudents);
         fabAddStudent = findViewById(R.id.fabAddStudent);
+        btnExtractAll = findViewById(R.id.btnExtractAll);
         
         // 设置RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -95,9 +116,181 @@ public class ClassroomActivity extends AppCompatActivity {
         
         // 设置点击事件
         fabAddStudent.setOnClickListener(v -> showAddStudentDialog());
+        if (btnExtractAll != null) {
+            btnExtractAll.setOnClickListener(v -> startBatchExtraction());
+        }
         
         // 设置学生点击事件
         studentAdapter.setOnItemClickListener(student -> showStudentDetailsDialog(student));
+    }
+
+    // ============= 批量特征提取入口 =============
+    private void startBatchExtraction() {
+        Cursor cursor = dbHelper.getStudentsByClass(classroomId);
+        studentsWithAvatar.clear();
+        processIndex = 0;
+
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
+                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
+                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
+                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+
+                if (!TextUtils.isEmpty(avatarUri)) {
+                    Student s = new Student(id, classroomId, name, sid, gender, avatarUri, createdAt);
+                    studentsWithAvatar.add(s);
+                }
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+
+        if (studentsWithAvatar.isEmpty()) {
+            Toast.makeText(this, "该班级暂无带头像的学生", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Snackbar.make(recyclerView, "开始批量提取，共 " + studentsWithAvatar.size() + " 人", Snackbar.LENGTH_SHORT).show();
+        processNextStudent();
+    }
+
+    private void processNextStudent() {
+        if (processIndex >= studentsWithAvatar.size()) {
+            Snackbar.make(recyclerView, "批量提取完成", Snackbar.LENGTH_LONG).show();
+            return;
+        }
+
+        Student student = studentsWithAvatar.get(processIndex);
+        processIndex++;
+
+        if (TextUtils.isEmpty(student.getAvatarUri())) {
+            processNextStudent();
+            return;
+        }
+
+        Uri avatar = Uri.parse(student.getAvatarUri());
+        try {
+            Bitmap original = MediaStore.Images.Media.getBitmap(getContentResolver(), avatar);
+            // 检测人脸
+            faceDetectionManager.detectFacesFromBitmap(original, new FaceDetectionManager.FaceDetectionCallback() {
+                @Override
+                public void onSuccess(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps) {
+                    runOnUiThread(() -> {
+                        if (faces == null || faces.isEmpty()) {
+                            Toast.makeText(ClassroomActivity.this, student.getName() + "：未检测到人脸，跳过", Toast.LENGTH_SHORT).show();
+                            processNextStudent();
+                            return;
+                        }
+
+                        // 质量评估（使用提取的第一个人脸位图）
+                        float quality = 0.0f;
+                        if (faceBitmaps != null && !faceBitmaps.isEmpty()) {
+                            Bitmap faceBmp = FaceImageProcessor.normalizeFaceImage(faceBitmaps.get(0), 224);
+                            quality = FaceImageProcessor.calculateImageQuality(faceBmp);
+                        }
+
+                        // 提取特征（直接用原图与Face信息，内部会裁剪和增强）
+                        float[] features = faceRecognitionManager.extractFaceFeatures(original, faces.get(0));
+                        if (features == null || features.length == 0) {
+                            Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取失败", Toast.LENGTH_SHORT).show();
+                            processNextStudent();
+                            return;
+                        }
+
+                        // 已存在则询问是否更新（为避免lambda捕获问题，拷贝到final变量）
+                        final Student targetStudent = student;
+                        final float[] targetFeatures = features;
+                        final float targetQuality = quality;
+
+                        List<com.example.facecheck.data.model.FaceEmbedding> existing = faceRecognitionManager.getStudentFaceEmbeddings(targetStudent.getId());
+                        if (existing != null && !existing.isEmpty()) {
+                            new AlertDialog.Builder(ClassroomActivity.this)
+                                .setTitle("更新确认")
+                                .setMessage("学生 " + targetStudent.getName() + " 已有人脸特征，是否更新为新结果？")
+                                .setPositiveButton("更新", (d, w) -> {
+                                    boolean ok = updateFaceEmbeddingRecord(targetStudent.getId(), targetFeatures, targetQuality);
+                                    if (ok) {
+                                        appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
+                                        Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已更新", Toast.LENGTH_SHORT).show();
+                                    } else {
+                                        Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：更新失败", Toast.LENGTH_SHORT).show();
+                                    }
+                                    processNextStudent();
+                                })
+                                .setNegativeButton("跳过", (d, w) -> processNextStudent())
+                                .setCancelable(false)
+                                .show();
+                        } else {
+                            // 直接保存
+                            boolean saved = faceRecognitionManager.saveFaceEmbedding(targetStudent.getId(), targetFeatures, targetQuality, null);
+                            if (saved) {
+                                appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
+                                Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已保存", Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：保存失败", Toast.LENGTH_SHORT).show();
+                            }
+                            processNextStudent();
+                        }
+                    });
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(ClassroomActivity.this, student.getName() + "：人脸检测失败(" + e.getMessage() + ")", Toast.LENGTH_SHORT).show();
+                        processNextStudent();
+                    });
+                }
+            });
+        } catch (IOException e) {
+            Toast.makeText(this, student.getName() + "：头像读取失败", Toast.LENGTH_SHORT).show();
+            processNextStudent();
+        }
+    }
+
+    private boolean updateFaceEmbeddingRecord(long studentId, float[] features, float quality) {
+        try {
+            // 选择质量最高的记录进行更新；如果没有则插入
+            android.database.Cursor c = dbHelper.getFaceEmbeddingsByStudent(studentId);
+            if (c != null && c.moveToFirst()) {
+                long id = c.getLong(c.getColumnIndexOrThrow("id"));
+                c.close();
+                byte[] vectorBytes = faceRecognitionManager.floatArrayToByteArray(features);
+                return dbHelper.updateFaceEmbeddingById(id, vectorBytes, quality);
+            }
+            // 没有记录则插入
+            return faceRecognitionManager.saveFaceEmbedding(studentId, features, quality, null);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    // 以JSON形式追加到 schema.sql（开发资产文件）
+    private void appendEmbeddingJson(long studentId, float[] features, float quality) {
+        try {
+            // 注意：生产环境中assets是只读；此处仅作为开发阶段生成插入语句
+            String path = "d:/typer/android_demo/FaceCheck/app/src/main/assets/schema.sql";
+            BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new java.io.FileOutputStream(path, true), StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            sb.append("\n-- FaceEmbedding JSON export for student ").append(studentId).append("\n");
+            sb.append("/* vector_json: ");
+            sb.append("[");
+            for (int i = 0; i < features.length; i++) {
+                sb.append(String.format(java.util.Locale.US, "%.6f", features[i]));
+                if (i < features.length - 1) sb.append(",");
+            }
+            sb.append("]");
+            sb.append(" */\n");
+            sb.append("-- quality: ").append(String.format(java.util.Locale.US, "%.4f", quality)).append("\n");
+            bw.write(sb.toString());
+            bw.flush();
+            bw.close();
+        } catch (Exception e) {
+            // 静默失败：在设备运行时可能不可写
+        }
     }
 
     private void initPhotoLaunchers() {
@@ -396,10 +589,16 @@ public class ClassroomActivity extends AppCompatActivity {
                .setTitle("学生详情")
                .setPositiveButton("保存", (dialog, which) -> {
                    String name = etName.getText().toString().trim();
+                   String sid = etSid.getText().toString().trim();
                    String gender = etGender.getText().toString().trim();
                    
                    if (TextUtils.isEmpty(name)) {
                        Toast.makeText(ClassroomActivity.this, "姓名不能为空", Toast.LENGTH_SHORT).show();
+                       return;
+                   }
+
+                   if (TextUtils.isEmpty(sid)) {
+                       Toast.makeText(ClassroomActivity.this, "学号不能为空", Toast.LENGTH_SHORT).show();
                        return;
                    }
                    
@@ -408,7 +607,7 @@ public class ClassroomActivity extends AppCompatActivity {
 
                    // 更新学生信息
                     boolean success = dbHelper.updateStudent(student.getId(), student.getClassId(), 
-                        name, student.getSid(), gender, newAvatarUri);
+                        name, sid, gender, newAvatarUri);
                    
                    // 重置 currentPhotoUri 和 currentPhotoFile
                    currentPhotoUri = null;

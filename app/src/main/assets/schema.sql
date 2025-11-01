@@ -103,3 +103,10 @@ AFTER UPDATE ON Teacher
 BEGIN
     UPDATE Teacher SET updatedAt = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+/*
+开发导出说明：
+当在课堂页面使用“一键提取向量”批量处理时，系统会将每个学生的向量以JSON行的形式追加到本文件末尾（仅开发调试用途，不影响数据库建表）。
+每行示例：
+{"studentId":1,"vector":[0.123,-0.045,...],"quality":0.86,"model":"v1","createdAt":"2025-10-30 10:00:00"}
+*/

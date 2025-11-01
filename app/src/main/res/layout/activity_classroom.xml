@@ -8,7 +8,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="16dp"
+        android:paddingTop="0dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -24,6 +27,14 @@
                 android:text="学生列表"
                 android:textSize="24sp"
                 android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExtractAll"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="一键提取向量"
+                android:layout_marginStart="8dp" />
 
         </LinearLayout>
 

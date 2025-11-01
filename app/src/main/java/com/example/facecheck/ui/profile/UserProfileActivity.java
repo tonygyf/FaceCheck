@@ -168,9 +168,10 @@ public class UserProfileActivity extends AppCompatActivity {
         // 修改用户名
         changeUsernameButton.setOnClickListener(v -> showChangeUsernameDialog());
         
-        // 修改密码（Teacher模型没有密码字段，暂时禁用此功能）
-        changePasswordButton.setEnabled(false);
-        changePasswordButton.setText("密码管理不可用");
+        // 修改密码
+        changePasswordButton.setEnabled(true);
+        changePasswordButton.setText("修改密码");
+        changePasswordButton.setOnClickListener(v -> showChangePasswordDialog());
         
         // WebDAV功能已移除
         webDavSwitch.setOnCheckedChangeListener(null);
@@ -380,9 +381,41 @@ public class UserProfileActivity extends AppCompatActivity {
             String newPassword = newPasswordInput.getText().toString();
             String confirmPassword = confirmPasswordInput.getText().toString();
             
-            // Teacher模型没有密码字段，此功能已禁用
-            Toast.makeText(UserProfileActivity.this, "密码管理功能暂不可用", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
+            // 输入校验
+            if (TextUtils.isEmpty(currentPassword) || TextUtils.isEmpty(newPassword) || TextUtils.isEmpty(confirmPassword)) {
+                Toast.makeText(UserProfileActivity.this, "请输入完整信息", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!currentPassword.equals(currentTeacher.getPassword())) {
+                Toast.makeText(UserProfileActivity.this, "当前密码不正确", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (newPassword.length() < 6) {
+                Toast.makeText(UserProfileActivity.this, "新密码至少6位", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!newPassword.equals(confirmPassword)) {
+                Toast.makeText(UserProfileActivity.this, "两次输入的新密码不一致", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (newPassword.equals(currentPassword)) {
+                Toast.makeText(UserProfileActivity.this, "新密码不能与当前密码相同", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // 更新密码
+            currentTeacher.setPassword(newPassword);
+            boolean success = dbHelper.updateTeacher(currentTeacher);
+            if (success) {
+                Toast.makeText(UserProfileActivity.this, "密码已更新", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } else {
+                Toast.makeText(UserProfileActivity.this, "密码更新失败", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
