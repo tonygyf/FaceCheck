@@ -19,11 +19,11 @@ public class WebDavManager {
     
     // WebDAV目录结构
     private static final String ROOT_DIR = "facecheck";
-    private static final String DATABASE_DIR = "database";
-    private static final String PHOTOS_DIR = "photos";
-    private static final String AVATARS_DIR = "photos/avatars";
-    private static final String ATTENDANCE_DIR = "photos/attendance";
-    private static final String RESULTS_DIR = "photos/results";
+    // 简洁目录结构：数据库文件直接位于 facecheck 根；其余资源为扁平子目录
+    private static final String DATA_DIR = "data"; // 可选数据文件夹
+    private static final String AVATARS_DIR = "avatars";
+    private static final String ATTENDANCE_DIR = "attendance";
+    private static final String RESULTS_DIR = "results";
     
     private final Context context;
     private final String serverUrl;
@@ -48,9 +48,8 @@ public class WebDavManager {
             // 创建根目录
             createDirectoryIfNotExists(rootPath);
             
-            // 创建子目录
-            createDirectoryIfNotExists(rootPath + "/" + DATABASE_DIR);
-            createDirectoryIfNotExists(rootPath + "/" + PHOTOS_DIR);
+            // 创建扁平子目录
+            createDirectoryIfNotExists(rootPath + "/" + DATA_DIR);
             createDirectoryIfNotExists(rootPath + "/" + AVATARS_DIR);
             createDirectoryIfNotExists(rootPath + "/" + ATTENDANCE_DIR);
             createDirectoryIfNotExists(rootPath + "/" + RESULTS_DIR);
@@ -173,7 +172,8 @@ public class WebDavManager {
 
     // 同步数据库文件
     public boolean syncDatabase(String localDbPath) {
-        String remoteDbPath = ROOT_DIR + "/" + DATABASE_DIR + "/facecheck.db";
+        // 覆盖式上传数据库到根目录：facecheck/database7.db
+        String remoteDbPath = ROOT_DIR + "/database7.db";
         return uploadFile(localDbPath, remoteDbPath);
     }
 
@@ -197,8 +197,23 @@ public class WebDavManager {
 
     // 获取数据库文件
     public boolean fetchDatabase(String localDbPath) {
-        String remoteDbPath = ROOT_DIR + "/" + DATABASE_DIR + "/facecheck.db";
+        String remoteDbPath = ROOT_DIR + "/database7.db";
         return downloadFile(remoteDbPath, localDbPath);
+    }
+
+    /**
+     * 首次连接：若根目录不存在，初始化并上传本地数据库到 facecheck/database7.db
+     */
+    public boolean initializeIfNeededAndUploadDb(String localDbPath) {
+        try {
+            if (!exists(rootPath)) {
+                if (!initializeDirectoryStructure()) return false;
+            }
+            return syncDatabase(localDbPath);
+        } catch (Throwable t) {
+            Log.e(TAG, "Initialize and upload DB failed", t);
+            return false;
+        }
     }
 
     // 获取头像

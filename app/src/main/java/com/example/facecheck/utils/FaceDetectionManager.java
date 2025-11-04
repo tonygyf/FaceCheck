@@ -56,13 +56,26 @@ public class FaceDetectionManager {
     }
     
     /**
-     * 从URI检测人脸
+     * 从URI检测人脸（使用EXIF方向一致的Bitmap进行检测与分割，避免低分辨率缩略图导致识别失败）
      */
     public void detectFacesFromUri(Uri imageUri, FaceDetectionCallback callback) {
         try {
-            Bitmap bitmap = MediaStore.Images.Media.getBitmap(context.getContentResolver(), imageUri);
-            detectFacesFromBitmap(bitmap, callback);
-        } catch (IOException e) {
+            // 加载并按EXIF旋转纠正位图，使用较大的目标尺寸以避免过度缩小
+            Bitmap orientedBitmap = ImageUtils.loadAndResizeBitmap(context, imageUri, 1600, 1600);
+            if (orientedBitmap == null) {
+                callback.onFailure(new IOException("无法加载原始图片用于检测"));
+                return;
+            }
+
+            // 使用与裁剪一致的位图进行检测，确保坐标对齐
+            InputImage image = InputImage.fromBitmap(orientedBitmap, 0);
+            faceDetector.process(image)
+                    .addOnSuccessListener(faces -> {
+                        List<Bitmap> faceBitmaps = extractFaceBitmaps(orientedBitmap, faces);
+                        callback.onSuccess(faces, faceBitmaps);
+                    })
+                    .addOnFailureListener(callback::onFailure);
+        } catch (Exception e) {
             callback.onFailure(e);
         }
     }

@@ -26,6 +26,24 @@ public class SyncManager {
         this.localDbPath = context.getDatabasePath("facecheck.db").getAbsolutePath();
     }
 
+    public enum SyncMode { UPLOAD, DOWNLOAD }
+
+    /**
+     * 简洁同步：仅初始化目录并选择上传或下载数据库；覆盖式，无备份。
+     */
+    public boolean performSimpleSync(SyncMode mode) {
+        // 首次连接时初始化目录结构
+        if (!webDavManager.initializeDirectoryStructure()) {
+            Log.e(TAG, "Failed to initialize WebDAV directory structure");
+            return false;
+        }
+        if (mode == SyncMode.UPLOAD) {
+            return webDavManager.syncDatabase(localDbPath);
+        } else {
+            return webDavManager.fetchDatabase(localDbPath);
+        }
+    }
+
     // 执行同步操作
     public boolean performSync() {
         // 1. 初始化WebDAV目录结构

@@ -638,8 +638,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getStudentsByClass(long classId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("Student", null, "classId = ?", 
-                new String[]{String.valueOf(classId)}, null, null, "name");
+        // 按学号升序排列（将 sid 作为整数排序，保证数值顺序）
+        return db.query("Student", null, "classId = ?",
+                new String[]{String.valueOf(classId)}, null, null, "CAST(sid AS INTEGER) ASC");
     }
 
     public Cursor getStudentById(long studentId) {
@@ -763,6 +764,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("FaceEmbedding", null, "studentId = ?", 
                 new String[]{String.valueOf(studentId)}, null, null, "quality DESC");
+    }
+
+    /**
+     * 获取指定模型版本的全部人脸嵌入（按质量降序）
+     */
+    public Cursor getAllFaceEmbeddingsByModel(String modelVer) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query("FaceEmbedding", null, "modelVer = ? AND isActive = 1",
+                new String[]{modelVer}, null, null, "quality DESC");
+    }
+
+    /**
+     * 返回数据库文件的绝对路径（供 WebDAV 同步使用）
+     */
+    public String getDatabaseAbsolutePath() {
+        return context.getDatabasePath(DATABASE_NAME).getAbsolutePath();
     }
 
     /**

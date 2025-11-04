@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>人脸识别与考勤流程说明</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 18px; margin-top: 24px; }
+    code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
+    .note { background: #fff8db; border: 1px solid #f2e089; padding: 12px; border-radius: 6px; }
+    ul { margin: 8px 0 16px; }
+  </style>
+  </head>
+<body>
+  <h1>人脸识别预览与考勤流程更新</h1>
+  <p class="note">
+    本页用于说明 Android 应用中人脸识别与考勤 UI/流程的近期修复与验证步骤。
+    由于这是静态预览说明页，实际 UI 变更请在设备或模拟器中运行应用查看。
+  </p>
+
+  <h2>预览图片显示修复</h2>
+  <ul>
+    <li>将识别页 <code>ivPreview</code> 的 <code>scaleType</code> 从 <code>centerInside</code> 调整为 <code>fitCenter</code>，更好地填充可用空间。</li>
+    <li>预览图加载改为使用 <code>ImageUtils.loadAndResizeBitmap(context, uri, 1600, 1600)</code>，按 EXIF 方向纠正并避免使用缩略图。</li>
+  </ul>
+
+  <h2>人脸检测与分割一致性</h2>
+  <ul>
+    <li><code>FaceDetectionManager.detectFacesFromUri</code> 改为与裁剪同一位图进行检测，避免坐标错位。</li>
+    <li>分割结果弹窗选项重构为：<strong>查看分割</strong>、<strong>人脸处理（修正/增强）</strong>、<strong>继续识别</strong>。</li>
+  </ul>
+
+  <h2>验证步骤</h2>
+  <ul>
+    <li>在设备上进入“考勤”页，拍照或导入清晰人脸图片。</li>
+    <li>确认预览图显示区域已明显增大且方向正确。</li>
+    <li>开始识别：出现分割结果后可选择查看分割或进行人脸修正/增强，再继续识别。</li>
+  </ul>
+
+  <h2>可能的进一步优化</h2>
+  <ul>
+    <li>将低质量图像的增强流程替换为基于质量的 <code>repairFaceImage(quality)</code>，提升细节保真度。</li>
+    <li>根据模型输入尺寸（如 112×112）精简重复缩放步骤，减少信息损失。</li>
+  </ul>
+
+  <p>若需更详细的识别管线可视化，请反馈具体页面位置或样例图，我们将补充预览说明。</p>
+</body>
+</html>

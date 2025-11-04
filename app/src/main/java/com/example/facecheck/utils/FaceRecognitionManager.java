@@ -29,7 +29,9 @@ public class FaceRecognitionManager {
     
     private static final String TAG = "FaceRecognitionManager";
     private static final String MODEL_VERSION = "v1.0";
-    private static final float SIMILARITY_THRESHOLD = 0.75f; // 相似度阈值
+    private static final String MODEL_VERSION_MFN = "mobilefacenet_v1"; // MobileFaceNet 模型标识
+    private static final float SIMILARITY_THRESHOLD = 0.75f; // 传统增强特征阈值
+    private static final float SIMILARITY_THRESHOLD_MFN = 0.80f; // MobileFaceNet 阈值（可根据数据校准）
     private static final int FEATURE_VECTOR_SIZE = 256; // 特征向量维度 - 增加特征维度以提高识别精度
     
     private final Context context;
@@ -1130,6 +1132,96 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             results.add(result);
         }
         
+        return results;
+    }
+
+    /**
+     * 使用 MobileFaceNet 嵌入进行单人脸识别
+     */
+    public RecognitionResult recognizeEmbedding(float[] queryEmbedding) {
+        if (queryEmbedding == null || queryEmbedding.length == 0) {
+            return new RecognitionResult(-1, 0.0f, "嵌入为空");
+        }
+        try {
+            List<Student> allStudents = databaseHelper.getAllStudents();
+            float bestSimilarity = 0.0f;
+            long bestStudentId = -1;
+            for (Student student : allStudents) {
+                List<FaceEmbedding> embeddings = getStudentFaceEmbeddings(student.getId());
+                for (FaceEmbedding embedding : embeddings) {
+                    // 仅比较 MobileFaceNet 向量
+                    if (!MODEL_VERSION_MFN.equals(embedding.getModelVer())) continue;
+                    float[] storedFeatures = byteArrayToFloatArray(embedding.getVector());
+                    if (storedFeatures.length == queryEmbedding.length) {
+                        float similarity = calculateSimilarity(queryEmbedding, storedFeatures);
+                        if (similarity > bestSimilarity) {
+                            bestSimilarity = similarity;
+                            bestStudentId = student.getId();
+                        }
+                    }
+                }
+            }
+            if (bestSimilarity >= SIMILARITY_THRESHOLD_MFN) {
+                return new RecognitionResult(bestStudentId, bestSimilarity, "识别成功");
+            } else {
+                return new RecognitionResult(-1, bestSimilarity, "未找到匹配的学生");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "嵌入识别失败: " + e.getMessage(), e);
+            return new RecognitionResult(-1, 0.0f, "识别异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 批量使用 MobileFaceNet 嵌入进行识别
+     */
+    public List<RecognitionResult> recognizeMultipleEmbeddings(List<float[]> embeddings) {
+        List<RecognitionResult> results = new ArrayList<>();
+        if (embeddings == null || embeddings.isEmpty()) return results;
+
+        // 预取数据库中全部 MobileFaceNet 嵌入，减少重复查询与 Blob->float[] 转换
+        android.database.Cursor cursor = null;
+        final List<Long> studentIds = new ArrayList<>();
+        final List<float[]> storedEmbeddings = new ArrayList<>();
+        try {
+            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION_MFN);
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
+                    byte[] vecBytes = cursor.getBlob(cursor.getColumnIndexOrThrow("vector"));
+                    float[] vec = byteArrayToFloatArray(vecBytes);
+                    if (vec != null && vec.length > 0) {
+                        studentIds.add(studentId);
+                        storedEmbeddings.add(vec);
+                    }
+                } while (cursor.moveToNext());
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "批量预取嵌入失败: " + t.getMessage(), t);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+
+        // 逐个待识别嵌入进行比对（内存中比对，避免 DB 循环查询）
+        for (float[] queryEmbedding : embeddings) {
+            float bestSim = 0f;
+            long bestStudentId = -1;
+            for (int i = 0; i < storedEmbeddings.size(); i++) {
+                float[] ref = storedEmbeddings.get(i);
+                if (ref.length == queryEmbedding.length) {
+                    float sim = calculateSimilarity(queryEmbedding, ref);
+                    if (sim > bestSim) {
+                        bestSim = sim;
+                        bestStudentId = studentIds.get(i);
+                    }
+                }
+            }
+            if (bestSim >= SIMILARITY_THRESHOLD_MFN) {
+                results.add(new RecognitionResult(bestStudentId, bestSim, "识别成功"));
+            } else {
+                results.add(new RecognitionResult(-1, bestSim, "未匹配到合适学生"));
+            }
+        }
         return results;
     }
     
