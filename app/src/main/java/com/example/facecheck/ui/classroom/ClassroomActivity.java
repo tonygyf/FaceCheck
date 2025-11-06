@@ -43,6 +43,8 @@ import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.utils.PhotoStorageManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
+import com.airbnb.lottie.LottieAnimationView;
+import com.airbnb.lottie.LottieDrawable;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,6 +69,10 @@ public class ClassroomActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
     private Button btnExtractAll;
+    // Lottie 覆盖层
+    private android.widget.FrameLayout lottieOverlayContainer;
+    private LottieAnimationView lottieView;
+    private boolean hadFailure = false;
 
     private FaceDetectionManager faceDetectionManager;
     private FaceRecognitionManager faceRecognitionManager;
@@ -124,6 +130,8 @@ public class ClassroomActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerViewStudents);
         fabAddStudent = findViewById(R.id.fabAddStudent);
         btnExtractAll = findViewById(R.id.btnExtractAll);
+        lottieOverlayContainer = findViewById(R.id.lottieOverlayContainer);
+        lottieView = findViewById(R.id.lottieView);
         
         // 设置RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -133,7 +141,10 @@ public class ClassroomActivity extends AppCompatActivity {
         // 设置点击事件
         fabAddStudent.setOnClickListener(v -> showAddStudentDialog());
         if (btnExtractAll != null) {
-            btnExtractAll.setOnClickListener(v -> startBatchExtraction());
+            btnExtractAll.setOnClickListener(v -> {
+                showBinaryScanOverlay();
+                startBatchExtraction();
+            });
         }
         
         // 设置学生点击事件
@@ -145,6 +156,7 @@ public class ClassroomActivity extends AppCompatActivity {
         Cursor cursor = dbHelper.getStudentsByClass(classroomId);
         studentsWithAvatar.clear();
         processIndex = 0;
+        hadFailure = false;
 
         if (cursor != null && cursor.moveToFirst()) {
             do {
@@ -175,6 +187,10 @@ public class ClassroomActivity extends AppCompatActivity {
     private void processNextStudent() {
         if (processIndex >= studentsWithAvatar.size()) {
             Snackbar.make(recyclerView, "批量提取完成", Snackbar.LENGTH_LONG).show();
+            // 成功则退出 Lottie，否则不退出（按需求）
+            if (!hadFailure) {
+                hideLottieOverlay();
+            }
             return;
         }
 
@@ -199,6 +215,7 @@ public class ClassroomActivity extends AppCompatActivity {
                             if (faces == null || faces.isEmpty()) {
                                 runOnUiThread(() -> {
                                     Toast.makeText(ClassroomActivity.this, student.getName() + "：未检测到人脸，跳过", Toast.LENGTH_SHORT).show();
+                                    hadFailure = true;
                                     processNextStudent();
                                 });
                                 return;
@@ -216,6 +233,7 @@ public class ClassroomActivity extends AppCompatActivity {
                             if (features == null || features.length == 0) {
                                 runOnUiThread(() -> {
                                     Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取失败", Toast.LENGTH_SHORT).show();
+                                    hadFailure = true;
                                     processNextStudent();
                                 });
                                 return;
@@ -238,6 +256,7 @@ public class ClassroomActivity extends AppCompatActivity {
                                                 Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已更新", Toast.LENGTH_SHORT).show();
                                             } else {
                                                 Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：更新失败", Toast.LENGTH_SHORT).show();
+                                                hadFailure = true;
                                             }
                                             processNextStudent();
                                         })
@@ -252,6 +271,7 @@ public class ClassroomActivity extends AppCompatActivity {
                                         Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已保存", Toast.LENGTH_SHORT).show();
                                     } else {
                                         Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：保存失败", Toast.LENGTH_SHORT).show();
+                                        hadFailure = true;
                                     }
                                     processNextStudent();
                                 });
@@ -259,6 +279,7 @@ public class ClassroomActivity extends AppCompatActivity {
                         } catch (Throwable t) {
                             runOnUiThread(() -> {
                                 Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取异常(" + t.getMessage() + ")", Toast.LENGTH_SHORT).show();
+                                hadFailure = true;
                                 processNextStudent();
                             });
                         }
@@ -269,12 +290,14 @@ public class ClassroomActivity extends AppCompatActivity {
                 public void onFailure(Exception e) {
                     runOnUiThread(() -> {
                         Toast.makeText(ClassroomActivity.this, student.getName() + "：人脸检测失败(" + e.getMessage() + ")", Toast.LENGTH_SHORT).show();
+                        hadFailure = true;
                         processNextStudent();
                     });
                 }
             });
         } catch (IOException e) {
             Toast.makeText(this, student.getName() + "：头像读取失败", Toast.LENGTH_SHORT).show();
+            hadFailure = true;
             processNextStudent();
         }
     }
@@ -284,6 +307,24 @@ public class ClassroomActivity extends AppCompatActivity {
         super.onDestroy();
         if (featureExecutor != null) {
             featureExecutor.shutdownNow();
+        }
+    }
+
+    private void showBinaryScanOverlay() {
+        if (lottieOverlayContainer != null && lottieView != null) {
+            lottieView.setAnimation("lottie/Binary Scan.json");
+            lottieView.setRepeatCount(LottieDrawable.INFINITE);
+            lottieOverlayContainer.setVisibility(View.VISIBLE);
+            lottieView.playAnimation();
+        }
+    }
+
+    private void hideLottieOverlay() {
+        if (lottieOverlayContainer != null && lottieView != null) {
+            try {
+                lottieView.cancelAnimation();
+            } catch (Throwable ignored) {}
+            lottieOverlayContainer.setVisibility(View.GONE);
         }
     }
 

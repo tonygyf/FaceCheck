@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.androidx.sqlite)
     implementation(libs.glide)
     implementation(libs.circleimageview)
+    // Lottie 动画
+    implementation("com.airbnb.android:lottie:6.4.0")
     
     // Google ML Kit 人脸检测
     implementation("com.google.mlkit:face-detection:16.1.6")

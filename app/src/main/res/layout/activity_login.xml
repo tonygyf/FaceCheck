@@ -245,4 +245,26 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Lottie 覆盖层：登录成功（telegram） -->
+    <FrameLayout
+        android:id="@+id/lottieOverlayLogin"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:elevation="8dp">
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/lottieLoginView"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            app:lottie_fileName="lottie/telegram.json"
+            app:lottie_autoPlay="false"
+            app:lottie_loop="false"
+            android:layout_gravity="center" />
+    </FrameLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

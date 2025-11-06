@@ -17,6 +17,9 @@ import androidx.lifecycle.ViewModelProvider;
 import com.example.facecheck.R;
 import com.example.facecheck.MainActivity;
 import android.content.SharedPreferences;
+import com.airbnb.lottie.LottieAnimationView;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -26,6 +29,8 @@ public class LoginActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private LoginViewModel loginViewModel;
     private CheckBox rememberPasswordCheckBox;
+    private LottieAnimationView lottieLoginView;
+    private View lottieOverlayLogin;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +47,8 @@ public class LoginActivity extends AppCompatActivity {
         registerTextView = findViewById(R.id.registerTextView);
         progressBar = findViewById(R.id.progressBar);
         rememberPasswordCheckBox = findViewById(R.id.rememberPasswordCheckBox);
+        lottieLoginView = findViewById(R.id.lottieLoginView);
+        lottieOverlayLogin = findViewById(R.id.lottieOverlayLogin);
 
         // 观察ViewModel状态
         loginViewModel.uiState.observe(this, this::handleUiState);
@@ -95,12 +102,31 @@ public class LoginActivity extends AppCompatActivity {
                     .remove("saved_password")
                     .apply();
             }
-            
-            // 跳转到主页面
-            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
+            // 显示登录成功 Lottie（telegram），执行1次后退出动画再跳转
+            if (lottieLoginView != null && lottieOverlayLogin != null) {
+                loginButton.setEnabled(false);
+                lottieOverlayLogin.setVisibility(View.VISIBLE);
+                lottieLoginView.setAnimation("lottie/telegram.json");
+                lottieLoginView.setRepeatCount(0);
+                lottieLoginView.addAnimatorListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        lottieOverlayLogin.setVisibility(View.GONE);
+                        // 跳转到主页面
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+                });
+                lottieLoginView.playAnimation();
+            } else {
+                // 回退：无动画视图则直接跳转
+                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                finish();
+            }
         } else if (state instanceof LoginUiState.Error) {
             LoginUiState.Error error = (LoginUiState.Error) state;
             progressBar.setVisibility(View.GONE);

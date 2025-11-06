@@ -32,6 +32,9 @@ import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.utils.PhotoStorageManager;
 // import com.example.facecheck.webdav.WebDavManager; // WebDAV功能已移除
+import com.airbnb.lottie.LottieAnimationView;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 
 import java.io.File;
 import java.io.IOException;
@@ -187,8 +190,8 @@ public class UserProfileActivity extends AppCompatActivity {
         
         // 退出登录
         logoutButton.setOnClickListener(v -> {
-            // 清除登录状态并返回登录页面
-            navigateToLogin();
+            // 退出动画（exit）执行一次后再跳转登录
+            playExitAndNavigate();
         });
     }
 
@@ -449,5 +452,43 @@ public class UserProfileActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+
+    private void playExitAndNavigate() {
+        // 动态添加覆盖层，避免修改现有布局结构（LinearLayout）
+        final android.widget.FrameLayout overlay = new android.widget.FrameLayout(this);
+        overlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        overlay.setClickable(true);
+        // 半透明遮罩
+        android.view.View dim = new android.view.View(this);
+        dim.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        dim.setBackgroundColor(0x80000000);
+        overlay.addView(dim);
+        // Lottie 视图
+        LottieAnimationView lottie = new LottieAnimationView(this);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(300, 300);
+        lp.gravity = android.view.Gravity.CENTER;
+        lottie.setLayoutParams(lp);
+        lottie.setAnimation("lottie/exit.json");
+        lottie.setRepeatCount(0);
+        overlay.addView(lottie);
+        // 添加到界面
+        addContentView(overlay, overlay.getLayoutParams());
+        // 播放并在结束后跳转
+        lottie.addAnimatorListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                // 移除覆盖层
+                try {
+                    ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+                } catch (Throwable ignored) {}
+                navigateToLogin();
+            }
+        });
+        lottie.playAnimation();
     }
 }

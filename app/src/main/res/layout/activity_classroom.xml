@@ -57,5 +57,28 @@
         app:backgroundTint="@color/colorAccent"
         app:tint="@android:color/white" />
 
+    <!-- Lottie 覆盖层：一键提取向量（binary scan） -->
+    <FrameLayout
+        android:id="@+id/lottieOverlayContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true">
+        <!-- 背景虚化（半透明遮罩） -->
+        <View
+            android:id="@+id/dimView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+        <!-- Lottie 动画视图 -->
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/lottieView"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:layout_gravity="center"
+            app:lottie_fileName="lottie/Binary Scan.json"
+            app:lottie_autoPlay="false"
+            app:lottie_loop="true" />
+    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
