@@ -33,6 +33,8 @@ import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.utils.PhotoStorageManager;
 // import com.example.facecheck.webdav.WebDavManager; // WebDAV功能已移除
 import com.airbnb.lottie.LottieAnimationView;
+import com.airbnb.lottie.LottieDrawable;
+import com.airbnb.lottie.LottieListener;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 
@@ -475,6 +477,8 @@ public class UserProfileActivity extends AppCompatActivity {
         lottie.setLayoutParams(lp);
         lottie.setAnimation("lottie/exit.json");
         lottie.setRepeatCount(0);
+        lottie.setRepeatMode(LottieDrawable.RESTART);
+        lottie.setSpeed(1.0f);
         overlay.addView(lottie);
         // 添加到界面
         addContentView(overlay, overlay.getLayoutParams());
@@ -489,6 +493,25 @@ public class UserProfileActivity extends AppCompatActivity {
                 navigateToLogin();
             }
         });
-        lottie.playAnimation();
+        // 保障动画资源加载后再播放，提升稳定性
+        lottie.addLottieOnCompositionLoadedListener(composition -> {
+            try {
+                lottie.playAnimation();
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "播放退出动画失败: " + t.getMessage());
+                // 失败则直接跳转
+                try {
+                    ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+                } catch (Throwable ignored) {}
+                navigateToLogin();
+            }
+        });
+        lottie.setFailureListener((LottieListener<Throwable>) throwable -> {
+            android.util.Log.e(TAG, "退出动画加载失败", throwable);
+            try {
+                ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+            } catch (Throwable ignored) {}
+            navigateToLogin();
+        });
     }
 }

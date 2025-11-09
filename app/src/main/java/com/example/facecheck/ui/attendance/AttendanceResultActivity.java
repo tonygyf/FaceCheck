@@ -27,6 +27,8 @@ public class AttendanceResultActivity extends AppCompatActivity {
     private DatabaseHelper dbHelper;
     private AttendanceResultAdapter resultAdapter;
     private long sessionId;
+    private int detectedFacesExtra;
+    private int recognizedFacesExtra;
     
     private RecyclerView recyclerViewResults;
     private TextView tvSessionInfo;
@@ -39,6 +41,8 @@ public class AttendanceResultActivity extends AppCompatActivity {
         
         // 获取会话ID
         sessionId = getIntent().getLongExtra("session_id", -1);
+        detectedFacesExtra = getIntent().getIntExtra("detected_faces", 0);
+        recognizedFacesExtra = getIntent().getIntExtra("recognized_faces", 0);
         if (sessionId == -1) {
             Toast.makeText(this, "会话信息无效", Toast.LENGTH_SHORT).show();
             finish();
@@ -132,24 +136,22 @@ public class AttendanceResultActivity extends AppCompatActivity {
     }
 
     private void updateSummary(List<AttendanceResult> results) {
-        int total = results.size();
+        int total = results.size(); // 本班总人数（本次会话已写入 Present/Absent）
         int present = 0;
         int absent = 0;
-        int unknown = 0;
         
         for (AttendanceResult result : results) {
-            switch (result.getStatus()) {
-                case "PRESENT":
-                    present++;
-                    break;
-                case "ABSENT":
-                    absent++;
-                    break;
-                default:
-                    unknown++;
-                    break;
+            String status = result.getStatus();
+            if ("Present".equals(status)) {
+                present++;
+            } else if ("Absent".equals(status)) {
+                absent++;
+            } else {
+                // 其他状态（如 Late/Leave），不计入上述三类
             }
         }
+        // 未知人数来源于：检测到的人脸数量 - 成功识别的人脸数量（可能是非本班人脸或未达阈值）
+        int unknown = Math.max(0, detectedFacesExtra - recognizedFacesExtra);
         
         String summary = String.format("总人数: %d, 出勤: %d, 缺勤: %d, 未知: %d", 
             total, present, absent, unknown);

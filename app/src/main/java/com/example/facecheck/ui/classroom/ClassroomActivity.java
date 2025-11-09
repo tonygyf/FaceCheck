@@ -228,7 +228,7 @@ public class ClassroomActivity extends AppCompatActivity {
                                 quality = FaceImageProcessor.calculateImageQuality(faceBmp);
                             }
 
-                            // 提取特征（内部会进行裁剪与增强）
+                            // 提取传统增强特征（256维，内部会进行裁剪与增强）
                             float[] features = faceRecognitionManager.extractFaceFeatures(original, faces.get(0));
                             if (features == null || features.length == 0) {
                                 runOnUiThread(() -> {
@@ -238,6 +238,8 @@ public class ClassroomActivity extends AppCompatActivity {
                                 });
                                 return;
                             }
+
+                            
 
                             // 已存在则询问是否更新（UI 交互放到主线程）
                             final Student targetStudent = student;
@@ -330,13 +332,27 @@ public class ClassroomActivity extends AppCompatActivity {
 
     private boolean updateFaceEmbeddingRecord(long studentId, float[] features, float quality) {
         try {
-            // 选择质量最高的记录进行更新；如果没有则插入
+            // 仅更新与当前特征维度匹配的记录，避免跨模型污染（如128维MFN vs 256维工程向量）
             android.database.Cursor c = dbHelper.getFaceEmbeddingsByStudent(studentId);
             if (c != null && c.moveToFirst()) {
-                long id = c.getLong(c.getColumnIndexOrThrow("id"));
+                long targetId = -1;
+                do {
+                    long id = c.getLong(c.getColumnIndexOrThrow("id"));
+                    byte[] vec = c.getBlob(c.getColumnIndexOrThrow("vector"));
+                    // 与本次特征长度一致才允许更新
+                    if (vec != null) {
+                        int len = vec.length / 4; // float占4字节
+                        if (len == features.length) {
+                            targetId = id;
+                            break; // 按质量已排序，匹配到第一个即可
+                        }
+                    }
+                } while (c.moveToNext());
                 c.close();
-                byte[] vectorBytes = faceRecognitionManager.floatArrayToByteArray(features);
-                return dbHelper.updateFaceEmbeddingById(id, vectorBytes, quality);
+                if (targetId != -1) {
+                    byte[] vectorBytes = faceRecognitionManager.floatArrayToByteArray(features);
+                    return dbHelper.updateFaceEmbeddingById(targetId, vectorBytes, quality);
+                }
             }
             // 没有记录则插入
             return faceRecognitionManager.saveFaceEmbedding(studentId, features, quality, null);

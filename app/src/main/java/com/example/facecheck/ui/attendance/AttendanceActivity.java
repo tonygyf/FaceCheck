@@ -1,6 +1,8 @@
 package com.example.facecheck.ui.attendance;
 
 import android.content.Intent;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -62,14 +64,11 @@ public class AttendanceActivity extends AppCompatActivity {
     private TextView tvStatus;
     private Spinner spinnerModel;
     
-    // 模型选择相关
+    // 模型选择相关（统一为 ML Kit）
     private String[] modelOptions = {
-        "YuNet + MobileFaceNet (TFLite)",
-        "Google ML Kit (推荐)",
-        "TensorFlow Lite + FaceNet",
-        "OpenCV DNN"
+        "Google ML Kit (推荐)"
     };
-    private String selectedModel = "YuNet + MobileFaceNet (TFLite)";
+    private String selectedModel = "Google ML Kit (推荐)";
     
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickImageLauncher;
@@ -275,183 +274,13 @@ public class AttendanceActivity extends AppCompatActivity {
         // 显示进度条
         progressBar.setVisibility(View.VISIBLE);
         btnStartRecognition.setEnabled(false);
-        tvStatus.setText("正在使用 " + selectedModel + " 进行识别...");
+        tvStatus.setText("正在使用 Google ML Kit 进行识别...");
         
-        // 根据选择的模型执行不同的人脸检测逻辑
-        if (selectedModel.equals("YuNet + MobileFaceNet (TFLite)")) {
-            performYuNetMobileFaceNetRecognition();
-        } else if (selectedModel.equals("Google ML Kit (推荐)")) {
-            performMLKitFaceDetection();
-        } else {
-            // 其他模型暂时使用ML Kit作为默认实现
-            performMLKitFaceDetection();
-        }
+        // 统一使用 ML Kit 检测与识别
+        performMLKitFaceDetection();
     }
 
-    /**
-     * 使用 YuNet 检测 + MobileFaceNet 嵌入进行识别
-     */
-    private void performYuNetMobileFaceNetRecognition() {
-        try {
-            Bitmap source = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-            if (source == null) {
-                progressBar.setVisibility(View.GONE);
-                btnStartRecognition.setEnabled(true);
-                tvStatus.setText("图片加载失败");
-                Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 仅使用 YuNet TFLite（多人脸）进行检测
-            List<Rect> rects;
-            YuNetTFLiteDetector detector = new YuNetTFLiteDetector(
-                this,
-                320,
-                0.6f,
-                0.5f,
-                YuNetTFLiteDetector.ModelVariant.MULTI_FACE
-            );
-            if (!detector.isReady()) {
-                progressBar.setVisibility(View.GONE);
-                btnStartRecognition.setEnabled(true);
-                tvStatus.setText("YuNet 模型未就绪，无法检测");
-                showMissingModelDialog("YuNet(fp16, 多人)", "models/yunet_fp16_multi.tflite");
-                return;
-            }
-            rects = detector.detect(source);
-            if (rects == null || rects.isEmpty()) {
-                progressBar.setVisibility(View.GONE);
-                btnStartRecognition.setEnabled(true);
-                tvStatus.setText("未检测到人脸");
-                Toast.makeText(this, "未检测到人脸，请调整角度或光线", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 裁剪人脸位图
-            List<Bitmap> faceBitmaps = new ArrayList<>();
-            for (Rect r : rects) {
-                Bitmap fb = cropFace(source, r);
-                if (fb != null) faceBitmaps.add(fb);
-            }
-            if (faceBitmaps.isEmpty()) {
-                progressBar.setVisibility(View.GONE);
-                btnStartRecognition.setEnabled(true);
-                tvStatus.setText("人脸裁剪失败");
-                Toast.makeText(this, "人脸裁剪失败", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 保存分割后的人脸图像（沿用已有工具）
-            List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps, String.valueOf(sessionId));
-            // YuNet 路径不依赖 ML Kit Face 对象，使用简化版提示
-            showFaceSegmentationResultsSimple(faceBitmaps.size(), faceBitmaps, faceImagePaths);
-
-            // 嵌入与识别放到子线程
-            new Thread(() -> {
-                try {
-                    MobileFaceNetEmbedder embedder = new MobileFaceNetEmbedder(AttendanceActivity.this);
-                    if (embedder == null) {
-                        // 防御性：不应为 null，但保留检查
-                        runOnUiThread(() -> {
-                            progressBar.setVisibility(View.GONE);
-                            btnStartRecognition.setEnabled(true);
-                            tvStatus.setText("嵌入器创建失败");
-                            Toast.makeText(AttendanceActivity.this, "嵌入器创建失败", Toast.LENGTH_SHORT).show();
-                        });
-                        return;
-                    }
-                    // 通过首次调用 embed() 前先检查模型是否加载成功
-                    if (embedder.embed(Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)) == null) {
-                        runOnUiThread(() -> {
-                            progressBar.setVisibility(View.GONE);
-                            btnStartRecognition.setEnabled(true);
-                            tvStatus.setText("MobileFaceNet 模型未就绪，无法识别");
-                            showMissingModelDialog("MobileFaceNet", "models/mobilefacenet.tflite");
-                        });
-                        return;
-                    }
-                    // 在生成嵌入前对每张人脸进行质量评估与修复增强
-                    List<Bitmap> enhancedBitmaps = new ArrayList<>(faceBitmaps.size());
-                    for (int i = 0; i < faceBitmaps.size(); i++) {
-                        Bitmap fb = faceBitmaps.get(i);
-                        float quality = FaceImageProcessor.calculateImageQuality(fb);
-                        Bitmap processed = fb;
-                        if (quality < 0.6f) {
-                            Bitmap repaired = FaceImageProcessor.repairFaceImage(fb);
-                            if (repaired != null) {
-                                processed = repaired;
-                                // 缓存增强结果用于查看或调试
-                                String enhancedPath = imageStorageManager.saveTempImage(processed,
-                                        "enhanced_face_" + sessionId + "_" + i + ".jpg");
-                                if (enhancedPath != null) {
-                                    Log.d(TAG, "YuNet: enhanced face saved: " + enhancedPath);
-                                }
-                            }
-                        }
-                        enhancedBitmaps.add(processed);
-                    }
-
-                    // 对增强后的人脸位图生成嵌入
-                    List<float[]> embeddings = new ArrayList<>();
-                    for (Bitmap eb : enhancedBitmaps) {
-                        float[] vec = embedder.embed(eb);
-                        if (vec != null) embeddings.add(vec);
-                    }
-
-                    if (embeddings.isEmpty()) {
-                        runOnUiThread(() -> {
-                            progressBar.setVisibility(View.GONE);
-                            btnStartRecognition.setEnabled(true);
-                            tvStatus.setText("嵌入生成失败");
-                            Toast.makeText(AttendanceActivity.this, "嵌入生成失败，检查模型文件", Toast.LENGTH_SHORT).show();
-                        });
-                        return;
-                    }
-
-                    List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager.recognizeMultipleEmbeddings(embeddings);
-
-                    int recognizedCount = 0;
-                    List<String> recognizedStudentNames = new ArrayList<>();
-                    for (FaceRecognitionManager.RecognitionResult result : results) {
-                        if (result.isSuccess()) {
-                            recognizedCount++;
-                            String studentName = getStudentNameById(result.getStudentId());
-                            recognizedStudentNames.add(studentName);
-                        }
-                    }
-
-                    final int finalDetectedCount = faceBitmaps.size();
-                    final int finalRecognizedCount = recognizedCount;
-                    final ArrayList<String> finalRecognizedNames = new ArrayList<>(recognizedStudentNames);
-                    runOnUiThread(() -> {
-                        tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + finalDetectedCount + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
-                        Intent intent = new Intent(this, AttendanceResultActivity.class);
-                        intent.putExtra("session_id", sessionId);
-                        intent.putExtra("detected_faces", finalDetectedCount);
-                        intent.putExtra("recognized_faces", finalRecognizedCount);
-                        intent.putStringArrayListExtra("recognized_names", finalRecognizedNames);
-                        startActivity(intent);
-                        finish();
-                    });
-                } catch (Exception e) {
-                    Log.e(TAG, "YuNet+MFN 识别失败: " + e.getMessage(), e);
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        btnStartRecognition.setEnabled(true);
-                        tvStatus.setText("识别失败");
-                        Toast.makeText(this, "识别失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }).start();
-
-        } catch (Throwable t) {
-            Log.e(TAG, "YuNet+MFN 流程异常: " + t.getMessage(), t);
-            progressBar.setVisibility(View.GONE);
-            btnStartRecognition.setEnabled(true);
-            tvStatus.setText("识别流程异常");
-            Toast.makeText(this, "识别流程异常: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
+    // 删除：YuNet 检测 + MobileFaceNet 嵌入识别流程（已废弃）
 
     private void showMissingModelDialog(String modelName, String assetPath) {
         String msg = "请将模型文件放入 app/src/main/assets/" + assetPath +
@@ -573,47 +402,118 @@ public class AttendanceActivity extends AppCompatActivity {
     private void performFaceRecognition(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
         new Thread(() -> {
             try {
-                // 使用人脸识别管理器进行批量识别
-                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager.recognizeMultipleFaces(faceBitmaps, faces);
-                
-                // 统计识别结果
-                int recognizedCount = 0;
-                List<String> recognizedStudentNames = new ArrayList<>();
-                
-                for (FaceRecognitionManager.RecognitionResult result : results) {
-                    if (result.isSuccess()) {
-                        recognizedCount++;
-                        // 获取学生姓名
-                        String studentName = getStudentNameById(result.getStudentId());
-                        recognizedStudentNames.add(studentName);
-                    }
+                // 先提取向量用于展示与确认
+                List<float[]> embeddings = new ArrayList<>();
+                for (int i = 0; i < faces.size() && i < faceBitmaps.size(); i++) {
+                    float[] vec = faceRecognitionManager.extractFaceFeatures(faceBitmaps.get(i), faces.get(i));
+                    if (vec != null) embeddings.add(vec);
                 }
-                
-                final int finalRecognizedCount = recognizedCount;
-                final List<String> finalRecognizedNames = recognizedStudentNames;
-                
+
+                if (embeddings.isEmpty()) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        btnStartRecognition.setEnabled(true);
+                        tvStatus.setText("向量提取失败");
+                        Toast.makeText(this, "向量提取失败，请检查图像或模型配置", Toast.LENGTH_SHORT).show();
+                    });
+                    return;
+                }
+
                 runOnUiThread(() -> {
-                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
-                    
-                    // 跳转到结果界面，传递识别结果
-                    Intent intent = new Intent(this, AttendanceResultActivity.class);
-                    intent.putExtra("session_id", sessionId);
-                    intent.putExtra("detected_faces", faces.size());
-                    intent.putExtra("recognized_faces", finalRecognizedCount);
-                    intent.putStringArrayListExtra("recognized_names", new ArrayList<>(finalRecognizedNames));
-                    startActivity(intent);
-                    finish();
+                    tvStatus.setText("已生成向量，待确认后继续比对");
+                    showEmbeddingsDialog(embeddings, () -> {
+                        // 用户确认后再进行比对（放回子线程执行）
+                        new Thread(() -> {
+                            try {
+                                // 使用通用导入向量的班级内比对方法，直接用已生成的向量
+                                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager.recognizeImportedVectorsWithinClass(embeddings, classroomId);
+
+                                // 将识别结果持久化到数据库（本次会话）
+                                persistAttendanceResultsForSession(sessionId, results);
+
+                                // 统计识别结果
+                                int recognizedCount = 0;
+                                List<String> recognizedStudentNames = new ArrayList<>();
+
+                                for (FaceRecognitionManager.RecognitionResult result : results) {
+                                    if (result.isSuccess()) {
+                                        recognizedCount++;
+                                        // 获取学生姓名
+                                        String studentName = getStudentNameById(result.getStudentId());
+                                        recognizedStudentNames.add(studentName);
+                                    }
+                                }
+
+                                final int finalRecognizedCount = recognizedCount;
+                                final List<String> finalRecognizedNames = recognizedStudentNames;
+
+                                runOnUiThread(() -> {
+                                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
+
+                                    // 跳转到结果界面，传递识别结果
+                                    Intent intent = new Intent(this, AttendanceResultActivity.class);
+                                    intent.putExtra("session_id", sessionId);
+                                    intent.putExtra("detected_faces", faces.size());
+                                    intent.putExtra("recognized_faces", finalRecognizedCount);
+                                    intent.putStringArrayListExtra("recognized_names", new ArrayList<>(finalRecognizedNames));
+                                    startActivity(intent);
+                                    finish();
+                                });
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                runOnUiThread(() -> {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnStartRecognition.setEnabled(true);
+                                    tvStatus.setText("识别失败");
+                                    Toast.makeText(this, "识别失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        }).start();
+                    });
                 });
             } catch (Exception e) {
                 e.printStackTrace();
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     btnStartRecognition.setEnabled(true);
-                    tvStatus.setText("识别失败");
-                    Toast.makeText(this, "识别失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    tvStatus.setText("向量提取失败");
+                    Toast.makeText(this, "向量提取失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
             }
         }).start();
+    }
+
+    /**
+     * 将识别结果写入 AttendanceResult 表：
+     * - 识别成功的学生标记为 Present
+     * - 本班未被识别到的学生标记为 Absent
+     */
+    private void persistAttendanceResultsForSession(long sessionId, List<FaceRecognitionManager.RecognitionResult> results) {
+        try {
+            java.util.Set<Long> presentIds = new java.util.HashSet<>();
+            for (FaceRecognitionManager.RecognitionResult r : results) {
+                if (r.isSuccess()) {
+                    presentIds.add(r.getStudentId());
+                    dbHelper.insertAttendanceResult(sessionId, r.getStudentId(), "Present", r.getSimilarity(), "AUTO");
+                }
+            }
+
+            // 将未识别到的本班学生标记为缺勤
+            android.database.Cursor cursor = dbHelper.getStudentsByClass(classroomId);
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    long sid = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                    if (!presentIds.contains(sid)) {
+                        dbHelper.insertAttendanceResult(sessionId, sid, "Absent", 0f, "AUTO");
+                    }
+                } while (cursor.moveToNext());
+                cursor.close();
+            } else if (cursor != null) {
+                cursor.close();
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "持久化考勤结果失败: " + t.getMessage(), t);
+        }
     }
     
     /**
@@ -742,6 +642,111 @@ public class AttendanceActivity extends AppCompatActivity {
     /**
      * 根据学生ID获取学生姓名
      */
+    /**
+     * 弹窗展示向量，提供复制 JSON/CSV 的功能，确认后继续比对
+     */
+    private void showEmbeddingsDialog(List<float[]> embeddings, Runnable onProceed) {
+        if (embeddings == null || embeddings.isEmpty()) {
+            Toast.makeText(this, "无可展示的向量", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String previewText = embeddingsToJSON(embeddings);
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText(previewText);
+        tv.setTextSize(12f);
+        tv.setTextIsSelectable(true);
+        int padding = (int) (12 * getResources().getDisplayMetrics().density);
+        tv.setPadding(padding, padding, padding, padding);
+        scrollView.addView(tv);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("向量预览 (" + embeddings.size() + " 张人脸)");
+        builder.setView(scrollView);
+        builder.setCancelable(false);
+
+        // 先定义按钮，但在显示后重写点击逻辑，避免复制按钮关闭弹窗
+        builder.setNegativeButton("复制 CSV", (d, w) -> {});
+        builder.setNeutralButton("复制 JSON", (d, w) -> {});
+        builder.setPositiveButton("继续比对", (d, w) -> {});
+
+        builder.setOnCancelListener(d -> {
+            // 用户取消则终止当前流程
+            progressBar.setVisibility(View.GONE);
+            btnStartRecognition.setEnabled(true);
+            tvStatus.setText("已取消比对");
+        });
+
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(l -> {
+            android.widget.Button btnCsv = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            android.widget.Button btnJson = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            android.widget.Button btnGo = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+
+            if (btnCsv != null) {
+                btnCsv.setOnClickListener(v -> {
+                    copyToClipboard("embeddings_csv", embeddingsToCSV(embeddings));
+                    Toast.makeText(this, "已复制 CSV，可继续点击\"继续比对\"", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            if (btnJson != null) {
+                btnJson.setOnClickListener(v -> {
+                    copyToClipboard("embeddings_json", embeddingsToJSON(embeddings));
+                    Toast.makeText(this, "已复制 JSON，可继续点击\"继续比对\"", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            if (btnGo != null) {
+                btnGo.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    if (onProceed != null) onProceed.run();
+                });
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void copyToClipboard(String label, String text) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm != null) {
+            cm.setPrimaryClip(ClipData.newPlainText(label, text));
+        }
+    }
+
+    private String embeddingsToJSON(List<float[]> embeddings) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int i = 0; i < embeddings.size(); i++) {
+            float[] vec = embeddings.get(i);
+            sb.append("[");
+            for (int j = 0; j < vec.length; j++) {
+                sb.append(String.format(java.util.Locale.US, "%.6f", vec[j]));
+                if (j < vec.length - 1) sb.append(", ");
+            }
+            sb.append("]");
+            if (i < embeddings.size() - 1) sb.append(",\n");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String embeddingsToCSV(List<float[]> embeddings) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < embeddings.size(); i++) {
+            float[] vec = embeddings.get(i);
+            for (int j = 0; j < vec.length; j++) {
+                sb.append(String.format(java.util.Locale.US, "%.6f", vec[j]));
+                if (j < vec.length - 1) sb.append(",");
+            }
+            if (i < embeddings.size() - 1) sb.append("\n");
+        }
+        return sb.toString();
+    }
+
     private String getStudentNameById(long studentId) {
         // 从数据库获取学生信息
         android.database.Cursor cursor = dbHelper.getStudentById(studentId);

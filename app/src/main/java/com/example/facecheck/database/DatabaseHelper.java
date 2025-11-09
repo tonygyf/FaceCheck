@@ -771,8 +771,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      */
     public Cursor getAllFaceEmbeddingsByModel(String modelVer) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("FaceEmbedding", null, "modelVer = ? AND isActive = 1",
-                new String[]{modelVer}, null, null, "quality DESC");
+        try {
+            // 兼容旧版数据库：某些设备上的 FaceEmbedding 表可能没有 isActive 列
+            if (hasColumn(db, "FaceEmbedding", "isActive")) {
+                return db.query("FaceEmbedding", null, "modelVer = ? AND isActive = 1",
+                        new String[]{modelVer}, null, null, "quality DESC");
+            } else {
+                Log.w(TAG, "FaceEmbedding 表缺少 isActive 列，回退为不带 isActive 的查询");
+                return db.query("FaceEmbedding", null, "modelVer = ?",
+                        new String[]{modelVer}, null, null, "quality DESC");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "按 isActive 查询失败，回退为仅 modelVer 的查询: " + e.getMessage());
+            return db.query("FaceEmbedding", null, "modelVer = ?",
+                    new String[]{modelVer}, null, null, "quality DESC");
+        }
     }
 
     /**
@@ -780,6 +793,29 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      */
     public String getDatabaseAbsolutePath() {
         return context.getDatabasePath(DATABASE_NAME).getAbsolutePath();
+    }
+
+    /**
+     * 判断指定数据表是否包含给定列（用于兼容旧版数据库）
+     */
+    private boolean hasColumn(SQLiteDatabase db, String tableName, String columnName) {
+        android.database.Cursor cursor = null;
+        try {
+            cursor = db.rawQuery("PRAGMA table_info(" + tableName + ")", null);
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                    if (columnName.equalsIgnoreCase(name)) {
+                        return true;
+                    }
+                } while (cursor.moveToNext());
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "PRAGMA table_info 查询失败: " + t.getMessage());
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return false;
     }
 
     /**

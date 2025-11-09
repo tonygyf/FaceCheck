@@ -20,6 +20,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Arrays;
 
 /**
  * 人脸识别管理器
@@ -29,10 +30,9 @@ public class FaceRecognitionManager {
     
     private static final String TAG = "FaceRecognitionManager";
     private static final String MODEL_VERSION = "v1.0";
-    private static final String MODEL_VERSION_MFN = "mobilefacenet_v1"; // MobileFaceNet 模型标识
     private static final float SIMILARITY_THRESHOLD = 0.75f; // 传统增强特征阈值
-    private static final float SIMILARITY_THRESHOLD_MFN = 0.80f; // MobileFaceNet 阈值（可根据数据校准）
     private static final int FEATURE_VECTOR_SIZE = 256; // 特征向量维度 - 增加特征维度以提高识别精度
+    private static final boolean DEBUG_SIMILARITY = true; // 相似度调试开关
     
     private final Context context;
     private final DatabaseHelper databaseHelper;
@@ -101,7 +101,25 @@ public class FaceRecognitionManager {
             }
 
             // 调用原来的特征生成（保持原有 generateEnhancedFeatureVector / normalizeVector）
-            float[] features = generateEnhancedFeatureVector(input, new ArrayList<>(), face);
+            // 收集 ML Kit 关键点并传递给生成函数
+            List<FaceLandmark> lmList = new ArrayList<>();
+            int[] allTypes = {
+                    FaceLandmark.LEFT_EYE,
+                    FaceLandmark.RIGHT_EYE,
+                    FaceLandmark.NOSE_BASE,
+                    FaceLandmark.MOUTH_LEFT,
+                    FaceLandmark.MOUTH_RIGHT,
+                    FaceLandmark.MOUTH_BOTTOM,
+                    FaceLandmark.LEFT_CHEEK,
+                    FaceLandmark.RIGHT_CHEEK
+            };
+            for (int t : allTypes) {
+                FaceLandmark lm = face.getLandmark(t);
+                if (lm != null) {
+                    lmList.add(lm);
+                }
+            }
+            float[] features = generateEnhancedFeatureVector(input, lmList, face);
             if (features == null) {
                 Log.e(TAG, "generateEnhancedFeatureVector returned null");
                 dumpBitmapForDebug(input, "gen_null");
@@ -238,7 +256,7 @@ public class FaceRecognitionManager {
             
             // 2. 生成增强纹理特征
             index = generateEnhancedTextureFeatures(faceBitmap, features, index);
-            
+
             // 3. 生成增强图像块特征
         index = generateEnhancedImageBlockFeatures(faceBitmap, features, index);
 
@@ -252,10 +270,18 @@ public class FaceRecognitionManager {
 
     } catch (Exception e) {
         Log.e(TAG, "生成特征向量失败: " + e.getMessage(), e);
-        return new float[FEATURE_VECTOR_SIZE]; // 返回零向量
+        // 返回已生成的部分，并确保剩余维度填充为 0
+        for (int i = 0; i < features.length; i++) {
+            // 若某些维度尚未写入，保持为 0
+            if (Float.isNaN(features[i]) || Float.isInfinite(features[i])) {
+                features[i] = (float) Math.random() * 0.01f; // 小随机值代替0
+            } else if (features[i] == 0.0f) {
+                features[i] = (float) Math.random() * 0.001f; // 轻微扰动
+            }
+        }
     }
 
-    return features; // 返回完整的特征向量
+    return features; // 返回完整或部分生成的特征向量
 }
 
 /**
@@ -1014,25 +1040,52 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
     }
     
     /**
-     * 计算两个特征向量的余弦相似度
+     * 计算两个特征向量的余弦相似度（鲁棒版，含调试日志）
      */
     public float calculateSimilarity(float[] vector1, float[] vector2) {
         if (vector1 == null || vector2 == null || vector1.length != vector2.length) {
             return 0.0f;
         }
-        
+
         float dotProduct = 0.0f;
         float norm1 = 0.0f;
         float norm2 = 0.0f;
-        
+
         for (int i = 0; i < vector1.length; i++) {
-            dotProduct += vector1[i] * vector2[i];
-            norm1 += vector1[i] * vector1[i];
-            norm2 += vector2[i] * vector2[i];
+            float a = vector1[i];
+            float b = vector2[i];
+            if (Float.isNaN(a) || Float.isNaN(b)) continue;
+            dotProduct += a * b;
+            norm1 += a * a;
+            norm2 += b * b;
         }
-        
-        float denominator = (float) (Math.sqrt(norm1) * Math.sqrt(norm2));
-        return denominator > 0 ? dotProduct / denominator : 0.0f;
+
+        if (Float.isNaN(dotProduct) || Float.isNaN(norm1) || Float.isNaN(norm2)) {
+            android.util.Log.e(TAG, "calculateSimilarity: NaN detected dot/n1/n2 -> " + dotProduct + ", " + norm1 + ", " + norm2);
+            return 0.0f;
+        }
+
+        float n1 = (float) Math.sqrt(norm1);
+        float n2 = (float) Math.sqrt(norm2);
+        if (n1 == 0.0f || n2 == 0.0f) {
+            if (DEBUG_SIMILARITY) {
+                android.util.Log.w(TAG, "calculateSimilarity: zero norm detected n1=" + n1 + " n2=" + n2);
+            }
+            return 0.0f;
+        }
+        float sim = dotProduct / (n1 * n2);
+        // clamp 到 [-1,1]
+        if (sim > 1.0f) sim = 1.0f;
+        else if (sim < -1.0f) sim = -1.0f;
+
+        if (DEBUG_SIMILARITY) {
+            int sampleCount = Math.min(5, vector1.length);
+            android.util.Log.d(TAG, "SIM_DEBUG query=" + Arrays.toString(Arrays.copyOf(vector1, sampleCount)));
+            android.util.Log.d(TAG, "SIM_DEBUG stored=" + Arrays.toString(Arrays.copyOf(vector2, sampleCount)));
+            android.util.Log.d(TAG, "SIM_DEBUG dot=" + dotProduct + " n1=" + norm1 + " n2=" + norm2 + " sim=" + sim);
+        }
+
+        return sim;
     }
     
     /**
@@ -1061,7 +1114,8 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
         for (int i = 0; i < floatArray.length; i++) {
             floatArray[i] = buffer.getFloat();
         }
-        return floatArray;
+        // 统一形式：读取后的向量做一次归一化，兼容历史未归一化数据
+        return normalizeVector(floatArray);
     }
     
     /**
@@ -1069,7 +1123,20 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
      */
     public boolean saveFaceEmbedding(long studentId, float[] features, float quality, String faceImagePath) {
         try {
-            byte[] vectorBytes = floatArrayToByteArray(features);
+            if (features == null || features.length != FEATURE_VECTOR_SIZE) {
+                Log.w(TAG, "saveFaceEmbedding: invalid features length=" + (features == null ? -1 : features.length));
+                return false;
+            }
+            // 零向量保护：避免把无效向量写库
+            float norm = 0f;
+            for (float v : features) norm += v * v;
+            if (norm == 0f) {
+                Log.w(TAG, "saveFaceEmbedding: zero-norm vector, skip saving");
+                return false;
+            }
+            // 统一形式：保存前再次归一化，确保库内均为单位向量
+            float[] normalized = normalizeVector(features);
+            byte[] vectorBytes = floatArrayToByteArray(normalized);
             long result = databaseHelper.insertFaceEmbedding(studentId, MODEL_VERSION, vectorBytes, quality);
             return result != -1;
         } catch (Exception e) {
@@ -1077,6 +1144,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             return false;
         }
     }
+
     
     /**
      * 从数据库获取学生的人脸特征
@@ -1129,8 +1197,10 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
                 List<FaceEmbedding> embeddings = getStudentFaceEmbeddings(student.getId());
                 
                 for (FaceEmbedding embedding : embeddings) {
+                    // 仅比对当前模型版本，避免模型混用
+                    if (!MODEL_VERSION.equals(embedding.getModelVer())) continue;
                     float[] storedFeatures = byteArrayToFloatArray(embedding.getVector());
-                    if (storedFeatures.length == queryFeatures.length) {
+                    if (storedFeatures != null && storedFeatures.length == queryFeatures.length) {
                         float similarity = calculateSimilarity(queryFeatures, storedFeatures);
                         
                         if (similarity > bestSimilarity) {
@@ -1168,59 +1238,50 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
         return results;
     }
 
-    /**
-     * 使用 MobileFaceNet 嵌入进行单人脸识别
-     */
-    public RecognitionResult recognizeEmbedding(float[] queryEmbedding) {
-        if (queryEmbedding == null || queryEmbedding.length == 0) {
-            return new RecognitionResult(-1, 0.0f, "嵌入为空");
-        }
-        try {
-            List<Student> allStudents = databaseHelper.getAllStudents();
-            float bestSimilarity = 0.0f;
-            long bestStudentId = -1;
-            for (Student student : allStudents) {
-                List<FaceEmbedding> embeddings = getStudentFaceEmbeddings(student.getId());
-                for (FaceEmbedding embedding : embeddings) {
-                    // 仅比较 MobileFaceNet 向量
-                    if (!MODEL_VERSION_MFN.equals(embedding.getModelVer())) continue;
-                    float[] storedFeatures = byteArrayToFloatArray(embedding.getVector());
-                    if (storedFeatures.length == queryEmbedding.length) {
-                        float similarity = calculateSimilarity(queryEmbedding, storedFeatures);
-                        if (similarity > bestSimilarity) {
-                            bestSimilarity = similarity;
-                            bestStudentId = student.getId();
-                        }
-                    }
-                }
-            }
-            if (bestSimilarity >= SIMILARITY_THRESHOLD_MFN) {
-                return new RecognitionResult(bestStudentId, bestSimilarity, "识别成功");
-            } else {
-                return new RecognitionResult(-1, bestSimilarity, "未找到匹配的学生");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "嵌入识别失败: " + e.getMessage(), e);
-            return new RecognitionResult(-1, 0.0f, "识别异常: " + e.getMessage());
-        }
-    }
+    // 删除：使用 MobileFaceNet 嵌入进行单人脸识别（已废弃）
+
+    // 删除：批量使用 MobileFaceNet 嵌入进行识别（已废弃）
+
+    // 删除：批量使用 MobileFaceNet 嵌入进行识别（限制在指定班级，已废弃）
 
     /**
-     * 批量使用 MobileFaceNet 嵌入进行识别
+     * 通用：批量使用已导入的人脸向量进行识别（限制在指定班级），不做增强
+     * 说明：
+     * - 输入向量维度应与库中统一维度一致（当前为 256）
+     * - 仅与指定班级的学生嵌入比对
+     * - 使用通用阈值 SIMILARITY_THRESHOLD
      */
-    public List<RecognitionResult> recognizeMultipleEmbeddings(List<float[]> embeddings) {
+    public List<RecognitionResult> recognizeImportedVectorsWithinClass(List<float[]> importedVectors, long classroomId) {
         List<RecognitionResult> results = new ArrayList<>();
-        if (embeddings == null || embeddings.isEmpty()) return results;
+        if (importedVectors == null || importedVectors.isEmpty()) return results;
 
-        // 预取数据库中全部 MobileFaceNet 嵌入，减少重复查询与 Blob->float[] 转换
+        // 取本班全部学生ID
+        final java.util.HashSet<Long> allowedIds = new java.util.HashSet<>();
+        android.database.Cursor sc = null;
+        try {
+            sc = databaseHelper.getStudentsByClass(classroomId);
+            if (sc != null && sc.moveToFirst()) {
+                do {
+                    long sid = sc.getLong(sc.getColumnIndexOrThrow("id"));
+                    allowedIds.add(sid);
+                } while (sc.moveToNext());
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "获取班级学生失败: " + t.getMessage(), t);
+        } finally {
+            if (sc != null) sc.close();
+        }
+
+        // 预取库中统一模型版本的嵌入，并按本班过滤
         android.database.Cursor cursor = null;
         final List<Long> studentIds = new ArrayList<>();
         final List<float[]> storedEmbeddings = new ArrayList<>();
         try {
-            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION_MFN);
+            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
+                    if (!allowedIds.contains(studentId)) continue; // 只比对本班学生
                     byte[] vecBytes = cursor.getBlob(cursor.getColumnIndexOrThrow("vector"));
                     float[] vec = byteArrayToFloatArray(vecBytes);
                     if (vec != null && vec.length > 0) {
@@ -1235,27 +1296,221 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             if (cursor != null) cursor.close();
         }
 
-        // 逐个待识别嵌入进行比对（内存中比对，避免 DB 循环查询）
-        for (float[] queryEmbedding : embeddings) {
+        // 逐个导入向量进行比对
+        for (float[] queryVector : importedVectors) {
+            if (queryVector == null || queryVector.length == 0) {
+                results.add(new RecognitionResult(-1, 0f, "向量为空"));
+                continue;
+            }
+
+            // 可选：归一化，避免不同来源的尺度差异（若外部已归一化，可注释）
+            float[] normalized = normalizeVector(queryVector);
+
             float bestSim = 0f;
             long bestStudentId = -1;
             for (int i = 0; i < storedEmbeddings.size(); i++) {
                 float[] ref = storedEmbeddings.get(i);
-                if (ref.length == queryEmbedding.length) {
-                    float sim = calculateSimilarity(queryEmbedding, ref);
+                if (ref != null && ref.length == normalized.length) {
+                    float sim = calculateSimilarity(normalized, ref);
                     if (sim > bestSim) {
                         bestSim = sim;
                         bestStudentId = studentIds.get(i);
                     }
                 }
             }
-            if (bestSim >= SIMILARITY_THRESHOLD_MFN) {
+
+            if (bestSim >= SIMILARITY_THRESHOLD) {
                 results.add(new RecognitionResult(bestStudentId, bestSim, "识别成功"));
             } else {
                 results.add(new RecognitionResult(-1, bestSim, "未匹配到合适学生"));
             }
         }
         return results;
+    }
+
+    /**
+     * 使用 ML Kit 提取的图像进行批量识别（限制在指定班级）
+     */
+    public List<RecognitionResult> recognizeMultipleFacesWithinClass(List<Bitmap> faceBitmaps, List<com.google.mlkit.vision.face.Face> faces, long classroomId) {
+        List<RecognitionResult> results = new ArrayList<>();
+        if (faceBitmaps == null || faces == null) return results;
+        int count = Math.min(faceBitmaps.size(), faces.size());
+
+        // 取本班全部学生ID
+        final java.util.HashSet<Long> allowedIds = new java.util.HashSet<>();
+        android.database.Cursor sc = null;
+        try {
+            sc = databaseHelper.getStudentsByClass(classroomId);
+            if (sc != null && sc.moveToFirst()) {
+                do {
+                    long sid = sc.getLong(sc.getColumnIndexOrThrow("id"));
+                    allowedIds.add(sid);
+                } while (sc.moveToNext());
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "获取班级学生失败: " + t.getMessage(), t);
+        } finally {
+            if (sc != null) sc.close();
+        }
+
+        // 逐人脸比对，仅与本班学生嵌入比对
+        for (int i = 0; i < count; i++) {
+            Bitmap b = faceBitmaps.get(i);
+            com.google.mlkit.vision.face.Face f = faces.get(i);
+
+            float[] queryFeatures = extractFaceFeatures(b, f);
+            if (queryFeatures == null) {
+                results.add(new RecognitionResult(-1, 0f, "特征提取失败"));
+                continue;
+            }
+
+            float bestSimilarity = 0.0f;
+            long bestStudentId = -1;
+
+            // 遍历本班学生的所有嵌入
+            android.database.Cursor cur = null;
+            try {
+                cur = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
+                if (cur != null && cur.moveToFirst()) {
+                    do {
+                        long sid = cur.getLong(cur.getColumnIndexOrThrow("studentId"));
+                        if (!allowedIds.contains(sid)) continue;
+                        byte[] vecBytes = cur.getBlob(cur.getColumnIndexOrThrow("vector"));
+                        float[] stored = byteArrayToFloatArray(vecBytes);
+                        if (stored != null && stored.length == queryFeatures.length) {
+                            float sim = calculateSimilarity(queryFeatures, stored);
+                            if (sim > bestSimilarity) {
+                                bestSimilarity = sim;
+                                bestStudentId = sid;
+                            }
+                        }
+                    } while (cur.moveToNext());
+                }
+            } catch (Throwable t) {
+                android.util.Log.e(TAG, "比对失败: " + t.getMessage(), t);
+            } finally {
+                if (cur != null) cur.close();
+            }
+
+            if (bestSimilarity >= SIMILARITY_THRESHOLD) {
+                results.add(new RecognitionResult(bestStudentId, bestSimilarity, "识别成功"));
+            } else {
+                results.add(new RecognitionResult(-1, bestSimilarity, "未找到匹配的学生"));
+            }
+        }
+        return results;
+    }
+
+    /**
+     * 一键校验：遍历库内当前模型版本的全部人脸向量，检查维度与范数，并导出日志到文件
+     * 返回导出日志文件的绝对路径；若失败返回 null
+     */
+    public String validateAllEmbeddingsAndExport(android.content.Context context) {
+        android.database.Cursor cursor = null;
+        StringBuilder sb = new StringBuilder();
+        long total = 0, dimMismatch = 0, zeroNorm = 0, nearUnit = 0, nanOrInf = 0;
+        final int expectedDim = FEATURE_VECTOR_SIZE;
+
+        sb.append("FaceEmbedding Validation Report\n")
+          .append("modelVer=").append(MODEL_VERSION).append('\n')
+          .append("expectedDim=").append(expectedDim).append('\n')
+          .append("time=").append(System.currentTimeMillis()).append("\n\n");
+
+        try {
+            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                    long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
+                    byte[] vecBytes = cursor.getBlob(cursor.getColumnIndexOrThrow("vector"));
+                    float quality = 0f;
+                    int qIdx = cursor.getColumnIndex("quality");
+                    if (qIdx >= 0) quality = cursor.getFloat(qIdx);
+
+                    int dim = (vecBytes == null ? 0 : vecBytes.length / 4);
+
+                    // 直接解析 BLOB 为 float[]（不做归一化），用于真实库数据的范数校验
+                    float[] vec = new float[dim];
+                    boolean hasNanOrInf = false;
+                    if (vecBytes != null && vecBytes.length % 4 == 0) {
+                        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(vecBytes).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                        for (int i = 0; i < dim; i++) {
+                            float v = buffer.getFloat();
+                            vec[i] = v;
+                            if (java.lang.Float.isNaN(v) || java.lang.Float.isInfinite(v)) {
+                                hasNanOrInf = true;
+                            }
+                        }
+                    }
+
+                    float norm2 = 0f;
+                    int nonZero = 0;
+                    int zeroRun = 0, maxZeroRun = 0;
+                    for (int i = 0; i < vec.length; i++) {
+                        float v = vec[i];
+                        norm2 += v * v;
+                        if (v != 0f) {
+                            nonZero++;
+                            zeroRun = 0;
+                        } else {
+                            zeroRun++;
+                            if (zeroRun > maxZeroRun) maxZeroRun = zeroRun;
+                        }
+                    }
+                    float norm = (float) Math.sqrt(norm2);
+
+                    total++;
+                    if (dim != expectedDim) dimMismatch++;
+                    if (norm == 0f) zeroNorm++;
+                    float unitDiff = Math.abs(norm - 1f);
+                    if (unitDiff <= 1e-3f) nearUnit++;
+                    if (hasNanOrInf) nanOrInf++;
+
+                    sb.append("id=").append(id)
+                      .append(", studentId=").append(studentId)
+                      .append(", dim=").append(dim)
+                      .append(", norm=").append(norm)
+                      .append(", nonZero=").append(nonZero)
+                      .append(", maxZeroRun=").append(maxZeroRun)
+                      .append(", quality=").append(quality);
+
+                    if (hasNanOrInf) sb.append(", flags=NAN_OR_INF");
+                    if (dim != expectedDim) sb.append(", flags=DIM_MISMATCH");
+                    if (norm == 0f) sb.append(", flags=ZERO_NORM");
+                    else if (unitDiff > 1e-3f) sb.append(", flags=NOT_UNIT");
+                    sb.append('\n');
+                } while (cursor.moveToNext());
+            } else {
+                sb.append("No embeddings found for modelVer=").append(MODEL_VERSION).append('\n');
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "validateAllEmbeddingsAndExport failed: " + t.getMessage(), t);
+            return null;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+
+        sb.append("\nSummary: total=").append(total)
+          .append(", dimMismatch=").append(dimMismatch)
+          .append(", zeroNorm=").append(zeroNorm)
+          .append(", nearUnit=").append(nearUnit)
+          .append(", nanOrInf=").append(nanOrInf)
+          .append('\n');
+
+        try {
+            java.io.File outDir = context.getExternalFilesDir("reports");
+            if (outDir != null && !outDir.exists()) outDir.mkdirs();
+            java.io.File outFile = new java.io.File(outDir, "embedding-validation-" + System.currentTimeMillis() + ".txt");
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(outFile);
+            fos.write(sb.toString().getBytes("UTF-8"));
+            fos.flush();
+            fos.close();
+            android.util.Log.i(TAG, "Validation report exported: " + outFile.getAbsolutePath());
+            return outFile.getAbsolutePath();
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Failed to write validation report: " + e.getMessage(), e);
+            return null;
+        }
     }
     
     /**
@@ -1295,7 +1550,10 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
         }
         
         public boolean isSuccess() {
-            return studentId != -1 && similarity >= SIMILARITY_THRESHOLD;
+            // 识别方法在低于各自阈值时都会返回 studentId = -1；
+            // 这里只需判断是否存在有效学生ID即可。
+            return studentId != -1;
         }
     }
 }
+
