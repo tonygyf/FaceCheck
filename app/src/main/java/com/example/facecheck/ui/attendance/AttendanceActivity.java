@@ -57,6 +57,8 @@ public class AttendanceActivity extends AppCompatActivity {
     private CacheManager cacheManager;
     
     private ImageView ivPreview;
+    // 缓存按 EXIF 方向纠正后的原始整图，用于特征提取
+    private Bitmap originalOrientedBitmap;
     private Button btnTakePhoto;
     private Button btnPickImage;
     private Button btnStartRecognition;
@@ -149,10 +151,10 @@ public class AttendanceActivity extends AppCompatActivity {
             result -> {
                 if (result.getResultCode() == RESULT_OK && currentPhotoUri != null) {
                     try {
-                        // 显示预览图（按EXIF方向与合适尺寸加载）
-                        Bitmap bitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-                        if (bitmap != null) {
-                            ivPreview.setImageBitmap(bitmap);
+                        // 显示预览图（按EXIF方向与合适尺寸加载）并缓存原始位图
+                        originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
+                        if (originalOrientedBitmap != null) {
+                            ivPreview.setImageBitmap(originalOrientedBitmap);
                         } else {
                             Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
                         }
@@ -183,9 +185,9 @@ public class AttendanceActivity extends AppCompatActivity {
                 if (uri != null) {
                     try {
                         currentPhotoUri = uri;
-                        Bitmap bitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-                        if (bitmap != null) {
-                            ivPreview.setImageBitmap(bitmap);
+                        originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
+                        if (originalOrientedBitmap != null) {
+                            ivPreview.setImageBitmap(originalOrientedBitmap);
                         } else {
                             Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
                         }
@@ -404,9 +406,29 @@ public class AttendanceActivity extends AppCompatActivity {
             try {
                 // 先提取向量用于展示与确认
                 List<float[]> embeddings = new ArrayList<>();
-                for (int i = 0; i < faces.size() && i < faceBitmaps.size(); i++) {
-                    float[] vec = faceRecognitionManager.extractFaceFeatures(faceBitmaps.get(i), faces.get(i));
-                    if (vec != null) embeddings.add(vec);
+                for (int i = 0; i < faces.size(); i++) {
+                    // 关键修正：用原始整图 + 检测框坐标系一致进行提取
+                    Bitmap src = originalOrientedBitmap;
+                    if (src == null) {
+                        // 保险：若缓存丢失则即时重新加载
+                        src = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
+                        originalOrientedBitmap = src;
+                    }
+                    float[] vec = (src != null)
+                            ? faceRecognitionManager.extractFaceFeatures(src, faces.get(i))
+                            : null;
+                    if (vec != null) {
+                        // 调试日志：检查向量维度、范数与前几维采样，便于与校验页比对
+                        float norm2 = 0f;
+                        for (float v : vec) norm2 += v * v;
+                        float norm = (float) Math.sqrt(norm2);
+                        int sampleCount = Math.min(5, vec.length);
+                        android.util.Log.d(TAG, "EMB_DEBUG index=" + i +
+                                ", dim=" + vec.length +
+                                ", norm=" + norm +
+                                ", sample=" + java.util.Arrays.toString(java.util.Arrays.copyOf(vec, sampleCount)));
+                        embeddings.add(vec);
+                    }
                 }
 
                 if (embeddings.isEmpty()) {

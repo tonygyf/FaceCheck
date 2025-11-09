@@ -26,6 +26,7 @@ import com.example.facecheck.ui.classroom.ClassroomSelectionActivity;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.activity.FaceCorrectionActivity;
 import com.example.facecheck.ui.face.FaceEnhancementActivity;
+import com.example.facecheck.ui.verify.VerifyFeatureConsistencyActivity;
 import androidx.appcompat.widget.TooltipCompat;
 
 public class HomeFragment extends Fragment {
@@ -66,6 +67,15 @@ public class HomeFragment extends Fragment {
         if (cardFaceEnhancement != null) {
             cardFaceEnhancement.setOnClickListener(v -> {
                 Intent intent = new Intent(getActivity(), FaceEnhancementActivity.class);
+                startActivity(intent);
+            });
+        }
+
+        // 验证特征一致性入口
+        CardView cardVerifyConsistency = view.findViewById(R.id.card_verify_consistency);
+        if (cardVerifyConsistency != null) {
+            cardVerifyConsistency.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), VerifyFeatureConsistencyActivity.class);
                 startActivity(intent);
             });
         }

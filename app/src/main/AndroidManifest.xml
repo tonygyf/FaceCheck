@@ -82,6 +82,12 @@
             android:label="人脸修复增强" />
             
         <activity
+            android:name=".ui.verify.VerifyFeatureConsistencyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="验证特征一致性" />
+
+        <activity
             android:name=".ui.attendance.FaceCorrectionActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"

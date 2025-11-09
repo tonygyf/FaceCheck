@@ -100,29 +100,11 @@ public class FaceRecognitionManager {
                 return null;
             }
 
-            // 调用原来的特征生成（保持原有 generateEnhancedFeatureVector / normalizeVector）
-            // 收集 ML Kit 关键点并传递给生成函数
-            List<FaceLandmark> lmList = new ArrayList<>();
-            int[] allTypes = {
-                    FaceLandmark.LEFT_EYE,
-                    FaceLandmark.RIGHT_EYE,
-                    FaceLandmark.NOSE_BASE,
-                    FaceLandmark.MOUTH_LEFT,
-                    FaceLandmark.MOUTH_RIGHT,
-                    FaceLandmark.MOUTH_BOTTOM,
-                    FaceLandmark.LEFT_CHEEK,
-                    FaceLandmark.RIGHT_CHEEK
-            };
-            for (int t : allTypes) {
-                FaceLandmark lm = face.getLandmark(t);
-                if (lm != null) {
-                    lmList.add(lm);
-                }
-            }
-            float[] features = generateEnhancedFeatureVector(input, lmList, face);
-            if (features == null) {
-                Log.e(TAG, "generateEnhancedFeatureVector returned null");
-                dumpBitmapForDebug(input, "gen_null");
+            // 基础特征提取：直接生成原始256维特征并归一化
+            float[] features = generateBaseFeatures(input);
+            if (features == null || features.length != FEATURE_VECTOR_SIZE) {
+                Log.e(TAG, "generateBaseFeatures returned invalid vector");
+                dumpBitmapForDebug(input, "base_gen_invalid");
                 return null;
             }
             return normalizeVector(features);
@@ -151,138 +133,53 @@ public class FaceRecognitionManager {
     }
     
     /**
-     * 生成增强特征向量
-     * 基于人脸几何特征、纹理特征、深度学习特征和高级统计特征
+     * 生成基础特征向量（无增强）：16x16 网格块灰度均值，共 256 维
      */
-    private float[] generateEnhancedFeatureVector(Bitmap faceBitmap, List<FaceLandmark> landmarks, Face face) {
-        float[] features = new float[FEATURE_VECTOR_SIZE];
-        
+    private float[] generateBaseFeatures(Bitmap faceBitmap) {
+        if (faceBitmap == null) return null;
         try {
-            // 1. 几何特征 (前80维) - 增强的几何关系和比例特征
-            int index = 0;
+            int grid = 16;
+            int bw = Math.max(1, faceBitmap.getWidth() / grid);
+            int bh = Math.max(1, faceBitmap.getHeight() / grid);
+            float[] features = new float[FEATURE_VECTOR_SIZE];
 
-            // 写入保护：避免越界写入
-            java.util.function.IntUnaryOperator push = (int i) -> i; // 占位，避免空指针
-            // 简洁安全的写入方法
-            final java.util.function.BiFunction<Integer, Float, Integer> safePut = (Integer i, Float v) -> {
-                if (i < features.length) {
-                    features[i] = v;
-                    return i + 1;
-                } else {
-                    android.util.Log.w(TAG, "generateEnhancedFeatureVector: index overflow at " + i);
-                    return i; // 保持不增，后续填充处理
+            int idx = 0;
+            for (int gy = 0; gy < grid; gy++) {
+                for (int gx = 0; gx < grid; gx++) {
+                    int startX = gx * bw;
+                    int startY = gy * bh;
+                    int endX = Math.min(startX + bw, faceBitmap.getWidth());
+                    int endY = Math.min(startY + bh, faceBitmap.getHeight());
+
+                    long sum = 0;
+                    int count = 0;
+                    for (int y = startY; y < endY; y++) {
+                        for (int x = startX; x < endX; x++) {
+                            int pixel = faceBitmap.getPixel(x, y);
+                            int gray = (int) (0.299f * ((pixel >> 16) & 0xFF)
+                                    + 0.587f * ((pixel >> 8) & 0xFF)
+                                    + 0.114f * (pixel & 0xFF));
+                            sum += gray;
+                            count++;
+                        }
+                    }
+                    float avg = count > 0 ? (float) sum / count : 0f;
+                    features[idx++] = avg / 255.0f; // 归一到 [0,1]，后续再做向量归一化
+                    if (idx >= FEATURE_VECTOR_SIZE) break;
                 }
-            };
-            
-            // 眼距特征
-            FaceLandmark leftEye = getLandmarkByType(landmarks, FaceLandmark.LEFT_EYE);
-            FaceLandmark rightEye = getLandmarkByType(landmarks, FaceLandmark.RIGHT_EYE);
-            if (leftEye != null && rightEye != null) {
-                float eyeDistance = calculateDistance(leftEye.getPosition(), rightEye.getPosition());
-                index = safePut.apply(index, eyeDistance / Math.max(1, faceBitmap.getWidth()));
-                
-                float eyeYDiff = Math.abs(leftEye.getPosition().y - rightEye.getPosition().y);
-                index = safePut.apply(index, eyeYDiff / Math.max(1, faceBitmap.getHeight()));
-                
-                float eyeAspectRatio = calculateEyeAspectRatio(leftEye, rightEye, faceBitmap);
-                index = safePut.apply(index, eyeAspectRatio);
-                
-                android.graphics.PointF faceCenter = new android.graphics.PointF(faceBitmap.getWidth() / 2f, faceBitmap.getHeight() / 2f);
-                float leftEyeToCenter = calculateDistance(leftEye.getPosition(), faceCenter);
-                float rightEyeToCenter = calculateDistance(rightEye.getPosition(), faceCenter);
-                index = safePut.apply(index, leftEyeToCenter / Math.max(1, faceBitmap.getWidth()));
-                index = safePut.apply(index, rightEyeToCenter / Math.max(1, faceBitmap.getWidth()));
+                if (idx >= FEATURE_VECTOR_SIZE) break;
             }
-            
-            // 眼鼻距特征
-            FaceLandmark nose = getLandmarkByType(landmarks, FaceLandmark.NOSE_BASE);
-            if (leftEye != null && nose != null) {
-                float eyeNoseDistance = calculateDistance(leftEye.getPosition(), nose.getPosition());
-                index = safePut.apply(index, eyeNoseDistance / Math.max(1, faceBitmap.getHeight()));
-                
-                android.graphics.PointF faceCenter = new android.graphics.PointF(faceBitmap.getWidth() / 2f, faceBitmap.getHeight() / 2f);
-                float noseToCenter = calculateDistance(nose.getPosition(), faceCenter);
-                index = safePut.apply(index, noseToCenter / Math.max(1, faceBitmap.getHeight()));
-            }
-            
-            // 嘴部特征
-            FaceLandmark leftMouth = getLandmarkByType(landmarks, FaceLandmark.MOUTH_LEFT);
-            FaceLandmark rightMouth = getLandmarkByType(landmarks, FaceLandmark.MOUTH_RIGHT);
-            if (leftMouth != null && rightMouth != null) {
-                float mouthWidth = calculateDistance(leftMouth.getPosition(), rightMouth.getPosition());
-                index = safePut.apply(index, mouthWidth / Math.max(1, faceBitmap.getWidth()));
-                
-                android.graphics.PointF mouthCenter = new android.graphics.PointF(
-                    (leftMouth.getPosition().x + rightMouth.getPosition().x) / 2,
-                    (leftMouth.getPosition().y + rightMouth.getPosition().y) / 2
-                );
-                
-                if (nose != null) {
-                    float mouthToNose = calculateDistance(mouthCenter, nose.getPosition());
-                    index = safePut.apply(index, mouthToNose / Math.max(1, faceBitmap.getHeight()));
-                }
-                
-                FaceLandmark upperLip = getLandmarkByType(landmarks, FaceLandmark.MOUTH_BOTTOM);
-                if (upperLip != null) {
-                    float mouthHeight = Math.abs(mouthCenter.y - upperLip.getPosition().y);
-                    index = safePut.apply(index, mouthHeight > 0 ? mouthWidth / mouthHeight : 0.0f);
-                }
-            }
-            
-            // 面部轮廓特征
-            FaceLandmark leftCheek = getLandmarkByType(landmarks, FaceLandmark.LEFT_CHEEK);
-            FaceLandmark rightCheek = getLandmarkByType(landmarks, FaceLandmark.RIGHT_CHEEK);
-            if (leftCheek != null && rightCheek != null) {
-                float cheekDistance = calculateDistance(leftCheek.getPosition(), rightCheek.getPosition());
-                index = safePut.apply(index, cheekDistance / Math.max(1, faceBitmap.getWidth()));
-                
-                android.graphics.PointF faceCenter = new android.graphics.PointF(faceBitmap.getWidth() / 2f, faceBitmap.getHeight() / 2f);
-                float leftCheekToCenter = calculateDistance(leftCheek.getPosition(), faceCenter);
-                float rightCheekToCenter = calculateDistance(rightCheek.getPosition(), faceCenter);
-                index = safePut.apply(index, Math.abs(leftCheekToCenter - rightCheekToCenter) / Math.max(1, faceBitmap.getWidth()));
-            }
-            
-            // 面部比例特征
-            android.graphics.Rect boundingBox = face.getBoundingBox();
-            float ratio = boundingBox != null && boundingBox.height() > 0 ? (float) boundingBox.width() / boundingBox.height() : 0f;
-            index = safePut.apply(index, ratio);
-            index = safePut.apply(index, face.getSmilingProbability() != null ? face.getSmilingProbability() : 0.5f);
-            index = safePut.apply(index, face.getLeftEyeOpenProbability() != null ? face.getLeftEyeOpenProbability() : 0.5f);
-            index = safePut.apply(index, face.getRightEyeOpenProbability() != null ? face.getRightEyeOpenProbability() : 0.5f);
-            
-            index = safePut.apply(index, Math.abs(face.getHeadEulerAngleX()) / 90.0f);
-            index = safePut.apply(index, Math.abs(face.getHeadEulerAngleY()) / 90.0f);
-            index = safePut.apply(index, Math.abs(face.getHeadEulerAngleZ()) / 90.0f);
-            
-            // 2. 生成增强纹理特征
-            index = generateEnhancedTextureFeatures(faceBitmap, features, index);
 
-            // 3. 生成增强图像块特征
-        index = generateEnhancedImageBlockFeatures(faceBitmap, features, index);
-
-        // 4. 生成深度学习特征
-        index = generateDeepLearningFeatures(faceBitmap, features, index);
-
-        // 5. 填充剩余维度
-        while (index < features.length) {
-            features[index++] = 0.0f;
-        }
-
-    } catch (Exception e) {
-        Log.e(TAG, "生成特征向量失败: " + e.getMessage(), e);
-        // 返回已生成的部分，并确保剩余维度填充为 0
-        for (int i = 0; i < features.length; i++) {
-            // 若某些维度尚未写入，保持为 0
-            if (Float.isNaN(features[i]) || Float.isInfinite(features[i])) {
-                features[i] = (float) Math.random() * 0.01f; // 小随机值代替0
-            } else if (features[i] == 0.0f) {
-                features[i] = (float) Math.random() * 0.001f; // 轻微扰动
+            // 若不足256维，补零（极少发生）
+            while (idx < FEATURE_VECTOR_SIZE) {
+                features[idx++] = 0f;
             }
+            return features;
+        } catch (Exception e) {
+            Log.e(TAG, "generateBaseFeatures failed: " + e.getMessage(), e);
+            return null;
         }
     }
-
-    return features; // 返回完整或部分生成的特征向量
-}
 
 /**
  * 计算眼睛纵横比
@@ -303,154 +200,24 @@ private float calculateEyeAspectRatio(FaceLandmark leftEye, FaceLandmark rightEy
  * 生成增强纹理特征 (LBP、Gabor和HOG特征)
  */
 private int generateEnhancedTextureFeatures(Bitmap faceBitmap, float[] features, int startIndex) {
-    int index = startIndex;
-
-    try {
-        // LBP特征 (局部二值模式)
-        int lbpRadius = 1;
-        int lbpNeighbors = 8;
-        int lbpBins = 256; // 2^8
-
-        // 计算LBP特征直方图
-        float[] lbpHistogram = calculateLBPHistogram(faceBitmap, lbpRadius, lbpNeighbors, lbpBins);
-
-        // 归一化LBP直方图并添加到特征向量
-        for (int i = 0; i < Math.min(lbpHistogram.length, 20) && index < features.length; i++) {
-            features[index++] = lbpHistogram[i] / (faceBitmap.getWidth() * faceBitmap.getHeight());
-        }
-
-        // Gabor特征 (纹理方向特征)
-        int gaborOrientations = 8; // 增加方向数量
-        int gaborScales = 3; // 增加尺度数量
-
-        for (int scale = 0; scale < gaborScales && index < features.length; scale++) {
-            for (int orientation = 0; orientation < gaborOrientations && index < features.length; orientation++) {
-                double theta = orientation * Math.PI / gaborOrientations;
-                double sigma = 1.0 + scale * 1.5; // 调整sigma值
-
-                float gaborResponse = calculateGaborResponse(faceBitmap, theta, sigma);
-                features[index++] = gaborResponse / 255.0f; // 归一化
-            }
-        }
-
-        // 新增：HOG特征 (方向梯度直方图)
-        float[] hogFeatures = calculateHOGFeatures(faceBitmap);
-        for (int i = 0; i < Math.min(hogFeatures.length, 16) && index < features.length; i++) {
-            features[index++] = hogFeatures[i];
-        }
-
-        // 新增：颜色直方图特征
-        float[] colorHistogram = calculateColorHistogram(faceBitmap);
-        for (int i = 0; i < Math.min(colorHistogram.length, 12) && index < features.length; i++) {
-            features[index++] = colorHistogram[i];
-        }
-
-    } catch (Exception e) {
-        Log.e(TAG, "生成增强纹理特征失败: " + e.getMessage(), e);
-        // 填充默认值
-        while (index < startIndex + 80 && index < features.length) {
-            features[index++] = 0.0f;
-        }
-    }
-
-    return index;
+    // 已移除增强纹理特征逻辑，直接返回
+    return startIndex;
 }
 
 /**
  * 生成增强图像块特征 (多尺度分析)
  */
     private int generateEnhancedImageBlockFeatures(Bitmap faceBitmap, float[] features, int startIndex) {
-        int index = startIndex;
-
-        try {
-            // 多尺度块分析
-            int[] scales = {4, 8, 16}; // 不同尺度的块大小
-
-            for (int scaleIndex = 0; scaleIndex < scales.length && index < features.length; scaleIndex++) {
-                int blockSize = scales[scaleIndex];
-                int blocksX = faceBitmap.getWidth() / blockSize;
-                int blocksY = faceBitmap.getHeight() / blockSize;
-
-                // 对每个块提取统计特征
-                for (int y = 0; y < blocksY && index < features.length; y++) {
-                    for (int x = 0; x < blocksX && index < features.length; x++) {
-                        float[] blockFeatures = calculateEnhancedBlockFeatures(faceBitmap,
-                                x * blockSize, y * blockSize, blockSize);
-
-                        // 写入前进行容量检查，避免越界
-                        int remaining = features.length - index;
-                        if (remaining <= 0) {
-                            return index; // 没有空间，提前返回
-                        }
-
-                        // 我们最多写入6个特征，若剩余空间不足，按可用空间写入并返回
-                        float[] values = new float[] {
-                                blockFeatures[0] / 255.0f, // 平均灰度
-                                Math.min(blockFeatures[1] / 128.0f, 1.0f), // 标准差
-                                blockFeatures[2] / 255.0f, // 最小值
-                                blockFeatures[3] / 255.0f, // 最大值
-                                blockFeatures[4], // 偏度
-                                blockFeatures[5]  // 峰度
-                        };
-
-                        int writeCount = Math.min(remaining, 6);
-                        for (int i = 0; i < writeCount; i++) {
-                            features[index++] = values[i];
-                        }
-
-                        if (writeCount < 6) {
-                            return index; // 空间用尽，提前返回
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "生成增强图像块特征失败: " + e.getMessage(), e);
-            // 填充默认值
-            while (index < startIndex + 80 && index < features.length) {
-                features[index++] = 0.0f;
-            }
-        }
-
-        return index;
+        // 已移除增强图像块特征逻辑，直接返回
+        return startIndex;
     }
 
 /**
  * 生成深度学习特征 (模拟CNN特征提取)
  */
 private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, int startIndex) {
-    int index = startIndex;
-
-    try {
-        // 模拟CNN特征提取：使用多尺度卷积核响应
-        int[] kernelSizes = {3, 5, 7}; // 不同大小的卷积核
-        int[] orientations = {0, 45, 90, 135}; // 不同方向
-
-        for (int kernelSize : kernelSizes) {
-            for (int orientation : orientations) {
-                if (index >= features.length) break;
-
-                float convResponse = calculateConvolutionResponse(faceBitmap, kernelSize, orientation);
-                features[index++] = Math.min(convResponse / 255.0f, 1.0f);
-            }
-        }
-
-        // 模拟池化特征
-        float[] poolingFeatures = calculatePoolingFeatures(faceBitmap);
-        for (int i = 0; i < Math.min(poolingFeatures.length, 16) && index < features.length; i++) {
-            features[index++] = poolingFeatures[i];
-        }
-
-    } catch (Exception e) {
-        Log.e(TAG, "生成深度学习特征失败: " + e.getMessage(), e);
-        // 填充默认值
-        while (index < features.length) {
-            features[index++] = 0.0f;
-        }
-    }
-
-    return index;
+    // 已移除深度学习增强特征逻辑，直接返回
+    return startIndex;
 }
     
     /**
