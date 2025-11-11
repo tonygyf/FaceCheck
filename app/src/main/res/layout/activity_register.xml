@@ -149,7 +149,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
             android:text="立即登录"
-            android:textColor="@color/purple_500"
+            android:textColor="@color/primary"
             android:textSize="14sp"
             android:textStyle="bold" />
 

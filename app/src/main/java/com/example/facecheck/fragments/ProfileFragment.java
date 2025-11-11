@@ -26,6 +26,7 @@ import android.provider.MediaStore;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
@@ -75,6 +76,13 @@ public class ProfileFragment extends Fragment {
     // 缓存设置相关视图
     private Button cacheSettingsButton;
     private TextView cacheStatusTextView;
+
+    // 主题与设置入口
+    private Button themeSystemButton;
+    private Button themeDarkButton;
+    private Button themeLightButton;
+    private View itemMoreSettings;
+    private View itemAbout;
     
     private DatabaseHelper dbHelper;
     private Teacher currentTeacher;
@@ -130,6 +138,16 @@ public class ProfileFragment extends Fragment {
         // 初始化缓存设置相关视图
         cacheSettingsButton = view.findViewById(R.id.btn_cache_settings);
         cacheStatusTextView = view.findViewById(R.id.tv_cache_status);
+
+        // 主题选择与入口视图
+        themeSystemButton = view.findViewById(R.id.btn_theme_system);
+        themeDarkButton = view.findViewById(R.id.btn_theme_dark);
+        themeLightButton = view.findViewById(R.id.btn_theme_light);
+        itemMoreSettings = view.findViewById(R.id.item_more_settings);
+        itemAbout = view.findViewById(R.id.item_about);
+
+        // 初始化主题状态
+        initThemeFromPrefs();
     }
     
     private void loadUserData() {
@@ -229,6 +247,75 @@ public class ProfileFragment extends Fragment {
             // 清除登录状态并返回登录页面
             navigateToLogin();
         });
+
+        // 主题切换
+        themeSystemButton.setOnClickListener(v -> applyThemeMode("system"));
+        themeDarkButton.setOnClickListener(v -> applyThemeMode("dark"));
+        themeLightButton.setOnClickListener(v -> applyThemeMode("light"));
+
+        // 更多设置入口
+        itemMoreSettings.setOnClickListener(v -> {
+            try {
+                Intent intent = new Intent(getActivity(), com.example.facecheck.ui.settings.MoreSettingsActivity.class);
+                startActivity(intent);
+            } catch (Throwable t) {
+                Toast.makeText(getActivity(), "更多设置暂不可用", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // 关于入口
+        itemAbout.setOnClickListener(v -> {
+            String versionName = "";
+            try {
+                versionName = getActivity().getPackageManager()
+                        .getPackageInfo(getActivity().getPackageName(), 0).versionName;
+            } catch (Throwable ignore) {}
+
+            new AlertDialog.Builder(getActivity())
+                    .setTitle("关于 FaceCheck")
+                    .setMessage("版本：" + versionName + "\n\nFaceCheck 用于课堂人脸识别与考勤。")
+                    .setPositiveButton("确定", null)
+                    .show();
+        });
+    }
+
+    private void initThemeFromPrefs() {
+        SharedPreferences prefs = getActivity().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE);
+        String mode = prefs.getString("theme_mode", "system");
+        updateThemeButtons(mode);
+    }
+
+    private void applyThemeMode(String mode) {
+        SharedPreferences prefs = getActivity().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE);
+        prefs.edit().putString("theme_mode", mode).apply();
+
+        switch (mode) {
+            case "dark":
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+                break;
+            case "light":
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+                break;
+            default:
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+                break;
+        }
+        updateThemeButtons(mode);
+    }
+
+    private void updateThemeButtons(String mode) {
+        // 选中状态更新：背景与左侧√图标
+        boolean sys = "system".equals(mode);
+        boolean dark = "dark".equals(mode);
+        boolean light = "light".equals(mode);
+
+        themeSystemButton.setBackgroundResource(sys ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+        themeDarkButton.setBackgroundResource(dark ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+        themeLightButton.setBackgroundResource(light ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+
+        themeSystemButton.setCompoundDrawablesWithIntrinsicBounds(sys ? R.drawable.ic_check_16 : 0, 0, 0, 0);
+        themeDarkButton.setCompoundDrawablesWithIntrinsicBounds(dark ? R.drawable.ic_check_16 : 0, 0, 0, 0);
+        themeLightButton.setCompoundDrawablesWithIntrinsicBounds(light ? R.drawable.ic_check_16 : 0, 0, 0, 0);
     }
     
     private void showImageSourceDialog() {

@@ -42,7 +42,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp"
             android:textColor="@android:color/white"
-            android:backgroundTint="@color/purple_500" />
+            android:backgroundTint="@color/primary" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"

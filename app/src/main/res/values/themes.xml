@@ -3,8 +3,8 @@
 
     <style name="Theme.FaceCheck" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- 主色调（保留，不影响 Toolbar 背景） -->
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/teal_200</item>
         <item name="colorSecondary">@color/teal_200</item>
 

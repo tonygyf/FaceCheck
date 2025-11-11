@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="16dp"
-    android:background="@android:color/white">
+    android:background="@color/colorBackground">
 
     <ScrollView
         android:layout_width="match_parent"
@@ -23,7 +23,7 @@
                 android:text="用户信息"
                 android:textSize="24sp"
                 android:textStyle="bold"
-                android:textColor="@color/purple_500"
+                android:textColor="@color/primary"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginBottom="24dp" />
 
@@ -45,7 +45,7 @@
                 android:layout_gravity="center_horizontal"
                 android:layout_marginBottom="24dp"
                 android:textColor="@android:color/white"
-                android:backgroundTint="@color/purple_500" />
+                android:backgroundTint="@color/primary" />
 
             <!-- 用户名显示 -->
             <TextView
@@ -66,7 +66,7 @@
                 android:text="修改用户名"
                 android:layout_marginBottom="24dp"
                 android:textColor="@android:color/white"
-                android:backgroundTint="@color/purple_500" />
+                android:backgroundTint="@color/primary" />
 
             <!-- 邮箱显示 -->
             <TextView
@@ -87,7 +87,7 @@
                 android:text="修改密码"
                 android:layout_marginBottom="24dp"
                 android:textColor="@android:color/white"
-                android:backgroundTint="@color/purple_500" />
+                android:backgroundTint="@color/primary" />
 
             <!-- WebDAV设置分割线 -->
             <View
@@ -103,7 +103,7 @@
                 android:text="WebDAV 设置"
                 android:textSize="20sp"
                 android:textStyle="bold"
-                android:textColor="@color/purple_500"
+                android:textColor="@color/primary"
                 android:layout_marginBottom="16dp" />
 
             <!-- WebDAV开关 -->
@@ -136,7 +136,7 @@
                 android:text="WebDAV 配置"
                 android:layout_marginBottom="8dp"
                 android:textColor="@android:color/white"
-                android:backgroundTint="@color/purple_500" />
+                android:backgroundTint="@color/primary" />
 
             <!-- WebDAV状态显示 -->
             <TextView

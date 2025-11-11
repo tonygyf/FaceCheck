@@ -13,7 +13,7 @@
         android:textStyle="bold"
         android:layout_gravity="center_horizontal"
         android:layout_marginBottom="24dp"
-        android:textColor="@color/purple_500" />
+        android:textColor="@color/primary" />
 
     <!-- WebDAV 服务器地址 -->
     <TextView
@@ -100,7 +100,7 @@
             android:layout_height="wrap_content"
             android:text="保存"
             android:textColor="@android:color/white"
-            android:backgroundTint="@color/purple_500" />
+            android:backgroundTint="@color/primary" />
 
     </LinearLayout>
 

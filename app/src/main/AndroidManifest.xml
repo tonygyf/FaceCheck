@@ -104,7 +104,13 @@
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"
             android:label="缓存管理" />
-            
+        
+        <activity
+            android:name=".ui.settings.MoreSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="更多设置" />
+        
         <!-- 文件提供者配置 -->
         <provider
             android:name="androidx.core.content.FileProvider"
