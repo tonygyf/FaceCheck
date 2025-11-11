@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
+import com.example.facecheck.adapters.AttendanceDayAdapter;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.database.DatabaseHelper;
 
@@ -32,6 +33,7 @@ public class AttendanceFragment extends Fragment {
     private RecyclerView recyclerView;
     private DatabaseHelper dbHelper;
     private String selectedDate;
+    private AttendanceDayAdapter dayAdapter;
 
     @Nullable
     @Override
@@ -61,6 +63,8 @@ public class AttendanceFragment extends Fragment {
         
         // 设置RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        dayAdapter = new AttendanceDayAdapter();
+        recyclerView.setAdapter(dayAdapter);
         
         // 加载当前日期的考勤数据
         loadAttendanceData(selectedDate);
@@ -78,7 +82,99 @@ public class AttendanceFragment extends Fragment {
     }
     
     private void loadAttendanceData(String date) {
-        // TODO: 从数据库加载指定日期的考勤数据
-        // 这里先使用空列表，实际应用中应该从数据库加载
+        if (getActivity() == null) return;
+        try {
+            // 当前登录教师ID
+            android.content.SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE);
+            long teacherId = prefs.getLong("teacher_id", -1);
+            if (teacherId == -1) {
+                dayAdapter.updateItems(java.util.Collections.emptyList());
+                return;
+            }
+
+            // 计算当日起止时间戳
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+            java.util.Date d = sdf.parse(date);
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.setTime(d);
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cal.set(java.util.Calendar.MINUTE, 0);
+            cal.set(java.util.Calendar.SECOND, 0);
+            cal.set(java.util.Calendar.MILLISECOND, 0);
+            long startTs = cal.getTimeInMillis();
+            long endTs = startTs + 24L * 60 * 60 * 1000;
+
+            // 查询当日所有考勤结果（按班级、学生聚合）
+            android.database.Cursor cursor = dbHelper.getAttendanceResultsByTeacherAndDateRange(teacherId, startTs, endTs);
+            java.util.Map<String, java.util.LinkedHashMap<Long, StudentAgg>> grouped = new java.util.LinkedHashMap<>();
+
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    String className = cursor.getString(cursor.getColumnIndexOrThrow("className"));
+                    long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
+                    String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+                    long decidedAt = cursor.getLong(cursor.getColumnIndexOrThrow("decidedAt"));
+
+                    java.util.LinkedHashMap<Long, StudentAgg> students = grouped.get(className);
+                    if (students == null) {
+                        students = new java.util.LinkedHashMap<>();
+                        grouped.put(className, students);
+                    }
+
+                    StudentAgg agg = students.get(studentId);
+                    if (agg == null) {
+                        // 查询学生基本信息
+                        android.database.Cursor sc = dbHelper.getStudentById(studentId);
+                        String name = "未知";
+                        String sid = "";
+                        if (sc != null && sc.moveToFirst()) {
+                            name = sc.getString(sc.getColumnIndexOrThrow("name"));
+                            sid = sc.getString(sc.getColumnIndexOrThrow("sid"));
+                            sc.close();
+                        } else if (sc != null) {
+                            sc.close();
+                        }
+                        agg = new StudentAgg(name, sid);
+                        students.put(studentId, agg);
+                    }
+
+                    if ("Present".equals(status)) {
+                        agg.presentCount++;
+                        // 格式化时间为 HH:mm
+                        java.text.SimpleDateFormat tf = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+                        String t = tf.format(new java.util.Date(decidedAt));
+                        agg.times.add(t);
+                    }
+                } while (cursor.moveToNext());
+                cursor.close();
+            } else if (cursor != null) {
+                cursor.close();
+            }
+
+            // 构建适配器项
+            java.util.List<AttendanceDayAdapter.Item> items = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<String, java.util.LinkedHashMap<Long, StudentAgg>> entry : grouped.entrySet()) {
+                String className = entry.getKey();
+                items.add(AttendanceDayAdapter.Item.header(className));
+                for (StudentAgg agg : entry.getValue().values()) {
+                    String timesText = String.join(", ", agg.times);
+                    items.add(AttendanceDayAdapter.Item.student(className, agg.name, agg.sid, agg.presentCount, timesText));
+                }
+            }
+
+            dayAdapter.updateItems(items);
+        } catch (Throwable t) {
+            android.util.Log.e("AttendanceFragment", "加载考勤数据失败: " + t.getMessage(), t);
+            dayAdapter.updateItems(java.util.Collections.emptyList());
+        }
+    }
+
+    // 学生聚合结构
+    private static class StudentAgg {
+        String name;
+        String sid;
+        int presentCount = 0;
+        java.util.List<String> times = new java.util.ArrayList<>();
+        StudentAgg(String name, String sid) { this.name = name; this.sid = sid; }
     }
 }

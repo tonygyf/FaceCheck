@@ -876,6 +876,28 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 new String[]{String.valueOf(sessionId)}, null, null, "decidedAt DESC");
     }
 
+    /**
+     * 按教师 + 日期范围获取当日所有考勤结果（包含班级名称），用于日历页面汇总展示。
+     *
+     * @param teacherId 教师ID
+     * @param startTs   当日开始时间戳（含）
+     * @param endTs     当日结束时间戳（不含）
+     * @return Cursor，列包含：
+     *         ar.id, ar.sessionId, ar.studentId, ar.status, ar.score, ar.decidedAt,
+     *         s.classId, c.name AS className
+     */
+    public Cursor getAttendanceResultsByTeacherAndDateRange(long teacherId, long startTs, long endTs) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT ar.id, ar.sessionId, ar.studentId, ar.status, ar.score, ar.decidedAt, " +
+                "s.classId, c.name AS className " +
+                "FROM AttendanceResult ar " +
+                "INNER JOIN AttendanceSession s ON ar.sessionId = s.id " +
+                "INNER JOIN Classroom c ON s.classId = c.id " +
+                "WHERE s.teacherId = ? AND s.startedAt >= ? AND s.startedAt < ? " +
+                "ORDER BY s.classId, ar.studentId, ar.decidedAt ASC";
+        return db.rawQuery(sql, new String[]{String.valueOf(teacherId), String.valueOf(startTs), String.valueOf(endTs)});
+    }
+
     // ============= 照片资源相关操作 =============
     
     public long insertPhotoAsset(long sessionId, Long studentId, String type, String uri, String meta) {
@@ -973,10 +995,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      * 获取指定教师的考勤记录数量
      */
     public int getAttendanceCountByTeacher(long teacherId) {
+        // 修改逻辑：每一次考勤会话算一次记录，不再按学生比对次数统计
         SQLiteDatabase db = this.getReadableDatabase();
-        String query = "SELECT COUNT(*) FROM AttendanceResult ar " +
-                      "INNER JOIN AttendanceSession a ON ar.sessionId = a.id " +
-                      "WHERE a.teacherId = ?";
+        String query = "SELECT COUNT(*) FROM AttendanceSession WHERE teacherId = ?";
         Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
         int count = 0;
         if (cursor != null && cursor.moveToFirst()) {
