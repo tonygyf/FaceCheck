@@ -66,10 +66,12 @@ dependencies {
     // Google ML Kit 人脸检测
     implementation("com.google.mlkit:face-detection:16.1.6")
 
-    // TensorFlow Lite 推理（用于 YuNet 检测与 MobileFaceNet 识别）
+    // TensorFlow Lite 推理（用于 MobileFaceNet / FaceNet 特征提取）
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
+    // FaceNet 需要 Flex 算子支持（如 FlexFusedBatchNormV3）
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0")
 
-    // ONNX Runtime（用于直接加载 YuNet ONNX 模型）
+    // （可选，后续将废弃 YuNet ONNX 检测）
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.3")
     
     testImplementation(libs.junit)

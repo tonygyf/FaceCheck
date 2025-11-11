@@ -35,7 +35,9 @@ FaceCheck 是一款基于人脸识别技术的智能考勤系统，专为教育�
 
 | 技术 | 用途 |
 |------|------|
-| **Google ML Kit** | 人脸检测与特征提取 |
+| **Google ML Kit** | 人脸检测与特征提取(精度不够) |
+| **mobilefacenet** | 同样精度不够 |
+| **Google FaceNet** | 正在尝试 |
 | **SQLite** | 本地数据存储 |
 | **WebDAV** | 云端数据同步 |
 | **Glide** | 图片加载与缓存 |
@@ -120,7 +122,7 @@ webdav.password=your_password
 ### 👤 人脸识别核心
 
 #### 人脸检测
-- 基于 Google ML Kit 的多人脸检测
+- 基于 Google ML Kit （不止，至少三个模型）的多人脸检测
 - 支持人脸轮廓、关键点检测
 - 实时人脸质量评估
 

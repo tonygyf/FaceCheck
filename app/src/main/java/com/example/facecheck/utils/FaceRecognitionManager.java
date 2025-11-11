@@ -3,6 +3,7 @@ package com.example.facecheck.utils;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.util.Log;
@@ -15,12 +16,18 @@ import com.google.mlkit.vision.face.FaceLandmark;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Arrays;
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.DataType;
 
 /**
  * 人脸识别管理器
@@ -29,7 +36,7 @@ import java.util.Arrays;
 public class FaceRecognitionManager {
     
     private static final String TAG = "FaceRecognitionManager";
-    private static final String MODEL_VERSION = "v1.0";
+    private static final String MODEL_VERSION = "mfn-new-f32";
     private static final float SIMILARITY_THRESHOLD = 0.75f; // 传统增强特征阈值
     private static final int FEATURE_VECTOR_SIZE = 256; // 特征向量维度 - 增加特征维度以提高识别精度
     private static final boolean DEBUG_SIMILARITY = true; // 相似度调试开关
@@ -37,11 +44,294 @@ public class FaceRecognitionManager {
     private final Context context;
     private final DatabaseHelper databaseHelper;
     private final ImageStorageManager imageStorageManager;
+    // MobileFaceNet 模型/维度
+    private Interpreter tflite;
+    private int modelInputWidth = 112;
+    private int modelInputHeight = 112;
+    private int modelInputChannels = 3;
+    private int modelOutputDim = 128; // 以模型输出为准，常见为128
+
+    // 动态模型选择
+    private String currentModelVersion = MODEL_VERSION; // 默认 MobileFaceNet (new/f32)
+    private String selectedModelName = "MobileFaceNet"; // 仅用于特征提取模型选择
     
     public FaceRecognitionManager(Context context) {
         this.context = context;
         this.databaseHelper = new DatabaseHelper(context);
         this.imageStorageManager = new ImageStorageManager(context);
+    }
+
+    /**
+     * 设置当前使用的特征提取模型
+     * 可选："Google ML Kit (推荐)", "MobileFaceNet", "Google FaceNet"
+     */
+    public void setSelectedModel(String name) {
+        if (name == null) return;
+        String trimmed = name.trim();
+        // 废弃除 ML Kit 检测外的旧特征提取模型配置：
+        // 若用户选择 ML Kit 作为“特征提取模型”，直接回退到 MobileFaceNet（new/f32）。
+        if (trimmed.contains("ML Kit")) {
+            Log.w(TAG, "ML Kit 特征提取已废弃，自动回退到 MobileFaceNet(new/f32)");
+            this.selectedModelName = "MobileFaceNet";
+            this.currentModelVersion = "mfn-new-f32";
+        } else if (trimmed.equalsIgnoreCase("MobileFaceNet")) {
+            this.selectedModelName = "MobileFaceNet";
+            this.currentModelVersion = "mfn-new-f32";
+        } else if (trimmed.contains("FaceNet")) {
+            this.selectedModelName = "Google FaceNet";
+            this.currentModelVersion = "facenet-new-f32"; // 典型 128 维
+            this.modelOutputDim = 128; // 按输出张量动态覆盖
+        } else {
+            // 回退到 MobileFaceNet(new/f32)
+            this.selectedModelName = "MobileFaceNet";
+            this.currentModelVersion = "mfn-new-f32";
+            Log.w(TAG, "Unknown model name: " + name + ", fallback to MobileFaceNet(new/f32)");
+        }
+    }
+
+    /**
+     * 加载当前选择的特征提取模型（new 目录下的 tflite），懒加载一次。
+     */
+    private void ensureInterpreterLoaded() {
+        if (tflite != null) return;
+        try {
+            String assetPath;
+            if ("Google FaceNet".equals(selectedModelName)) {
+                assetPath = "models/new/facenet_float32.tflite";
+            } else {
+                // 默认 MobileFaceNet(new/f32)
+                assetPath = "models/new/mobilefacenet_float32.tflite";
+            }
+            MappedByteBuffer buffer = loadModelFile(assetPath);
+            tflite = new Interpreter(buffer);
+
+            // 动态解析输入（考虑 FaceNet 多输入场景，选择 4D 输入作为图像入口）
+            int inCount = tflite.getInputTensorCount();
+            int imgIndex = -1;
+            for (int i = 0; i < inCount; i++) {
+                Tensor t = tflite.getInputTensor(i);
+                int[] shape = t.shape();
+                if (shape != null && shape.length >= 4) {
+                    imgIndex = i;
+                    this.modelInputHeight = shape[1];
+                    this.modelInputWidth = shape[2];
+                    this.modelInputChannels = shape[3];
+                    break;
+                }
+            }
+            if (imgIndex == -1) {
+                // 回退：根据模型类型给默认尺寸
+                if ("Google FaceNet".equals(selectedModelName)) {
+                    this.modelInputWidth = 160;
+                    this.modelInputHeight = 160;
+                    this.modelInputChannels = 3;
+                } else {
+                    this.modelInputWidth = 112;
+                    this.modelInputHeight = 112;
+                    this.modelInputChannels = 3;
+                }
+            }
+
+            // 动态解析输出维度（选择首个二维 FLOAT32 输出作为嵌入向量）
+            int outCount = tflite.getOutputTensorCount();
+            int outDim = -1;
+            for (int i = 0; i < outCount; i++) {
+                Tensor o = tflite.getOutputTensor(i);
+                int[] os = o.shape();
+                if (o.dataType() == DataType.FLOAT32 && os != null && os.length >= 2) {
+                    outDim = os[os.length - 1];
+                    break;
+                }
+            }
+            this.modelOutputDim = (outDim > 0) ? outDim : 128;
+
+            Log.i(TAG, String.format(
+                    "Model loaded: %s, input=%dx%dx%d, outputDim=%d, inputs=%d, outputs=%d",
+                    selectedModelName, modelInputWidth, modelInputHeight, modelInputChannels,
+                    modelOutputDim, inCount, outCount));
+        } catch (Exception e) {
+            Log.e(TAG, "加载模型失败: " + e.getMessage(), e);
+            tflite = null;
+        }
+    }
+
+    /**
+     * 从 assets 加载并映射 .tflite 模型
+     */
+    private MappedByteBuffer loadModelFile(String assetPath) throws java.io.IOException {
+        AssetFileDescriptor afd = context.getAssets().openFd(assetPath);
+        FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
+        FileChannel channel = fis.getChannel();
+        long startOffset = afd.getStartOffset();
+        long declaredLength = afd.getDeclaredLength();
+        return channel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
+
+    /**
+     * 运行 MobileFaceNet 推理，返回未归一化的特征向量
+     */
+    private float[] runMobileFaceNet(Bitmap input) {
+        if (tflite == null) {
+            Log.w(TAG, "TFLite interpreter is null, cannot run inference");
+            return null;
+        }
+        // 根据模型期望尺寸做缩放
+        int w = input.getWidth();
+        int h = input.getHeight();
+        if (w != modelInputWidth || h != modelInputHeight) {
+            input = Bitmap.createScaledBitmap(input, modelInputWidth, modelInputHeight, true);
+            w = modelInputWidth;
+            h = modelInputHeight;
+        }
+
+        // 打印一次输入张量规格
+        Tensor inTensor = tflite.getInputTensor(0);
+        int[] inShape = inTensor.shape();
+        DataType inType = inTensor.dataType();
+        Log.i(TAG, "MFN input shape=" + java.util.Arrays.toString(inShape) + ", dtype=" + inType);
+
+        // 根据数据类型构造输入 Buffer
+        boolean useFloat32 = (inType == DataType.FLOAT32);
+        int[] pixels = new int[w * h];
+        input.getPixels(pixels, 0, w, 0, 0, w, h);
+
+        ByteBuffer inBuffer;
+        if (useFloat32) {
+            inBuffer = ByteBuffer.allocateDirect(w * h * modelInputChannels * 4);
+            inBuffer.order(ByteOrder.nativeOrder());
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int c = pixels[y * w + x];
+                    float r = ((c >> 16) & 0xFF);
+                    float g = ((c >> 8) & 0xFF);
+                    float b = (c & 0xFF);
+                    // 常见归一化：[-1,1]
+                    inBuffer.putFloat((r - 127.5f) / 128f);
+                    inBuffer.putFloat((g - 127.5f) / 128f);
+                    inBuffer.putFloat((b - 127.5f) / 128f);
+                }
+            }
+        } else if (inType == DataType.UINT8) {
+            inBuffer = ByteBuffer.allocateDirect(w * h * modelInputChannels);
+            inBuffer.order(ByteOrder.nativeOrder());
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int c = pixels[y * w + x];
+                    int r = (c >> 16) & 0xFF;
+                    int g = (c >> 8) & 0xFF;
+                    int b = c & 0xFF;
+                    inBuffer.put((byte) r);
+                    inBuffer.put((byte) g);
+                    inBuffer.put((byte) b);
+                }
+            }
+        } else {
+            Log.e(TAG, "Unsupported input data type: " + inType);
+            return null;
+        }
+
+        float[][] out = new float[1][modelOutputDim];
+        try {
+            tflite.run(inBuffer, out);
+        } catch (Throwable t) {
+            Log.e(TAG, "MobileFaceNet inference failed: " + t.getMessage(), t);
+            return null;
+        }
+        return out[0];
+    }
+
+    /**
+     * 运行 FaceNet 推理（固定图像标准化 + 额外输入 phase_train=false, batch_size=1）
+     */
+    private float[] runFaceNet(Bitmap input) {
+        if (tflite == null) {
+            Log.w(TAG, "TFLite interpreter is null, cannot run FaceNet inference");
+            return null;
+        }
+        // 缩放到模型输入尺寸
+        int w = input.getWidth();
+        int h = input.getHeight();
+        if (w != modelInputWidth || h != modelInputHeight) {
+            input = Bitmap.createScaledBitmap(input, modelInputWidth, modelInputHeight, true);
+            w = modelInputWidth;
+            h = modelInputHeight;
+        }
+
+        // 固定图像标准化（fixed image standardization）：(x - 127.5) / 128
+        int[] pixels = new int[w * h];
+        input.getPixels(pixels, 0, w, 0, 0, w, h);
+        ByteBuffer inBuffer = ByteBuffer.allocateDirect(w * h * modelInputChannels * 4);
+        inBuffer.order(ByteOrder.nativeOrder());
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int c = pixels[y * w + x];
+                float r = ((c >> 16) & 0xFF);
+                float g = ((c >> 8) & 0xFF);
+                float b = (c & 0xFF);
+                inBuffer.putFloat((r - 127.5f) / 128f);
+                inBuffer.putFloat((g - 127.5f) / 128f);
+                inBuffer.putFloat((b - 127.5f) / 128f);
+            }
+        }
+
+        // 组合多输入
+        int inCount = tflite.getInputTensorCount();
+        Object[] inputs = new Object[inCount];
+        int imageIndex = -1;
+        for (int i = 0; i < inCount; i++) {
+            Tensor t = tflite.getInputTensor(i);
+            DataType dt = t.dataType();
+            int[] shape = t.shape();
+            if (shape != null && shape.length >= 4 && dt == DataType.FLOAT32 && imageIndex == -1) {
+                imageIndex = i;
+                inputs[i] = inBuffer;
+            } else if (dt == DataType.BOOL) {
+                inputs[i] = new boolean[]{false};
+            } else if (dt == DataType.INT32) {
+                inputs[i] = new int[]{1};
+            } else if (dt == DataType.FLOAT32 && (shape == null || shape.length <= 1)) {
+                inputs[i] = new float[]{1.0f};
+            } else {
+                // 不常用输入，给一个合理的默认值
+                inputs[i] = new float[]{0.0f};
+            }
+        }
+        if (imageIndex == -1 && inCount > 0) {
+            inputs[0] = inBuffer; // 回退：将图像作为第一个输入
+        }
+
+        // 选取首个二维 FLOAT32 输出作为嵌入向量
+        int outCount = tflite.getOutputTensorCount();
+        java.util.Map<Integer, Object> outputs = new java.util.HashMap<>();
+        int mainOutIdx = -1;
+        float[][] mainOut = null;
+        for (int i = 0; i < outCount; i++) {
+            Tensor o = tflite.getOutputTensor(i);
+            int[] os = o.shape();
+            if (o.dataType() == DataType.FLOAT32 && os != null && os.length >= 2) {
+                outputs.put(i, new float[os[0]][os[os.length - 1]]);
+                if (mainOutIdx == -1) {
+                    mainOutIdx = i;
+                    mainOut = (float[][]) outputs.get(i);
+                }
+            }
+        }
+        if (mainOut == null) {
+            // 回退：假设第一个输出是嵌入
+            Tensor o0 = tflite.getOutputTensor(0);
+            int[] os0 = o0.shape();
+            outputs.put(0, new float[os0[0]][os0[os0.length - 1]]);
+            mainOutIdx = 0;
+            mainOut = (float[][]) outputs.get(0);
+        }
+
+        try {
+            tflite.runForMultipleInputsOutputs(inputs, outputs);
+        } catch (Throwable t) {
+            Log.e(TAG, "FaceNet inference failed: " + t.getMessage(), t);
+            return null;
+        }
+        return (mainOut != null && mainOut.length > 0) ? mainOut[0] : null;
     }
     
     /**
@@ -56,9 +346,11 @@ public class FaceRecognitionManager {
         try {
             Log.d(TAG, "extractFaceFeatures: bitmap w=" + faceBitmap.getWidth() + ", h=" + faceBitmap.getHeight()
                     + ", euler=(" + face.getHeadEulerAngleX() + "," + face.getHeadEulerAngleY() + "," + face.getHeadEulerAngleZ() + ")");
-
-            final int MODEL_W = 112; // TODO: 根据你的模型实际输入替换
-            final int MODEL_H = 112;
+            // 针对不同模型的输入尺寸：
+            // - ML Kit 路径使用任意统一尺寸生成基础特征（此处沿用当前设置）
+            // - 其他深度模型根据 interpreter 的输入动态解析
+            final int MODEL_W = modelInputWidth;
+            final int MODEL_H = modelInputHeight;
 
             Rect bbox = face.getBoundingBox();
             if (bbox == null) {
@@ -79,7 +371,13 @@ public class FaceRecognitionManager {
             }
 
             Bitmap crop = Bitmap.createBitmap(faceBitmap, left, top, w, h);
-            Bitmap input = Bitmap.createScaledBitmap(crop, MODEL_W, MODEL_H, true);
+            // 对齐：根据人脸滚转角（Z 轴）将裁剪区域旋转到水平，提高跨照片一致性
+            float roll = face.getHeadEulerAngleZ();
+            Bitmap alignedCrop = (Math.abs(roll) > 1.0f) ? rotateBitmap(crop, -roll) : crop;
+            if (alignedCrop != crop) {
+                Log.d(TAG, String.format("apply roll alignment: z=%.2f, crop=%dx%d", roll, w, h));
+            }
+            Bitmap input = Bitmap.createScaledBitmap(alignedCrop, MODEL_W, MODEL_H, true);
 
             // 打印常见关键点状态
             int present = 0;
@@ -100,18 +398,139 @@ public class FaceRecognitionManager {
                 return null;
             }
 
-            // 基础特征提取：直接生成原始256维特征并归一化
-            float[] features = generateBaseFeatures(input);
-            if (features == null || features.length != FEATURE_VECTOR_SIZE) {
-                Log.e(TAG, "generateBaseFeatures returned invalid vector");
-                dumpBitmapForDebug(input, "base_gen_invalid");
-                return null;
+            // 废弃 ML Kit 嵌入，统一走深度模型（MobileFaceNet / FaceNet）
+            ensureInterpreterLoaded();
+            float[] features;
+            if ("Google FaceNet".equals(selectedModelName)) {
+                features = runFaceNet(input);
+            } else {
+                features = runMobileFaceNet(input);
             }
-            return normalizeVector(features);
+                if (features == null) {
+                    Log.e(TAG, "inference returned null");
+                    dumpBitmapForDebug(input, "infer_null");
+                    return null;
+                }
+                float[] normFeat = normalizeVector(features);
+                if (normFeat != null && normFeat.length > 0) {
+                    int sampleCount = Math.min(5, normFeat.length);
+                    Log.d(TAG, "EMB_DEBUG dim=" + normFeat.length + ", sample="
+                            + java.util.Arrays.toString(java.util.Arrays.copyOf(normFeat, sampleCount)));
+                }
+                return normFeat;
+            
         } catch (Exception e) {
             Log.e(TAG, "提取人脸特征失败: " + e.getMessage(), e);
             dumpBitmapForDebug(faceBitmap, "exception");
             return null;
+        }
+    }
+
+    /**
+     * 提取人脸特征向量（YuNet/其它检测输出：使用 Rect 裁剪）
+     */
+    public float[] extractFaceFeatures(Bitmap sourceBitmap, Rect bbox) {
+        if (sourceBitmap == null) {
+            Log.e(TAG, "extractFaceFeatures(Rect): sourceBitmap == null");
+            return null;
+        }
+        if (bbox == null) {
+            Log.e(TAG, "extractFaceFeatures(Rect): bbox == null");
+            dumpBitmapForDebug(sourceBitmap, "rect_null");
+            return null;
+        }
+        try {
+            // 统一裁剪并缩放到当前模型的输入尺寸
+            int left = Math.max(0, bbox.left);
+            int top = Math.max(0, bbox.top);
+            int right = Math.min(sourceBitmap.getWidth(), bbox.right);
+            int bottom = Math.min(sourceBitmap.getHeight(), bbox.bottom);
+            int w = right - left;
+            int h = bottom - top;
+            if (w <= 0 || h <= 0) {
+                Log.w(TAG, "extractFaceFeatures(Rect): invalid crop w=" + w + ", h=" + h);
+                dumpBitmapForDebug(sourceBitmap, "rect_invalid");
+                return null;
+            }
+
+            Bitmap crop = Bitmap.createBitmap(sourceBitmap, left, top, w, h);
+            Bitmap input = Bitmap.createScaledBitmap(crop, modelInputWidth, modelInputHeight, true);
+
+            // 废弃 ML Kit 嵌入，统一走深度模型（MobileFaceNet / FaceNet）
+            ensureInterpreterLoaded();
+            float[] features = "Google FaceNet".equals(selectedModelName)
+                    ? runFaceNet(input)
+                    : runMobileFaceNet(input);
+                if (features == null) {
+                    Log.e(TAG, "Inference returned null (Rect)");
+                    dumpBitmapForDebug(input, "infer_null_rect");
+                    return null;
+                }
+                float[] normFeat = normalizeVector(features);
+                if (normFeat != null && normFeat.length > 0) {
+                    int sampleCount = Math.min(5, normFeat.length);
+                    Log.d(TAG, "EMB_DEBUG(rect) dim=" + normFeat.length + ", sample="
+                            + java.util.Arrays.toString(java.util.Arrays.copyOf(normFeat, sampleCount)));
+                }
+                return normFeat;
+            
+        } catch (Throwable t) {
+            Log.e(TAG, "提取人脸特征失败(Rect): " + t.getMessage(), t);
+            dumpBitmapForDebug(sourceBitmap, "exception_rect");
+            return null;
+        }
+    }
+
+    /**
+     * 识别单个人脸（YuNet Rect 路径）
+     */
+    public RecognitionResult recognizeFace(Bitmap sourceBitmap, Rect bbox) {
+        try {
+            float[] queryFeatures = extractFaceFeatures(sourceBitmap, bbox);
+            if (queryFeatures == null) {
+                return new RecognitionResult(-1, 0.0f, "特征提取失败(Rect)");
+            }
+
+            List<Student> allStudents = databaseHelper.getAllStudents();
+            float bestSimilarity = 0.0f;
+            long bestStudentId = -1;
+
+            for (Student student : allStudents) {
+                List<FaceEmbedding> embeddings = getStudentFaceEmbeddings(student.getId());
+                for (FaceEmbedding embedding : embeddings) {
+                    if (!currentModelVersion.equals(embedding.getModelVer())) continue;
+                    float[] stored = byteArrayToFloatArray(embedding.getVector());
+                    if (stored != null && stored.length == queryFeatures.length) {
+                        float sim = calculateSimilarity(queryFeatures, stored);
+                        if (sim > bestSimilarity) {
+                            bestSimilarity = sim;
+                            bestStudentId = student.getId();
+                        }
+                    }
+                }
+            }
+
+            if (bestStudentId != -1 && bestSimilarity >= 0.6f) {
+                return new RecognitionResult(bestStudentId, bestSimilarity, "识别成功(Rect)");
+            } else {
+                return new RecognitionResult(-1, bestSimilarity, "未识别到匹配(Rect)");
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "识别失败(Rect): " + t.getMessage(), t);
+            return new RecognitionResult(-1, 0.0f, "识别异常(Rect)");
+        }
+    }
+
+    // 旋转位图的辅助方法
+    private Bitmap rotateBitmap(Bitmap src, float degrees) {
+        try {
+            if (src == null) return null;
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.postRotate(degrees);
+            return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), m, true);
+        } catch (Throwable t) {
+            Log.w(TAG, "rotateBitmap failed: " + t.getMessage());
+            return src;
         }
     }
 
@@ -890,8 +1309,10 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
      */
     public boolean saveFaceEmbedding(long studentId, float[] features, float quality, String faceImagePath) {
         try {
-            if (features == null || features.length != FEATURE_VECTOR_SIZE) {
-                Log.w(TAG, "saveFaceEmbedding: invalid features length=" + (features == null ? -1 : features.length));
+            // 使用当前模型的输出维度进行校验，避免与旧模型混用
+            if (features == null || features.length != modelOutputDim) {
+                Log.w(TAG, "saveFaceEmbedding: invalid features length=" + (features == null ? -1 : features.length)
+                        + ", expected=" + modelOutputDim + ", modelVer=" + currentModelVersion);
                 return false;
             }
             // 零向量保护：避免把无效向量写库
@@ -904,7 +1325,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             // 统一形式：保存前再次归一化，确保库内均为单位向量
             float[] normalized = normalizeVector(features);
             byte[] vectorBytes = floatArrayToByteArray(normalized);
-            long result = databaseHelper.insertFaceEmbedding(studentId, MODEL_VERSION, vectorBytes, quality);
+            long result = databaseHelper.insertFaceEmbedding(studentId, currentModelVersion, vectorBytes, quality);
             return result != -1;
         } catch (Exception e) {
             Log.e(TAG, "保存人脸特征失败: " + e.getMessage(), e);
@@ -965,7 +1386,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
                 
                 for (FaceEmbedding embedding : embeddings) {
                     // 仅比对当前模型版本，避免模型混用
-                    if (!MODEL_VERSION.equals(embedding.getModelVer())) continue;
+                    if (!currentModelVersion.equals(embedding.getModelVer())) continue;
                     float[] storedFeatures = byteArrayToFloatArray(embedding.getVector());
                     if (storedFeatures != null && storedFeatures.length == queryFeatures.length) {
                         float similarity = calculateSimilarity(queryFeatures, storedFeatures);
@@ -1044,7 +1465,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
         final List<Long> studentIds = new ArrayList<>();
         final List<float[]> storedEmbeddings = new ArrayList<>();
         try {
-            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
+            cursor = databaseHelper.getAllFaceEmbeddingsByModel(currentModelVersion);
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
@@ -1137,7 +1558,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             // 遍历本班学生的所有嵌入
             android.database.Cursor cur = null;
             try {
-                cur = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
+                cur = databaseHelper.getAllFaceEmbeddingsByModel(currentModelVersion);
                 if (cur != null && cur.moveToFirst()) {
                     do {
                         long sid = cur.getLong(cur.getColumnIndexOrThrow("studentId"));
@@ -1176,15 +1597,16 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
         android.database.Cursor cursor = null;
         StringBuilder sb = new StringBuilder();
         long total = 0, dimMismatch = 0, zeroNorm = 0, nearUnit = 0, nanOrInf = 0;
-        final int expectedDim = FEATURE_VECTOR_SIZE;
+        // 以当前加载的模型输出维度为准
+        final int expectedDim = modelOutputDim;
 
         sb.append("FaceEmbedding Validation Report\n")
-          .append("modelVer=").append(MODEL_VERSION).append('\n')
+          .append("modelVer=").append(currentModelVersion).append('\n')
           .append("expectedDim=").append(expectedDim).append('\n')
           .append("time=").append(System.currentTimeMillis()).append("\n\n");
 
         try {
-            cursor = databaseHelper.getAllFaceEmbeddingsByModel(MODEL_VERSION);
+            cursor = databaseHelper.getAllFaceEmbeddingsByModel(currentModelVersion);
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
@@ -1248,7 +1670,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
                     sb.append('\n');
                 } while (cursor.moveToNext());
             } else {
-                sb.append("No embeddings found for modelVer=").append(MODEL_VERSION).append('\n');
+                sb.append("No embeddings found for modelVer=").append(currentModelVersion).append('\n');
             }
         } catch (Throwable t) {
             android.util.Log.e(TAG, "validateAllEmbeddingsAndExport failed: " + t.getMessage(), t);
