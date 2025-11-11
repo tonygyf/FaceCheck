@@ -15,6 +15,8 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -69,6 +71,7 @@ public class ClassroomActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
     private Button btnExtractAll;
+    private Spinner spinnerModel;
     // Lottie 覆盖层
     private android.widget.FrameLayout lottieOverlayContainer;
     private LottieAnimationView lottieView;
@@ -86,6 +89,13 @@ public class ClassroomActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickPhotoLauncher;
     private Student currentStudent;
+
+    // 特征模型选择
+    private String[] modelOptions = {
+        "MobileFaceNet",
+        "FaceNet"
+    };
+    private String selectedModel = "MobileFaceNet";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -130,6 +140,7 @@ public class ClassroomActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerViewStudents);
         fabAddStudent = findViewById(R.id.fabAddStudent);
         btnExtractAll = findViewById(R.id.btnExtractAll);
+        spinnerModel = findViewById(R.id.spinnerModel);
         lottieOverlayContainer = findViewById(R.id.lottieOverlayContainer);
         lottieView = findViewById(R.id.lottieView);
         
@@ -138,6 +149,27 @@ public class ClassroomActivity extends AppCompatActivity {
         studentAdapter = new StudentAdapter(new ArrayList<>());
         recyclerView.setAdapter(studentAdapter);
         
+        // 初始化模型选择器
+        if (spinnerModel != null) {
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, modelOptions);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spinnerModel.setAdapter(adapter);
+            spinnerModel.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                    selectedModel = modelOptions[position];
+                    faceRecognitionManager.setSelectedModel(selectedModel);
+                    Toast.makeText(ClassroomActivity.this, "已选择模型: " + selectedModel, Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+            });
+            // 默认选择
+            faceRecognitionManager.setSelectedModel(selectedModel);
+        }
+
         // 设置点击事件
         fabAddStudent.setOnClickListener(v -> showAddStudentDialog());
         if (btnExtractAll != null) {
@@ -332,20 +364,17 @@ public class ClassroomActivity extends AppCompatActivity {
 
     private boolean updateFaceEmbeddingRecord(long studentId, float[] features, float quality) {
         try {
-            // 仅更新与当前特征维度匹配的记录，避免跨模型污染（如128维MFN vs 256维工程向量）
+            // 仅更新当前所选模型版本的记录，避免跨模型混用
+            String currentVer = faceRecognitionManager.getCurrentModelVersion();
             android.database.Cursor c = dbHelper.getFaceEmbeddingsByStudent(studentId);
             if (c != null && c.moveToFirst()) {
                 long targetId = -1;
                 do {
                     long id = c.getLong(c.getColumnIndexOrThrow("id"));
-                    byte[] vec = c.getBlob(c.getColumnIndexOrThrow("vector"));
-                    // 与本次特征长度一致才允许更新
-                    if (vec != null) {
-                        int len = vec.length / 4; // float占4字节
-                        if (len == features.length) {
-                            targetId = id;
-                            break; // 按质量已排序，匹配到第一个即可
-                        }
+                    String modelVer = c.getString(c.getColumnIndexOrThrow("modelVer"));
+                    if (currentVer != null && currentVer.equals(modelVer)) {
+                        targetId = id;
+                        break; // 找到当前模型的第一条记录即可
                     }
                 } while (c.moveToNext());
                 c.close();

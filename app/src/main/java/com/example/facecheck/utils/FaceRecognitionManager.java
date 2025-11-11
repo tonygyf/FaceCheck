@@ -90,6 +90,13 @@ public class FaceRecognitionManager {
     }
 
     /**
+     * 获取当前模型版本（用于区分库中不同模型的嵌入记录）
+     */
+    public String getCurrentModelVersion() {
+        return this.currentModelVersion;
+    }
+
+    /**
      * 加载当前选择的特征提取模型（new 目录下的 tflite），懒加载一次。
      */
     private void ensureInterpreterLoaded() {
