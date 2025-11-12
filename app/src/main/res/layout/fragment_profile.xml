@@ -19,15 +19,8 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- 用户信息区 -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="当前用户"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@color/primary"
-                android:layout_marginBottom="12dp" />
+
+
 
             <!-- 用户头像 -->
             <de.hdodenhof.circleimageview.CircleImageView
