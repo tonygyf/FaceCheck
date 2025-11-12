@@ -41,6 +41,20 @@ public class SettingsFragment extends Fragment {
         // 更多设置入口
         View itemMoreSettings = view.findViewById(R.id.item_more_settings);
         itemMoreSettings.setOnClickListener(v -> showMoreSettingsBottomSheet());
+
+        // 关于 FaceCheck（移到主页面）
+        View itemAbout = view.findViewById(R.id.item_about);
+        itemAbout.setOnClickListener(v -> {
+            String version = "";
+            try {
+                version = requireContext().getPackageManager().getPackageInfo(requireContext().getPackageName(), 0).versionName;
+            } catch (Throwable ignore) {}
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("关于 FaceCheck")
+                    .setMessage("版本：" + version + "\n\n人脸考勤·课堂管理·快速打卡\n简约现代的考勤体验")
+                    .setPositiveButton("确定", null)
+                    .show();
+        });
     }
 
     private void initThemeFromPrefs() {
@@ -93,30 +107,62 @@ public class SettingsFragment extends Fragment {
         View sheetView = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_more_settings, null);
         bottomSheet.setContentView(sheetView);
 
+        // WebDAV 开关状态与持久化
+        android.widget.Switch switchWebDav = sheetView.findViewById(R.id.switch_webdav);
+        android.content.SharedPreferences webdavPrefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+        boolean enabled = webdavPrefs.getBoolean("webdav_enabled", false);
+        switchWebDav.setChecked(enabled);
+        switchWebDav.setOnCheckedChangeListener((btn, isChecked) -> {
+            webdavPrefs.edit().putBoolean("webdav_enabled", isChecked).apply();
+            android.widget.Toast.makeText(requireContext(), isChecked ? "WebDAV 已启用" : "WebDAV 已禁用", android.widget.Toast.LENGTH_SHORT).show();
+        });
+
+        // 计算缓存大小并更新显示
+        android.widget.TextView tvCache = sheetView.findViewById(R.id.tv_cache_status);
+        android.widget.ProgressBar pbCache = sheetView.findViewById(R.id.progress_bar_cache);
+        if (tvCache != null) {
+            tvCache.setText("缓存: 正在计算大小...");
+            com.example.facecheck.utils.CacheManager cm = new com.example.facecheck.utils.CacheManager(requireContext());
+            cm.getCacheSize(new com.example.facecheck.utils.CacheManager.CacheSizeCallback() {
+                @Override public void onSizeCalculated(com.example.facecheck.utils.CacheManager.CacheSizeInfo sizeInfo) {
+                    String text = String.format("缓存: %s (图片: %s)",
+                            formatFileSize(sizeInfo.totalSize),
+                            formatFileSize(sizeInfo.imageCacheSize));
+                    tvCache.setText(text);
+                }
+                @Override public void onError(String error) {
+                    tvCache.setText("缓存: 获取失败");
+                }
+            });
+        }
+
         // WebDAV 配置
         sheetView.findViewById(R.id.btn_webdav_config).setOnClickListener(v -> {
             bottomSheet.dismiss();
-            Toast.makeText(requireContext(), "WebDAV 配置（后续接入）", Toast.LENGTH_SHORT).show();
+            showWebDavConfigDialog();
         });
 
         // 立即同步
         sheetView.findViewById(R.id.btn_sync_now).setOnClickListener(v -> {
             bottomSheet.dismiss();
-            Toast.makeText(requireContext(), "立即同步（后续接入）", Toast.LENGTH_SHORT).show();
+            runWebDavSync();
         });
 
         // 缓存清理
         sheetView.findViewById(R.id.btn_clear_all_cache).setOnClickListener(v -> {
-            Toast.makeText(requireContext(), "清理所有缓存（后续接入）", Toast.LENGTH_SHORT).show();
+            bottomSheet.dismiss();
+            runClearAllCache();
         });
         sheetView.findViewById(R.id.btn_clear_image_cache).setOnClickListener(v -> {
-            Toast.makeText(requireContext(), "清理图片缓存（后续接入）", Toast.LENGTH_SHORT).show();
+            bottomSheet.dismiss();
+            runClearImageCache();
         });
         sheetView.findViewById(R.id.btn_clear_temp_cache).setOnClickListener(v -> {
-            Toast.makeText(requireContext(), "清理临时缓存（后续接入）", Toast.LENGTH_SHORT).show();
+            bottomSheet.dismiss();
+            runClearTempCache();
         });
 
-        // 关于
+        // 关于（保留弹层入口，但主页面已有）
         sheetView.findViewById(R.id.item_about).setOnClickListener(v -> {
             bottomSheet.dismiss();
             String version = "";
@@ -131,5 +177,174 @@ public class SettingsFragment extends Fragment {
         });
 
         bottomSheet.show();
+    }
+
+    private String formatFileSize(long size) {
+        if (size <= 0) return "0 B";
+        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
+        int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
+        return new java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
+    }
+
+    private void runClearAllCache() {
+        com.example.facecheck.utils.CacheManager cm = new com.example.facecheck.utils.CacheManager(requireContext());
+        cm.clearAllCache(new com.example.facecheck.utils.CacheManager.CacheCleanCallback() {
+            @Override public void onProgress(int progress, String message) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onComplete(long freedSpace, String summary) {
+                Toast.makeText(requireContext(), summary, Toast.LENGTH_LONG).show();
+            }
+            @Override public void onError(String error) {
+                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void runClearImageCache() {
+        com.example.facecheck.utils.CacheManager cm = new com.example.facecheck.utils.CacheManager(requireContext());
+        cm.clearImageCache(new com.example.facecheck.utils.CacheManager.CacheCleanCallback() {
+            @Override public void onProgress(int progress, String message) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onComplete(long freedSpace, String summary) {
+                Toast.makeText(requireContext(), summary, Toast.LENGTH_LONG).show();
+            }
+            @Override public void onError(String error) {
+                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void runClearTempCache() {
+        com.example.facecheck.utils.CacheManager cm = new com.example.facecheck.utils.CacheManager(requireContext());
+        cm.clearTempCache(new com.example.facecheck.utils.CacheManager.CacheCleanCallback() {
+            @Override public void onProgress(int progress, String message) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onComplete(long freedSpace, String summary) {
+                Toast.makeText(requireContext(), summary, Toast.LENGTH_LONG).show();
+            }
+            @Override public void onError(String error) {
+                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void showWebDavConfigDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(requireContext());
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_webdav_config, null);
+        builder.setView(dialogView);
+        android.app.AlertDialog dialog = builder.create();
+
+        android.widget.EditText etUrl = dialogView.findViewById(R.id.et_webdav_url);
+        android.widget.EditText etUser = dialogView.findViewById(R.id.et_webdav_username);
+        android.widget.EditText etPass = dialogView.findViewById(R.id.et_webdav_password);
+        android.widget.TextView tvStatus = dialogView.findViewById(R.id.tv_connection_status);
+
+        // 预填已保存配置
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+        etUrl.setText(prefs.getString("webdav_url", ""));
+        etUser.setText(prefs.getString("webdav_username", ""));
+        etPass.setText(prefs.getString("webdav_password", ""));
+
+        dialogView.findViewById(R.id.btn_test_connection).setOnClickListener(v -> {
+            String url = etUrl.getText().toString().trim();
+            String user = etUser.getText().toString().trim();
+            String pass = etPass.getText().toString().trim();
+            if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+                tvStatus.setVisibility(View.VISIBLE);
+                tvStatus.setText("请完整填写服务器、用户名、密码");
+                return;
+            }
+            com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+            boolean ok = mgr.testConnection();
+            tvStatus.setVisibility(View.VISIBLE);
+            tvStatus.setText(ok ? "测试成功" : "测试失败");
+        });
+
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialog.dismiss());
+        dialogView.findViewById(R.id.btn_save).setOnClickListener(v -> {
+            String url = etUrl.getText().toString().trim();
+            String user = etUser.getText().toString().trim();
+            String pass = etPass.getText().toString().trim();
+            if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+                tvStatus.setVisibility(View.VISIBLE);
+                tvStatus.setText("请完整填写服务器、用户名、密码");
+                return;
+            }
+            android.content.SharedPreferences p = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+            p.edit()
+                    .putString("webdav_url", url)
+                    .putString("webdav_username", user)
+                    .putString("webdav_password", pass)
+                    .putBoolean("webdav_enabled", true)
+                    .apply();
+            tvStatus.setVisibility(View.VISIBLE);
+            tvStatus.setText("配置已保存并启用同步");
+        });
+
+        dialog.show();
+    }
+
+    private void runWebDavSync() {
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+        boolean enabled = prefs.getBoolean("webdav_enabled", false);
+        String url = prefs.getString("webdav_url", "");
+        String user = prefs.getString("webdav_username", "");
+        String pass = prefs.getString("webdav_password", "");
+        if (!enabled || url.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+            Toast.makeText(requireContext(), "请先在 WebDAV 配置中启用并填写完整信息", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(requireContext(), "开始同步...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            boolean ok = false;
+            String msg = "";
+            try {
+                com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+                // 初始化目录
+                mgr.initializeDirectoryStructure();
+
+                // 同步数据库
+                com.example.facecheck.database.DatabaseHelper dbh = new com.example.facecheck.database.DatabaseHelper(requireContext());
+                String dbPath = dbh.getDatabaseAbsolutePath();
+                ok = mgr.syncDatabase(dbPath);
+
+                // 同步头像
+                java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                java.io.File[] avatars = avatarDir.listFiles();
+                if (avatars != null) {
+                    for (java.io.File f : avatars) {
+                        mgr.syncAvatar(f.getAbsolutePath(), f.getName());
+                    }
+                }
+
+                // 同步考勤照片
+                java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                java.io.File[] photos = attDir.listFiles();
+                if (photos != null) {
+                    for (java.io.File f : photos) {
+                        mgr.syncAttendancePhoto(f.getAbsolutePath(), f.getName());
+                    }
+                }
+
+                // 更新最后同步时间
+                if (ok) {
+                    prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                }
+                msg = ok ? "同步完成" : "同步失败";
+            } catch (Throwable t) {
+                ok = false;
+                msg = "同步异常: " + t.getMessage();
+            }
+
+            final boolean success = ok;
+            final String text = msg;
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                    Toast.makeText(requireContext(), text, Toast.LENGTH_SHORT).show()
+            );
+        }).start();
     }
 }
