@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private BottomNavigationView bottomNavigationView;
     private BottomAppBar bottomAppBar;
     private long teacherId = -1;
-    private ImageButton btnNavHome, btnNavClassroom, btnNavAttendance, btnNavProfile;
+    private ImageButton btnNavHome, btnNavClassroom, btnNavAttendance, btnNavProfile, btnNavSettings;
 
     public long getTeacherId() {
         return teacherId;
@@ -81,9 +81,7 @@ public class MainActivity extends AppCompatActivity {
         // 设置工具栏（透明背景、居中标题）
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("人脸考勤系统");
-        }
+        // 初始标题在后续按所选页面设置；不在此硬编码，避免主题切换后标题回退
 
         // 获取教师ID
         teacherId = getSharedPreferences("user_prefs", MODE_PRIVATE).getLong("teacher_id", -1);
@@ -107,14 +105,40 @@ public class MainActivity extends AppCompatActivity {
         btnNavClassroom = findViewById(R.id.btn_nav_classroom);
         btnNavAttendance = findViewById(R.id.btn_nav_attendance);
         btnNavProfile = findViewById(R.id.btn_nav_profile);
+        btnNavSettings = findViewById(R.id.btn_nav_settings);
 
         if (btnNavHome != null) btnNavHome.setOnClickListener(v -> handleNavigation(R.id.nav_home));
         if (btnNavClassroom != null) btnNavClassroom.setOnClickListener(v -> handleNavigation(R.id.nav_classroom));
         if (btnNavAttendance != null) btnNavAttendance.setOnClickListener(v -> handleNavigation(R.id.nav_attendance));
         if (btnNavProfile != null) btnNavProfile.setOnClickListener(v -> handleNavigation(R.id.nav_profile));
+        if (btnNavSettings != null) btnNavSettings.setOnClickListener(v -> {
+            int selectedColor = ContextCompat.getColor(this, R.color.primary);
+            if (btnNavSettings != null) {
+                ImageViewCompat.setImageTintList(btnNavSettings, ColorStateList.valueOf(selectedColor));
+            }
+            try {
+                Fragment settingsFragment = new com.example.facecheck.fragments.SettingsFragment();
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, settingsFragment)
+                        .addToBackStack("settings")
+                        .commit();
+                if (getSupportActionBar() != null) getSupportActionBar().setTitle("设置");
+                updateBottomBarButtonsState(R.id.nav_settings);
+                getSharedPreferences("ui_prefs", MODE_PRIVATE)
+                        .edit().putInt("nav_selected_id", R.id.nav_settings).apply();
+            } catch (Throwable t) {
+                Toast.makeText(this, "设置页打开失败", Toast.LENGTH_SHORT).show();
+            }
+        });
 
-        // 初始高亮首页并设置图标颜色状态
-        updateBottomBarButtonsState(R.id.nav_home);
+        // 恢复上次选中的导航项（默认首页）
+        int savedNav = getSharedPreferences("ui_prefs", MODE_PRIVATE)
+                .getInt("nav_selected_id", R.id.nav_home);
+        handleNavigation(savedNav);
+        if (getSupportFragmentManager().findFragmentById(R.id.fragment_container) == null) {
+            handleNavigation(R.id.nav_home);
+        }
+        showFirstLaunchWelcomeIfNeeded();
 
         // 中间拍照打卡按钮
         FloatingActionButton fabCameraPunch = findViewById(R.id.fabCameraPunch);
@@ -124,12 +148,7 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 默认显示首页
-        if (savedInstanceState == null) {
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, new HomeFragment())
-                    .commit();
-        }
+        // 默认展示已恢复的导航页，移除强制首页，避免覆盖用户选择
 
         // 初始化WebDAV同步
         initWebDAVSync();
@@ -182,6 +201,10 @@ public class MainActivity extends AppCompatActivity {
             selectedFragment = new ProfileFragment();
             if (getSupportActionBar() != null) getSupportActionBar().setTitle("个人资料");
             Log.d(TAG, "切换到我的");
+        } else if (itemId == R.id.nav_settings) {
+            selectedFragment = new com.example.facecheck.fragments.SettingsFragment();
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle("设置");
+            Log.d(TAG, "切换到设置");
         }
 
         if (selectedFragment != null) {
@@ -189,7 +212,28 @@ public class MainActivity extends AppCompatActivity {
                     .replace(R.id.fragment_container, selectedFragment)
                     .commit();
             updateBottomBarButtonsState(itemId);
+            // 记住当前导航项，主题切换重建后恢复
+            getSharedPreferences("ui_prefs", MODE_PRIVATE)
+                    .edit().putInt("nav_selected_id", itemId).apply();
         }
+    }
+
+    private void showFirstLaunchWelcomeIfNeeded() {
+        SharedPreferences prefs = getSharedPreferences("ui_prefs", MODE_PRIVATE);
+        boolean shown = prefs.getBoolean("first_launch_welcome_shown", false);
+        if (shown) return;
+        String version = "";
+        try {
+            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Throwable ignore) {}
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("FaceCheck")
+                .setMessage("版本：" + version + "\n\n人脸考勤·课堂管理·快速打卡\n简约现代的考勤体验")
+                .setPositiveButton("开始使用", (d, w) -> {
+                    getSharedPreferences("ui_prefs", MODE_PRIVATE)
+                            .edit().putBoolean("first_launch_welcome_shown", true).apply();
+                })
+                .show();
     }
 
     // 显式设置左右按钮的选中与未选中颜色
@@ -209,5 +253,8 @@ public class MainActivity extends AppCompatActivity {
         if (btnNavProfile != null)
             ImageViewCompat.setImageTintList(btnNavProfile,
                     ColorStateList.valueOf(selectedId == R.id.nav_profile ? selectedColor : defaultColor));
+        if (btnNavSettings != null)
+            ImageViewCompat.setImageTintList(btnNavSettings,
+                    ColorStateList.valueOf(selectedId == R.id.nav_settings ? selectedColor : defaultColor));
     }
 }

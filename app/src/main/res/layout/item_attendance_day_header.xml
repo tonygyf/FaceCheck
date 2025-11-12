@@ -13,6 +13,6 @@
         android:text="班级"
         android:textStyle="bold"
         android:textSize="16sp"
-        android:textColor="@android:color/black"/>
+        android:textColor="@color/text_primary"/>
 
 </LinearLayout>

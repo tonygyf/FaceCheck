@@ -114,15 +114,11 @@ public class AttendanceDayAdapter extends RecyclerView.Adapter<RecyclerView.View
             tvPresentCount.setText("次数: " + item.presentCount);
             tvTimes.setText("时间: " + (item.timesText == null || item.timesText.isEmpty() ? "-" : item.timesText));
             if (item.presentCount == 0) {
-                // 零出勤特殊样式：红色、斜体
-                tvStudentName.setTextColor(0xFFB00020); // Material 红色近似值
-                tvPresentCount.setTextColor(0xFFB00020);
+                tvStudentName.setTextColor(0xFFF44336);
                 tvStudentName.setTypeface(tvStudentName.getTypeface(), android.graphics.Typeface.ITALIC);
                 tvPresentCount.setTypeface(tvPresentCount.getTypeface(), android.graphics.Typeface.BOLD);
             } else {
-                // 恢复默认样式（避免复用污染）
-                tvStudentName.setTextColor(0xFF000000);
-                tvPresentCount.setTextColor(0xFF000000);
+                tvStudentName.setTextColor(0xFF2196F3);
                 tvStudentName.setTypeface(null, android.graphics.Typeface.NORMAL);
                 tvPresentCount.setTypeface(null, android.graphics.Typeface.BOLD);
             }

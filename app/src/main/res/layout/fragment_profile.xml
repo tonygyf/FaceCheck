@@ -7,8 +7,7 @@
     android:paddingLeft="16dp"
     android:paddingRight="16dp"
     android:paddingBottom="16dp"
-    android:paddingTop="0dp"
-    android:background="@color/colorBackground">
+    android:paddingTop="0dp">
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -20,159 +19,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- 顶部 FaceCheck 标题，作为 Logo 样式 -->
-            <TextView
-                android:id="@+id/tv_logo_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="FaceCheck"
-                android:textSize="56sp"
-                android:textStyle="bold"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="36dp"
-                android:layout_marginBottom="24dp"
-                android:textColor="@color/primary" />
-            <!-- 分割线 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@android:color/darker_gray"
-                android:layout_marginBottom="12dp" />
-            <!-- 主题模式选择：系统 / 深色 / 浅色 -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginBottom="24dp">
-
-                <Button
-                    android:id="@+id/btn_theme_system"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="系统模式"
-                    android:background="@drawable/bg_theme_option_selected"
-                    android:textColor="@android:color/black"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="12dp" />
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="wrap_content" />
-
-                <Button
-                    android:id="@+id/btn_theme_dark"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="深色模式"
-                    android:background="@drawable/bg_theme_option_unselected"
-                    android:textColor="@android:color/black"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="12dp" />
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="wrap_content" />
-
-                <Button
-                    android:id="@+id/btn_theme_light"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="浅色模式"
-                    android:background="@drawable/bg_theme_option_unselected"
-                    android:textColor="@android:color/black"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="12dp" />
-            </LinearLayout>
-            <!-- 分割线 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@android:color/darker_gray"
-                android:layout_marginBottom="16dp" />
-
-            <!-- WebDAV 开关（主设置区） -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginBottom="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="启用 WebDAV"
-                    android:textSize="16sp" />
-
-                <Switch
-                    android:id="@+id/switch_webdav"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="false" />
-            </LinearLayout>
-
-            <!-- 更多设置入口 -->
-            <LinearLayout
-                android:id="@+id/item_more_settings"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="12dp"
-                android:background="@drawable/edit_text_background"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="更多设置"
-                    android:textSize="16sp" />
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_chevron_right_24" />
-            </LinearLayout>
-
-            <!-- 关于 FaceCheck 入口 -->
-            <LinearLayout
-                android:id="@+id/item_about"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="12dp"
-                android:background="@drawable/edit_text_background"
-                android:layout_marginBottom="12dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="关于 FaceCheck"
-                    android:textSize="16sp" />
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_chevron_right_24" />
-            </LinearLayout>
-
-            <!-- 分割线 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@android:color/darker_gray"
-                android:layout_marginBottom="12dp" />
-
-            <!-- 用户信息区（可滚动，下移） -->
+            <!-- 用户信息区 -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -244,61 +91,54 @@
                 android:textColor="@android:color/white"
                 android:backgroundTint="@color/primary" />
 
-            <!-- WebDAV状态与配置按钮（迁移到更多设置，主页面默认隐藏但保留 ID） -->
-            <Button
-                android:id="@+id/btn_webdav_config"
+            <!-- 更多设置入口 -->
+            <LinearLayout
+                android:id="@+id/item_more_settings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="WebDAV 配置"
-                android:layout_marginBottom="8dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/primary"
-                android:visibility="gone" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp"
+                android:background="@drawable/edit_text_background"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp">
 
-            <TextView
-                android:id="@+id/tv_webdav_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="WebDAV 状态: 未连接"
-                android:textSize="14sp"
-                android:padding="8dp"
-                android:background="@drawable/status_background_disconnected"
-                android:textColor="@android:color/black"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="更多设置"
+                    android:textSize="16sp" />
 
-            <Button
-                android:id="@+id/btn_sync_now"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="立即同步"
-                android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/teal_700"
-                android:visibility="gone" />
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right_24" />
+            </LinearLayout>
 
-            <!-- 缓存管理（迁移到更多设置，默认隐藏但保留 ID） -->
-            <TextView
-                android:id="@+id/tv_cache_status"
+            <!-- 关于 FaceCheck 入口 -->
+            <LinearLayout
+                android:id="@+id/item_about"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="缓存: 计算中..."
-                android:textSize="14sp"
-                android:padding="8dp"
-                android:background="@drawable/status_background_disconnected"
-                android:textColor="@android:color/black"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp"
+                android:background="@drawable/edit_text_background"
+                android:layout_marginBottom="12dp">
 
-            <Button
-                android:id="@+id/btn_cache_settings"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="缓存设置"
-                android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/primary"
-                android:visibility="gone" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="关于 FaceCheck"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right_24" />
+            </LinearLayout>
 
             <!-- 退出登录按钮 -->
             <Button

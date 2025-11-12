@@ -3,11 +3,24 @@ package com.example.facecheck;
 import android.app.Application;
 import android.os.StrictMode;
 import android.util.Log;
+import android.content.SharedPreferences;
+import androidx.appcompat.app.AppCompatDelegate;
 
 public class FaceCheckApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        try {
+            SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
+            String mode = prefs.getString("theme_mode", "system");
+            if ("dark".equals(mode)) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+            } else if ("light".equals(mode)) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            } else {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+            }
+        } catch (Throwable ignore) {}
         if (BuildConfig.DEBUG) {
             try {
                 StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()

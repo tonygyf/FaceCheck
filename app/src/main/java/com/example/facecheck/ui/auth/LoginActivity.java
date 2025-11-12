@@ -170,9 +170,8 @@ public class LoginActivity extends AppCompatActivity {
         super.onStart();
         // 自动登录逻辑
         SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-        boolean rememberPassword = prefs.getBoolean("remember_password", false);
         long teacherId = prefs.getLong("teacher_id", -1);
-        if (rememberPassword && teacherId != -1) {
+        if (teacherId != -1) {
             // 跳转到主页面
             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- WebDAV 开关 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="启用 WebDAV"
+            android:textSize="16sp" />
+
+        <Switch
+            android:id="@+id/switch_webdav"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- WebDAV 配置 -->
+    <Button
+        android:id="@+id/btn_webdav_config"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="WebDAV 配置"
+        android:textColor="@android:color/white"
+        android:backgroundTint="@color/primary"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 立即同步 -->
+    <Button
+        android:id="@+id/btn_sync_now"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="立即同步"
+        android:textColor="@android:color/white"
+        android:backgroundTint="@color/teal_700"
+        android:layout_marginBottom="12dp" />
+
+    <!-- 缓存状态 -->
+    <TextView
+        android:id="@+id/tv_cache_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="缓存: 计算中..."
+        android:textSize="14sp"
+        android:padding="8dp"
+        android:background="@drawable/status_background_disconnected"
+        android:textColor="@color/text_primary"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 缓存清理按钮组 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="12dp">
+
+        <Button
+            android:id="@+id/btn_clear_all_cache"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="清理所有"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/primary" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btn_clear_image_cache"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="图片缓存"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/primary" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btn_clear_temp_cache"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="临时缓存"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/primary" />
+    </LinearLayout>
+
+    <!-- 缓存进度条 -->
+    <ProgressBar
+        android:id="@+id/progress_bar_cache"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:layout_marginBottom="12dp" />
+
+    <!-- 关于 -->
+    <LinearLayout
+        android:id="@+id/item_about"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@drawable/edit_text_background"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="关于 FaceCheck"
+            android:textSize="16sp"
+            android:textColor="@color/text_primary" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_chevron_right_24" />
+    </LinearLayout>
+
+</LinearLayout>

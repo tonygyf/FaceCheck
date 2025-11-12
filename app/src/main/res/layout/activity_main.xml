@@ -113,6 +113,16 @@
                 android:contentDescription="我的"
                 android:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_myplaces" />
+
+            <ImageButton
+                android:id="@+id/btn_nav_settings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="设置"
+                android:tint="@color/grey_600"
+                android:src="@android:drawable/ic_menu_manage" />
         </LinearLayout>
 
     </com.google.android.material.bottomappbar.BottomAppBar>

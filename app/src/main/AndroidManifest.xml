@@ -99,17 +99,19 @@
             android:theme="@style/Theme.FaceCheck"
             android:label="考勤结果" />
             
-        <activity
-            android:name=".ui.settings.CacheSettingsActivity"
-            android:exported="false"
-            android:theme="@style/Theme.FaceCheck"
-            android:label="缓存管理" />
+        <!-- CacheSettingsActivity 已迁移功能到 SettingsActivity，移除声明 -->
         
         <activity
             android:name=".ui.settings.MoreSettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"
             android:label="更多设置" />
+
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="设置" />
         
         <!-- 文件提供者配置 -->
         <provider

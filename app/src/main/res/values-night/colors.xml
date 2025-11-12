@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 夜间模式覆盖：采用 Material Dark 近似值 -->
+    <color name="colorBackground">#121212</color>
+    <color name="colorOnBackground">#FFFFFF</color>
+    <color name="colorSurface">#1E1E1E</color>
+    <color name="colorOnSurface">#FFFFFF</color>
+
+    <!-- 文本颜色在夜间变为更亮 -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#BDBDBD</color>
+    <color name="text_hint">#9E9E9E</color>
+
+    <!-- Toolbar/StatusBar 夜间色 -->
+    <color name="toolbar_bg">#262626</color>
+    <color name="status_bar_bg">#262626</color>
+</resources>

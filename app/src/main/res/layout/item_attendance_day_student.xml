@@ -17,7 +17,7 @@
             android:layout_weight="1"
             android:text="学生姓名"
             android:textSize="15sp"
-            android:textColor="@android:color/black"/>
+            android:textColor="@color/text_primary"/>
 
         <TextView
             android:id="@+id/tvSid"
@@ -25,6 +25,7 @@
             android:layout_height="wrap_content"
             android:text="学号"
             android:textSize="13sp"
+            android:textColor="@color/text_secondary"
             android:alpha="0.7"/>
     </LinearLayout>
 
@@ -50,6 +51,7 @@
             android:layout_marginStart="16dp"
             android:text="时间: -"
             android:textSize="13sp"
+            android:textColor="@color/text_secondary"
             android:alpha="0.8"/>
     </LinearLayout>
 
