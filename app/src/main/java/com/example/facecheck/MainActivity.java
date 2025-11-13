@@ -144,7 +144,12 @@ public class MainActivity extends AppCompatActivity {
         FloatingActionButton fabCameraPunch = findViewById(R.id.fabCameraPunch);
         if (fabCameraPunch != null) {
             fabCameraPunch.setOnClickListener(v -> {
-                Toast.makeText(MainActivity.this, "拍照打卡（后续接入）", Toast.LENGTH_SHORT).show();
+                try {
+                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.face.FaceMiniDetectActivity.class);
+                    startActivity(intent);
+                } catch (Throwable t) {
+                    Toast.makeText(MainActivity.this, "打开小人脸识别失败", Toast.LENGTH_SHORT).show();
+                }
             });
         }
 

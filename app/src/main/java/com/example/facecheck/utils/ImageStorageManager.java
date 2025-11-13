@@ -256,9 +256,10 @@ public class ImageStorageManager {
         
         // 清理原始照片（保留最近7天的）
         totalSize += clearOldOriginalPhotos(7);
-        
-        // 清理分割后人脸（保留最近3天的）
-        totalSize += clearOldSegmentedFaces(3);
+
+        // 清理分割后人脸与处理后人脸（全部清理，更符合“缓存清理”预期）
+        totalSize += clearSegmentedFacesAll();
+        totalSize += clearProcessedFacesAll();
         
         return totalSize;
     }
@@ -305,6 +306,40 @@ public class ImageStorageManager {
         }
         
         return totalSize;
+    }
+
+    /**
+     * 清理所有分割后人脸目录
+     */
+    public long clearSegmentedFacesAll() {
+        long total = 0;
+        File segmentedRootDir = PhotoStorageManager.getSegmentedFacesRootDir(context);
+        if (segmentedRootDir.exists()) {
+            File[] sessionDirs = segmentedRootDir.listFiles();
+            if (sessionDirs != null) {
+                for (File sessionDir : sessionDirs) {
+                    total += deleteDirectoryAndGetSize(sessionDir);
+                }
+            }
+        }
+        return total;
+    }
+
+    /**
+     * 清理所有处理后人脸目录
+     */
+    public long clearProcessedFacesAll() {
+        long total = 0;
+        File processedRootDir = PhotoStorageManager.getProcessedFacesRootDir(context);
+        if (processedRootDir.exists()) {
+            File[] sessionDirs = processedRootDir.listFiles();
+            if (sessionDirs != null) {
+                for (File sessionDir : sessionDirs) {
+                    total += deleteDirectoryAndGetSize(sessionDir);
+                }
+            }
+        }
+        return total;
     }
     
     /**
