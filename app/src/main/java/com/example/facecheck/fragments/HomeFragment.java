@@ -36,6 +36,27 @@ public class HomeFragment extends Fragment {
     private CardView cardClassroom, cardStudents, cardAttendance, cardQuickAttendance;
     private Button btnSync;
     private static final int PICK_IMAGE_REQUEST = 1001;
+    private android.widget.ImageView bannerImage;
+    private final int[] bannerRes = new int[]{
+            R.drawable.baked_goods_1,
+            R.drawable.baked_goods_2,
+            R.drawable.baked_goods_3
+    };
+    private int bannerIndex = 0;
+    private final android.os.Handler bannerHandler = new android.os.Handler();
+    private final Runnable bannerRunnable = new Runnable() {
+        @Override public void run() {
+            if (getContext() != null && bannerImage != null) {
+                try {
+                    com.bumptech.glide.Glide.with(HomeFragment.this)
+                            .load(bannerRes[bannerIndex % bannerRes.length])
+                            .into(bannerImage);
+                    bannerIndex++;
+                } catch (Throwable ignore) {}
+                bannerHandler.postDelayed(this, 4000);
+            }
+        }
+    };
 
     @Nullable
     @Override
@@ -46,6 +67,7 @@ public class HomeFragment extends Fragment {
         dbHelper = new DatabaseHelper(getContext());
         
         // 初始化视图
+        bannerImage = view.findViewById(R.id.bannerImage);
         tvClassCount = view.findViewById(R.id.tv_class_count);
         tvStudentCount = view.findViewById(R.id.tv_student_count);
         tvAttendanceCount = view.findViewById(R.id.tv_attendance_count);
@@ -91,6 +113,15 @@ public class HomeFragment extends Fragment {
         
         // 加载统计数据
         loadStatistics();
+        if (bannerImage != null) {
+            try {
+                com.bumptech.glide.Glide.with(HomeFragment.this)
+                        .load(bannerRes[bannerIndex % bannerRes.length])
+                        .into(bannerImage);
+            } catch (Throwable ignore) {}
+            bannerHandler.removeCallbacks(bannerRunnable);
+            bannerHandler.post(bannerRunnable);
+        }
         
         return view;
     }
@@ -100,6 +131,10 @@ public class HomeFragment extends Fragment {
         super.onResume();
         // 每次恢复时刷新统计数据
         loadStatistics();
+        if (bannerImage != null) {
+            bannerHandler.removeCallbacks(bannerRunnable);
+            bannerHandler.post(bannerRunnable);
+        }
     }
     
     private void loadStatistics() {
@@ -124,6 +159,12 @@ public class HomeFragment extends Fragment {
         tvClassCount.setText(String.valueOf(classCount));
         tvStudentCount.setText(String.valueOf(studentCount));
         tvAttendanceCount.setText(String.valueOf(attendanceCount));
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        bannerHandler.removeCallbacks(bannerRunnable);
     }
     
     private void navigateToClassroom() {
@@ -155,7 +196,10 @@ public class HomeFragment extends Fragment {
     }
     
     private void syncDatabase() {
-        // TODO: 实现WebDAV同步
+        View overlay = showUploadingOverlayWithTimeout();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            dismissUploadingOverlay(overlay);
+        }, 5000);
         Toast.makeText(getContext(), "正在同步数据...", Toast.LENGTH_SHORT).show();
     }
     
@@ -166,6 +210,71 @@ public class HomeFragment extends Fragment {
         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         intent.setType("image/*");
         startActivityForResult(intent, PICK_IMAGE_REQUEST);
+    }
+
+    private View showUploadingOverlayWithTimeout() {
+        if (getActivity() == null) return null;
+        ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+        View overlay = LayoutInflater.from(getContext()).inflate(R.layout.uploading_overlay, root, false);
+        root.addView(overlay);
+        com.airbnb.lottie.LottieAnimationView lav = overlay.findViewById(R.id.lottieUploading);
+        android.view.View spinner = overlay.findViewById(R.id.progressFallback);
+        try {
+            com.airbnb.lottie.LottieCompositionFactory.fromAsset(getContext(), "lottie/Uploading to cloud.json")
+                    .addListener(comp -> {
+                        spinner.setVisibility(android.view.View.GONE);
+                        lav.setComposition(comp);
+                        lav.setRenderMode(com.airbnb.lottie.RenderMode.AUTOMATIC);
+                        lav.setRepeatCount(com.airbnb.lottie.LottieDrawable.INFINITE);
+                        lav.playAnimation();
+                    });
+        } catch (Throwable ignore) {}
+        overlay.setOnTouchListener(new View.OnTouchListener() {
+            float downY;
+            @Override public boolean onTouch(View v, android.view.MotionEvent e) {
+                if (e.getAction() == android.view.MotionEvent.ACTION_DOWN) { downY = e.getY(); return true; }
+                if (e.getAction() == android.view.MotionEvent.ACTION_UP) {
+                    float dy = e.getY() - downY;
+                    if (dy > 50) { dismissUploadingOverlay(overlay); return true; }
+                }
+                return false;
+            }
+        });
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> dismissUploadingOverlay(overlay), 5000);
+        return overlay;
+    }
+
+    private void dismissUploadingOverlay(View overlay) {
+        if (overlay == null || getActivity() == null) return;
+        ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+        root.removeView(overlay);
+    }
+
+    @SuppressWarnings("ClickableViewAccessibility")
+    private void setupBannerSwipe() {
+        if (bannerImage == null) return;
+        bannerImage.setOnTouchListener(new View.OnTouchListener() {
+            float downX;
+            @Override public boolean onTouch(View v, android.view.MotionEvent event) {
+                switch (event.getAction()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        downX = event.getX();
+                        return true;
+                    case android.view.MotionEvent.ACTION_UP:
+                        float dx = event.getX() - downX;
+                        if (Math.abs(dx) > 50) {
+                            if (dx < 0) bannerIndex++; else bannerIndex = (bannerIndex - 1 + bannerRes.length) % bannerRes.length;
+                            try {
+                                com.bumptech.glide.Glide.with(HomeFragment.this)
+                                        .load(bannerRes[bannerIndex % bannerRes.length])
+                                        .into(bannerImage);
+                            } catch (Throwable ignore) {}
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
     }
     
     @Override

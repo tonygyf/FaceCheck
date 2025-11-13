@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.facecheck.R;
 import com.example.facecheck.webdav.WebDavManager;
+import com.example.facecheck.utils.AsyncExecutor;
 
 public class MoreSettingsActivity extends AppCompatActivity {
 
@@ -75,14 +76,17 @@ public class MoreSettingsActivity extends AppCompatActivity {
             statusText.setText("正在测试连接...");
             statusText.setTextColor(getResources().getColor(android.R.color.black));
             statusText.setVisibility(View.VISIBLE);
-            new Thread(() -> {
+            AsyncExecutor exec = new AsyncExecutor();
+            exec.run(() -> {
                 WebDavManager tmp = new WebDavManager(this, url, user, pass);
-                boolean ok = tmp.testConnection();
-                runOnUiThread(() -> {
-                    statusText.setText(ok ? "连接成功！" : "连接失败，请检查配置");
-                    statusText.setTextColor(getResources().getColor(ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
-                });
-            }).start();
+                return tmp.testConnection();
+            }, ok -> {
+                statusText.setText(ok ? "连接成功！" : "连接失败，请检查配置");
+                statusText.setTextColor(getResources().getColor(ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
+            }, t -> {
+                statusText.setText("连接失败: " + t.getMessage());
+                statusText.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            });
         });
 
         cancelButton.setOnClickListener(v -> {

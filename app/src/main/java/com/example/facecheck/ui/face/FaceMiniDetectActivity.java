@@ -49,6 +49,8 @@ public class FaceMiniDetectActivity extends AppCompatActivity {
     private final List<String> facePaths = new ArrayList<>();
     private Uri currentPhotoUri;
     private ImageStorageManager imageStorageManager;
+    private static final int REQ_PERM_CAMERA = 2001;
+    private static final int REQ_PERM_READ_MEDIA = 2002;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,12 +75,17 @@ public class FaceMiniDetectActivity extends AppCompatActivity {
     }
 
     private void startCamera() {
+        if (!hasCameraPermission()) {
+            requestCameraPermission();
+            return;
+        }
         try {
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
             File image = File.createTempFile("mini_" + timeStamp + "_", ".jpg", getExternalFilesDir("Pictures"));
             currentPhotoUri = androidx.core.content.FileProvider.getUriForFile(this, "com.example.facecheck.fileprovider", image);
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivityForResult(intent, REQ_CAMERA);
         } catch (IOException e) {
             Toast.makeText(this, "无法启动相机", Toast.LENGTH_SHORT).show();
@@ -86,6 +93,10 @@ public class FaceMiniDetectActivity extends AppCompatActivity {
     }
 
     private void pickPhoto() {
+        if (!hasReadImagesPermission()) {
+            requestReadImagesPermission();
+            return;
+        }
         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         startActivityForResult(intent, REQ_PICK);
     }
@@ -98,6 +109,43 @@ public class FaceMiniDetectActivity extends AppCompatActivity {
         if (requestCode == REQ_CAMERA) uri = currentPhotoUri;
         else if (requestCode == REQ_PICK && data != null) uri = data.getData();
         if (uri != null) detectFaces(uri);
+    }
+
+    private boolean hasCameraPermission() {
+        return androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+    private void requestCameraPermission() {
+        androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.CAMERA}, REQ_PERM_CAMERA);
+    }
+    private boolean hasReadImagesPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            return androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_MEDIA_IMAGES) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        } else {
+            return true;
+        }
+    }
+    private void requestReadImagesPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.READ_MEDIA_IMAGES}, REQ_PERM_READ_MEDIA);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_PERM_CAMERA) {
+            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                startCamera();
+            } else {
+                Toast.makeText(this, "需要相机权限以拍照", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == REQ_PERM_READ_MEDIA) {
+            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pickPhoto();
+            } else {
+                Toast.makeText(this, "需要读取图片权限以选择照片", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void detectFaces(Uri uri) {

@@ -112,6 +112,12 @@
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"
             android:label="设置" />
+
+        <activity
+            android:name=".ui.face.FaceMiniDetectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="小人脸识别" />
         
         <!-- 文件提供者配置 -->
         <provider

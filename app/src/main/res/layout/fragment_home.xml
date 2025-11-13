@@ -13,7 +13,14 @@
         android:paddingBottom="16dp"
         android:paddingTop="0dp">
 
-
+        <!-- 公告/广告轮播图 -->
+        <ImageView
+            android:id="@+id/bannerImage"
+            android:layout_width="match_parent"
+            android:layout_height="240dp"
+            android:scaleType="centerCrop"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/edit_text_background" />
 
         <!-- 统计信息卡片 -->
         <LinearLayout

@@ -145,7 +145,7 @@ public class SettingsFragment extends Fragment {
         // 立即同步
         sheetView.findViewById(R.id.btn_sync_now).setOnClickListener(v -> {
             bottomSheet.dismiss();
-            runWebDavSync();
+            checkAndPromptWebDavSync(true);
         });
 
         // 缓存清理
@@ -177,6 +177,82 @@ public class SettingsFragment extends Fragment {
         });
 
         bottomSheet.show();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        scheduleWebDavPeriodicCheck();
+    }
+
+    private void scheduleWebDavPeriodicCheck() {
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+        boolean enabled = prefs.getBoolean("webdav_enabled", false);
+        if (!enabled) return;
+        String url = prefs.getString("webdav_url", "");
+        String user = prefs.getString("webdav_username", "");
+        String pass = prefs.getString("webdav_password", "");
+        if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> checkAndPromptWebDavSync(false), 5000);
+    }
+
+    private void checkAndPromptWebDavSync(boolean forcePrompt) {
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
+        String url = prefs.getString("webdav_url", "");
+        String user = prefs.getString("webdav_username", "");
+        String pass = prefs.getString("webdav_password", "");
+        com.example.facecheck.database.DatabaseHelper dbh = new com.example.facecheck.database.DatabaseHelper(requireContext());
+        String localDbPath = dbh.getDatabaseAbsolutePath();
+        long localTs = new java.io.File(localDbPath).lastModified();
+
+        new Thread(() -> {
+            com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+            java.util.Date remoteDbMod = mgr.getResourceModified(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/database7.db");
+            long remoteTs = remoteDbMod != null ? remoteDbMod.getTime() : 0;
+            long delta = Math.abs(remoteTs - localTs);
+            if (forcePrompt || delta > 60_000) {
+                String msg = String.format("本地DB: %s\n云端DB: %s\n选择同步方向", formatTime(localTs), formatTime(remoteTs));
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    final View overlay = showUploadingOverlayWithTimeout();
+                    new android.app.AlertDialog.Builder(requireContext())
+                            .setTitle("WebDAV 差异检测")
+                            .setMessage(msg)
+                            .setPositiveButton("上传到云端", (d, w) -> {
+                                new Thread(() -> {
+                                    boolean ok = mgr.ensureFacecheckStructure();
+                                    ok &= mgr.syncDatabase(localDbPath);
+                                    java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                                    ok &= mgr.uploadDirectory(avatarDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/cover");
+                                    java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                                    ok &= mgr.uploadDirectory(attDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/file");
+                                    if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                                    final boolean success = ok;
+                                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                        dismissUploadingOverlay(overlay);
+                                        android.widget.Toast.makeText(requireContext(), success ? "上传完成" : "上传失败", android.widget.Toast.LENGTH_SHORT).show();
+                                    });
+                                }).start();
+                            })
+                            .setNegativeButton("同步到本地", (d, w) -> {
+                                new Thread(() -> {
+                                    boolean ok = mgr.ensureFacecheckStructure();
+                                    ok &= mgr.fetchDatabase(localDbPath);
+                                    java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                                    ok &= mgr.downloadDirectory(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/cover", avatarDir.getAbsolutePath());
+                                    java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                                    ok &= mgr.downloadDirectory(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/file", attDir.getAbsolutePath());
+                                    if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                                    final boolean success = ok;
+                                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                        dismissUploadingOverlay(overlay);
+                                        android.widget.Toast.makeText(requireContext(), success ? "下载并同步到本地完成" : "下载失败", android.widget.Toast.LENGTH_SHORT).show();
+                                    });
+                                }).start();
+                            })
+                            .show();
+                });
+            }
+        }).start();
     }
 
     private String formatFileSize(long size) {
@@ -257,10 +333,15 @@ public class SettingsFragment extends Fragment {
                 tvStatus.setText("请完整填写服务器、用户名、密码");
                 return;
             }
-            com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
-            boolean ok = mgr.testConnection();
             tvStatus.setVisibility(View.VISIBLE);
-            tvStatus.setText(ok ? "测试成功" : "测试失败");
+            tvStatus.setText("正在测试连接...");
+            new Thread(() -> {
+                com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+                boolean ok = mgr.testConnection();
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    tvStatus.setText(ok ? "测试成功" : "测试失败");
+                });
+            }).start();
         });
 
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialog.dismiss());
@@ -298,53 +379,120 @@ public class SettingsFragment extends Fragment {
             return;
         }
 
-        Toast.makeText(requireContext(), "开始同步...", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            boolean ok = false;
-            String msg = "";
-            try {
-                com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
-                // 初始化目录
-                mgr.initializeDirectoryStructure();
+        com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+        boolean rootExists = mgr.exists(mgr.getRootPath());
+        com.example.facecheck.database.DatabaseHelper dbh = new com.example.facecheck.database.DatabaseHelper(requireContext());
+        String localDbPath = dbh.getDatabaseAbsolutePath();
+        long localTs = new java.io.File(localDbPath).lastModified();
 
-                // 同步数据库
-                com.example.facecheck.database.DatabaseHelper dbh = new com.example.facecheck.database.DatabaseHelper(requireContext());
-                String dbPath = dbh.getDatabaseAbsolutePath();
-                ok = mgr.syncDatabase(dbPath);
+        if (!rootExists) {
+            new android.app.AlertDialog.Builder(requireContext())
+                    .setTitle("初始化 WebDAV")
+                    .setMessage("未检测到 facecheck 目录，是否创建并上传本地数据？")
+                    .setPositiveButton("初始化并上传", (d, w) -> {
+                        new Thread(() -> {
+                            boolean ok = mgr.ensureFacecheckStructure();
+                            ok &= mgr.syncDatabase(localDbPath);
+                            // 上传头像到 data/cover；考勤到 data/file
+                            java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                            ok &= mgr.uploadDirectory(avatarDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/cover");
+                            java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                            ok &= mgr.uploadDirectory(attDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/file");
+                            if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                            final boolean success = ok;
+                            new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                                    Toast.makeText(requireContext(), success ? "初始化并上传完成" : "初始化失败", Toast.LENGTH_SHORT).show()
+                            );
+                        }).start();
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
 
-                // 同步头像
-                java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
-                java.io.File[] avatars = avatarDir.listFiles();
-                if (avatars != null) {
-                    for (java.io.File f : avatars) {
-                        mgr.syncAvatar(f.getAbsolutePath(), f.getName());
-                    }
+        java.util.Date remoteDbMod = mgr.getResourceModified(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/database7.db");
+        long remoteTs = remoteDbMod != null ? remoteDbMod.getTime() : 0;
+        String msg = String.format("本地DB: %s\n云端DB: %s\n选择同步方向", formatTime(localTs), formatTime(remoteTs));
+        final View overlay = showUploadingOverlayWithTimeout();
+        new android.app.AlertDialog.Builder(requireContext())
+                .setTitle("选择同步方向")
+                .setMessage(msg)
+                .setPositiveButton("上传到云端", (d, w) -> {
+                    new Thread(() -> {
+                        boolean ok = mgr.ensureFacecheckStructure();
+                        ok &= mgr.syncDatabase(localDbPath);
+                        java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                        ok &= mgr.uploadDirectory(avatarDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/cover");
+                        java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                        ok &= mgr.uploadDirectory(attDir.getAbsolutePath(), com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/file");
+                        if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                        final boolean success = ok;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                dismissUploadingOverlay(overlay);
+                                Toast.makeText(requireContext(), success ? "上传完成" : "上传失败", Toast.LENGTH_SHORT).show();
+                        });
+                    }).start();
+                })
+                .setNegativeButton("同步到本地", (d, w) -> {
+                    new Thread(() -> {
+                        boolean ok = mgr.ensureFacecheckStructure();
+                        ok &= mgr.fetchDatabase(localDbPath);
+                        java.io.File avatarDir = com.example.facecheck.utils.PhotoStorageManager.getAvatarPhotosDir(requireContext());
+                        ok &= mgr.downloadDirectory(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/cover", avatarDir.getAbsolutePath());
+                        java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
+                        ok &= mgr.downloadDirectory(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/data/file", attDir.getAbsolutePath());
+                        if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
+                        final boolean success = ok;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                dismissUploadingOverlay(overlay);
+                                Toast.makeText(requireContext(), success ? "下载并同步到本地完成" : "下载失败", Toast.LENGTH_SHORT).show();
+                        });
+                    }).start();
+                })
+                .show();
+    }
+
+    private String formatTime(long ts) {
+        if (ts <= 0) return "未知";
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
+        return sdf.format(new java.util.Date(ts));
+    }
+
+    private View showUploadingOverlayWithTimeout() {
+        ViewGroup root = (ViewGroup) requireActivity().getWindow().getDecorView();
+        View overlay = LayoutInflater.from(requireContext()).inflate(R.layout.uploading_overlay, root, false);
+        root.addView(overlay);
+        com.airbnb.lottie.LottieAnimationView lav = overlay.findViewById(R.id.lottieUploading);
+        android.view.View spinner = overlay.findViewById(R.id.progressFallback);
+        try {
+            com.airbnb.lottie.LottieCompositionFactory.fromAsset(getContext(), "lottie/Uploading to cloud.json")
+                    .addListener(comp -> {
+                        spinner.setVisibility(android.view.View.GONE);
+                        lav.setComposition(comp);
+                        lav.setRenderMode(com.airbnb.lottie.RenderMode.AUTOMATIC);
+                        lav.setRepeatCount(com.airbnb.lottie.LottieDrawable.INFINITE);
+                        lav.playAnimation();
+                    });
+        } catch (Throwable ignore) {}
+        // 手势下滑关闭
+        overlay.setOnTouchListener(new android.view.View.OnTouchListener() {
+            float downY;
+            @Override public boolean onTouch(android.view.View v, android.view.MotionEvent e) {
+                if (e.getAction() == android.view.MotionEvent.ACTION_DOWN) { downY = e.getY(); return true; }
+                if (e.getAction() == android.view.MotionEvent.ACTION_UP) {
+                    float dy = e.getY() - downY;
+                    if (dy > 50) { dismissUploadingOverlay(overlay); return true; }
                 }
-
-                // 同步考勤照片
-                java.io.File attDir = com.example.facecheck.utils.PhotoStorageManager.getAttendancePhotosDir(requireContext());
-                java.io.File[] photos = attDir.listFiles();
-                if (photos != null) {
-                    for (java.io.File f : photos) {
-                        mgr.syncAttendancePhoto(f.getAbsolutePath(), f.getName());
-                    }
-                }
-
-                // 更新最后同步时间
-                if (ok) {
-                    prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
-                }
-                msg = ok ? "同步完成" : "同步失败";
-            } catch (Throwable t) {
-                ok = false;
-                msg = "同步异常: " + t.getMessage();
+                return false;
             }
+        });
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> dismissUploadingOverlay(overlay), 5000);
+        return overlay;
+    }
 
-            final boolean success = ok;
-            final String text = msg;
-            new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
-                    Toast.makeText(requireContext(), text, Toast.LENGTH_SHORT).show()
-            );
-        }).start();
+    private void dismissUploadingOverlay(View overlay) {
+        if (overlay == null) return;
+        ViewGroup root = (ViewGroup) requireActivity().getWindow().getDecorView();
+        root.removeView(overlay);
     }
 }

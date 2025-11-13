@@ -185,53 +185,72 @@ public class ProfileFragment extends Fragment {
     }
     
     private void setupClickListeners() {
-        // 更换头像
-        changePhotoButton.setOnClickListener(v -> showImageSourceDialog());
+        if (changePhotoButton != null) {
+            changePhotoButton.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showImageSourceDialog();
+            });
+        }
         
         // 修改用户名
-        changeUsernameButton.setOnClickListener(v -> showChangeUsernameDialog());
+        if (changeUsernameButton != null) {
+            changeUsernameButton.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showChangeUsernameDialog();
+            });
+        }
         
         // 修改密码（Teacher模型没有密码字段，暂时禁用此功能）
-        changePasswordButton.setEnabled(false);
-        changePasswordButton.setText("密码管理不可用");
+        if (changePasswordButton != null) {
+            changePasswordButton.setEnabled(false);
+            changePasswordButton.setText("密码管理不可用");
+        }
         
         // 个人页不再处理 WebDAV/缓存入口，统一在设置页管理
         
         // 退出登录
-        logoutButton.setOnClickListener(v -> {
-            // 清除登录状态并返回登录页面
-            navigateToLogin();
-        });
+        if (logoutButton != null) {
+            logoutButton.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                navigateToLogin();
+            });
+        }
 
         // 主题切换（当布局存在主题按钮时）
-        if (themeSystemButton != null) themeSystemButton.setOnClickListener(v -> applyThemeMode("system"));
-        if (themeDarkButton != null) themeDarkButton.setOnClickListener(v -> applyThemeMode("dark"));
-        if (themeLightButton != null) themeLightButton.setOnClickListener(v -> applyThemeMode("light"));
+        if (themeSystemButton != null) themeSystemButton.setOnClickListener(v -> { if (!isAdded()) return; applyThemeMode("system"); });
+        if (themeDarkButton != null) themeDarkButton.setOnClickListener(v -> { if (!isAdded()) return; applyThemeMode("dark"); });
+        if (themeLightButton != null) themeLightButton.setOnClickListener(v -> { if (!isAdded()) return; applyThemeMode("light"); });
 
         // 更多设置入口
-        itemMoreSettings.setOnClickListener(v -> {
-            try {
-                Intent intent = new Intent(requireContext(), com.example.facecheck.ui.settings.MoreSettingsActivity.class);
-                startActivity(intent);
-            } catch (Throwable t) {
-                Toast.makeText(requireContext(), "更多设置暂不可用", Toast.LENGTH_SHORT).show();
-            }
-        });
+        if (itemMoreSettings != null) {
+            itemMoreSettings.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                try {
+                    Intent intent = new Intent(requireContext(), com.example.facecheck.ui.settings.MoreSettingsActivity.class);
+                    startActivity(intent);
+                } catch (Throwable t) {
+                    Toast.makeText(requireContext(), "更多设置暂不可用", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         // 关于入口
-        itemAbout.setOnClickListener(v -> {
-            String versionName = "";
-            try {
-                versionName = requireContext().getPackageManager()
-                        .getPackageInfo(requireContext().getPackageName(), 0).versionName;
-            } catch (Throwable ignore) {}
+        if (itemAbout != null) {
+            itemAbout.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                String versionName = "";
+                try {
+                    versionName = requireContext().getPackageManager()
+                            .getPackageInfo(requireContext().getPackageName(), 0).versionName;
+                } catch (Throwable ignore) {}
 
-            new AlertDialog.Builder(requireContext())
-                    .setTitle("关于 FaceCheck")
-                    .setMessage("版本：" + versionName + "\n\nFaceCheck 用于课堂人脸识别与考勤。")
-                    .setPositiveButton("确定", null)
-                    .show();
-        });
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("关于 FaceCheck")
+                        .setMessage("版本：" + versionName + "\n\nFaceCheck 用于课堂人脸识别与考勤。")
+                        .setPositiveButton("确定", null)
+                        .show();
+            });
+        }
     }
 
     private void initThemeFromPrefs() {
@@ -290,7 +309,9 @@ public class ProfileFragment extends Fragment {
                 startActivityForResult(pickPhotoIntent, REQUEST_PICK_IMAGE);
             }
         });
-        builder.show();
+        try {
+            builder.show();
+        } catch (Throwable ignore) {}
     }
     
     private void dispatchTakePictureIntent() {

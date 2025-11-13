@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.sync.SyncManager;
+import com.example.facecheck.utils.AsyncExecutor;
 import com.example.facecheck.webdav.WebDavManager;
 import com.example.facecheck.utils.CacheManager;
 
@@ -221,14 +222,17 @@ public class SettingsActivity extends AppCompatActivity {
             statusText.setText("正在测试连接...");
             statusText.setTextColor(ContextCompat.getColor(this, android.R.color.black));
             statusText.setVisibility(View.VISIBLE);
-            new Thread(() -> {
+            AsyncExecutor exec = new AsyncExecutor();
+            exec.run(() -> {
                 WebDavManager tmp = new WebDavManager(this, url, user, pass);
-                boolean ok = tmp.testConnection();
-                runOnUiThread(() -> {
-                    statusText.setText(ok ? "连接成功！" : "连接失败，请检查配置");
-                    statusText.setTextColor(ContextCompat.getColor(this, ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
-                });
-            }).start();
+                return tmp.testConnection();
+            }, ok -> {
+                statusText.setText(ok ? "连接成功！" : "连接失败，请检查配置");
+                statusText.setTextColor(ContextCompat.getColor(this, ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
+            }, t -> {
+                statusText.setText("连接失败: " + t.getMessage());
+                statusText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+            });
         });
 
         cancelButton.setOnClickListener(v -> dialog.dismiss());
@@ -262,20 +266,14 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
-            try {
-                boolean success = syncManager.performSync();
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    Toast.makeText(this, success ? "同步成功" : "同步失败，请检查网络连接和WebDAV配置", Toast.LENGTH_SHORT).show();
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    Toast.makeText(this, "同步出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-        }).start();
+        AsyncExecutor exec = new AsyncExecutor();
+        exec.run(() -> syncManager.performSync(), success -> {
+            progressBar.setVisibility(View.GONE);
+            Toast.makeText(this, success ? "同步成功" : "同步失败，请检查网络连接和WebDAV配置", Toast.LENGTH_SHORT).show();
+        }, t -> {
+            progressBar.setVisibility(View.GONE);
+            Toast.makeText(this, "同步出错: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+        });
     }
 
     // ===== 缓存管理 =====

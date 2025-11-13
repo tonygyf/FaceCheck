@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.thegrizzlylabs.sardineandroid.Sardine;
+import com.thegrizzlylabs.sardineandroid.DavResource;
 import com.thegrizzlylabs.sardineandroid.impl.OkHttpSardine;
 
 import java.io.File;
@@ -18,7 +19,7 @@ public class WebDavManager {
     private static final String TAG = "WebDavManager";
     
     // WebDAV目录结构
-    private static final String ROOT_DIR = "facecheck";
+    public static final String ROOT_DIR = "facecheck";
     // 简洁目录结构：数据库文件直接位于 facecheck 根；其余资源为扁平子目录
     private static final String DATA_DIR = "data"; // 可选数据文件夹
     private static final String AVATARS_DIR = "avatars";
@@ -57,6 +58,20 @@ public class WebDavManager {
             return true;
         } catch (IOException e) {
             Log.e(TAG, "Error initializing WebDAV directory structure", e);
+            return false;
+        }
+    }
+
+    // 创建标准结构：root/facecheck, root/facecheck/data/{cover,file}
+    public boolean ensureFacecheckStructure() {
+        try {
+            createDirectoryIfNotExists(rootPath);
+            createDirectoryIfNotExists(rootPath + "/" + DATA_DIR);
+            createDirectoryIfNotExists(rootPath + "/" + DATA_DIR + "/cover");
+            createDirectoryIfNotExists(rootPath + "/" + DATA_DIR + "/file");
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "ensureFacecheckStructure failed", e);
             return false;
         }
     }
@@ -127,6 +142,63 @@ public class WebDavManager {
         }
     }
 
+    // 获取资源修改时间
+    public java.util.Date getResourceModified(String remotePath) {
+        try {
+            String full = serverUrl + remotePath;
+            List<DavResource> res = sardine.list(full);
+            if (res != null && !res.isEmpty()) {
+                // 第一个资源通常为目标
+                return res.get(0).getModified();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "getResourceModified error: " + remotePath, e);
+        }
+        return null;
+    }
+
+    // 上传目录中所有文件到远端目录
+    public boolean uploadDirectory(String localDir, String remoteDir) {
+        try {
+            createDirectoryIfNotExists(serverUrl + remoteDir);
+            File dir = new File(localDir);
+            File[] files = dir.listFiles();
+            if (files == null) return true;
+            boolean ok = true;
+            for (File f : files) {
+                if (f.isFile()) {
+                    String remoteRel = remoteDir + "/" + f.getName();
+                    ok &= uploadFile(f.getAbsolutePath(), remoteRel);
+                }
+            }
+            return ok;
+        } catch (IOException e) {
+            Log.e(TAG, "uploadDirectory failed: " + remoteDir, e);
+            return false;
+        }
+    }
+
+    // 下载远端目录所有文件到本地目录
+    public boolean downloadDirectory(String remoteDir, String localDir) {
+        try {
+            List<DavResource> resources = sardine.list(serverUrl + remoteDir);
+            File ldir = new File(localDir);
+            if (!ldir.exists()) ldir.mkdirs();
+            boolean ok = true;
+            for (DavResource r : resources) {
+                if (r.isDirectory()) continue;
+                String name = new File(r.getName()).getName();
+                ok &= downloadFile(remoteDir + "/" + name, new File(ldir, name).getAbsolutePath());
+            }
+            return ok;
+        } catch (IOException e) {
+            Log.e(TAG, "downloadDirectory failed: " + remoteDir, e);
+            return false;
+        }
+    }
+
+    public String getRootPath() { return rootPath; }
+
     // 列出目录内容
     public List<String> listDirectory(String path) {
         try {
@@ -163,10 +235,16 @@ public class WebDavManager {
     // 测试连接
     public boolean testConnection() {
         try {
-            return sardine.exists(rootPath);
-        } catch (IOException e) {
-            Log.e(TAG, "Error testing connection", e);
-            return false;
+            // 优先尝试列举服务器根，部分服务对 exists(rootPath) 返回 404
+            sardine.list(serverUrl);
+            return true;
+        } catch (IOException e1) {
+            try {
+                return sardine.exists(serverUrl) || sardine.exists(rootPath);
+            } catch (IOException e2) {
+                Log.e(TAG, "Error testing connection", e2);
+                return false;
+            }
         }
     }
 
