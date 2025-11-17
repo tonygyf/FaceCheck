@@ -38,9 +38,9 @@ public class HomeFragment extends Fragment {
     private static final int PICK_IMAGE_REQUEST = 1001;
     private android.widget.ImageView bannerImage;
     private final int[] bannerRes = new int[]{
-            R.drawable.baked_goods_1,
-            R.drawable.baked_goods_2,
-            R.drawable.baked_goods_3
+            R.drawable.logo_bright,
+            R.drawable.facecheck,
+            R.drawable.fclogo
     };
     private int bannerIndex = 0;
     private final android.os.Handler bannerHandler = new android.os.Handler();
@@ -115,12 +115,14 @@ public class HomeFragment extends Fragment {
         loadStatistics();
         if (bannerImage != null) {
             try {
+                bannerImage.setImageResource(bannerRes[bannerIndex % bannerRes.length]);
                 com.bumptech.glide.Glide.with(HomeFragment.this)
                         .load(bannerRes[bannerIndex % bannerRes.length])
                         .into(bannerImage);
             } catch (Throwable ignore) {}
             bannerHandler.removeCallbacks(bannerRunnable);
             bannerHandler.post(bannerRunnable);
+            setupBannerSwipe();
         }
         
         return view;

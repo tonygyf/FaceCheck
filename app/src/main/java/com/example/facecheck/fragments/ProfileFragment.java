@@ -34,6 +34,7 @@ import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Teacher;
+import com.example.facecheck.data.model.Student;
 import com.example.facecheck.ui.auth.LoginActivity;
 import com.example.facecheck.utils.PhotoStorageManager;
 import androidx.core.content.FileProvider;
@@ -85,7 +86,9 @@ public class ProfileFragment extends Fragment {
         // 初始化视图
         initViews(view);
         
-        dbHelper = new DatabaseHelper(requireContext());
+        if (getContext() != null) {
+            dbHelper = new DatabaseHelper(getContext());
+        }
         
         // 加载当前用户信息
         loadUserData();
@@ -122,66 +125,82 @@ public class ProfileFragment extends Fragment {
     }
     
     private void loadUserData() {
-        // 从SharedPreferences获取当前登录的教师ID
         SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        String role = prefs.getString("user_role", "teacher");
         long teacherId = prefs.getLong("teacher_id", -1);
-        
-        if (teacherId == -1) {
-            Toast.makeText(requireContext(), "教师信息无效", Toast.LENGTH_SHORT).show();
-            navigateToLogin();
-            return;
-        }
-        
-        // 从数据库查询教师信息
-        Cursor cursor = dbHelper.getReadableDatabase().query(
-            "Teacher",
-            new String[]{"id", "name", "username", "password", "avatarUri", "createdAt", "updatedAt"},
-            "id = ?",
-            new String[]{String.valueOf(teacherId)},
-            null, null, null);
-            
-        if (cursor != null && cursor.moveToFirst()) {
-            long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-            String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-            String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
-            String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
-            String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-            long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
-            long updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"));
-            cursor.close();
-            
-            currentTeacher = new Teacher();
-            currentTeacher.setId(id);
-            currentTeacher.setName(name);
-            currentTeacher.setUsername(username);
-            currentTeacher.setPassword(password);
-            currentTeacher.setAvatarUri(avatarUri);
-            currentTeacher.setCreatedAt(createdAt);
-            currentTeacher.setUpdatedAt(updatedAt);
-            
-            // 显示教师信息
-            if (isAdded()) {
-                if (usernameTextView != null) usernameTextView.setText(currentTeacher.getName());
-                if (emailTextView != null) emailTextView.setText(currentTeacher.getUsername());
-            }
-            
-            // 加载头像
-            if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
-                File avatarFile = new File(currentTeacher.getAvatarUri());
-                if (avatarFile.exists()) {
-                    if (isAdded() && profileImageView != null) {
-                        Glide.with(this)
-                            .load(avatarFile)
-                            .into(profileImageView);
+        long studentId = prefs.getLong("student_id", -1);
+
+        if ("student".equals(role) && studentId != -1) {
+            Cursor c = dbHelper.getStudentById(studentId);
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(c.getColumnIndexOrThrow("name"));
+                String sid = c.getString(c.getColumnIndexOrThrow("sid"));
+                String avatarUri = c.getString(c.getColumnIndexOrThrow("avatarUri"));
+                c.close();
+                if (isAdded()) {
+                    if (usernameTextView != null) usernameTextView.setText(name);
+                    if (emailTextView != null) emailTextView.setText(sid);
+                }
+                if (avatarUri != null && !avatarUri.isEmpty() && profileImageView != null) {
+                    File avatarFile = new File(avatarUri.startsWith("file://") ? avatarUri.replace("file://", "") : avatarUri);
+                    if (avatarFile.exists()) {
+                        Glide.with(this).load(avatarFile).into(profileImageView);
                     }
                 }
+                // 学生角色：禁用教师专属操作
+                if (changePhotoButton != null) { changePhotoButton.setEnabled(false); }
+                if (changeUsernameButton != null) { changeUsernameButton.setEnabled(false); }
+            } else if (c != null) {
+                c.close();
+                Toast.makeText(requireContext(), "学生信息加载失败", Toast.LENGTH_SHORT).show();
             }
-            
-        } else {
-            // 如果找不到教师，返回登录页面
-            Toast.makeText(requireContext(), "教师信息加载失败，请重新登录", Toast.LENGTH_SHORT).show();
-            navigateToLogin();
+            return;
         }
+
+        if ("teacher".equals(role) && teacherId != -1) {
+            Cursor cursor = dbHelper.getReadableDatabase().query(
+                    "Teacher",
+                    new String[]{"id", "name", "username", "password", "avatarUri", "createdAt", "updatedAt"},
+                    "id = ?",
+                    new String[]{String.valueOf(teacherId)},
+                    null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
+                String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
+                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
+                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                long updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"));
+                cursor.close();
+
+                currentTeacher = new Teacher();
+                currentTeacher.setId(id);
+                currentTeacher.setName(name);
+                currentTeacher.setUsername(username);
+                currentTeacher.setPassword(password);
+                currentTeacher.setAvatarUri(avatarUri);
+                currentTeacher.setCreatedAt(createdAt);
+                currentTeacher.setUpdatedAt(updatedAt);
+
+                if (isAdded()) {
+                    if (usernameTextView != null) usernameTextView.setText(currentTeacher.getName());
+                    if (emailTextView != null) emailTextView.setText(currentTeacher.getUsername());
+                }
+                if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
+                    File avatarFile = new File(currentTeacher.getAvatarUri());
+                    if (avatarFile.exists() && profileImageView != null) {
+                        Glide.with(this).load(avatarFile).into(profileImageView);
+                    }
+                }
+            } else {
+                Toast.makeText(requireContext(), "教师信息加载失败", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+
+        Toast.makeText(requireContext(), "登录信息无效，请重新登录", Toast.LENGTH_SHORT).show();
+        navigateToLogin();
     }
     
     private void setupClickListeners() {
@@ -398,14 +417,14 @@ public class ProfileFragment extends Fragment {
     
     
     private void navigateToLogin() {
-        // 清除SharedPreferences中的登录状态
-        SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        Context c = getContext(); if (c == null) return;
+        SharedPreferences prefs = c.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
         editor.remove("teacher_id");
+        editor.remove("student_id");
+        editor.remove("user_role");
         editor.apply();
-        
-        // 跳转到登录页面
-        Intent intent = new Intent(requireContext(), LoginActivity.class);
+        Intent intent = new Intent(c, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         if (getActivity() != null) getActivity().finish();

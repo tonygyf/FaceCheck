@@ -24,7 +24,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 6; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 7; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -130,6 +130,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "classId INTEGER NOT NULL, " +
                 "name TEXT NOT NULL, " +
                 "sid TEXT NOT NULL, " +
+                "password TEXT NOT NULL DEFAULT '123456', " +
                 "gender TEXT CHECK(gender IN ('M', 'F', 'O')), " +
                 "birthDate TEXT, " +
                 "email TEXT, " +
@@ -265,6 +266,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_class ON Student(classId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_sid ON Student(sid)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_status ON Student(status)");
+        // 班级内学号唯一
+        try {
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_class_sid ON Student(classId, sid)");
+        } catch (Throwable t) {
+            Log.w(TAG, "创建uniq_student_class_sid失败: " + t.getMessage());
+        }
         
         // 人脸特征索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_face_embedding_student ON FaceEmbedding(studentId)");
@@ -437,10 +444,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (dot > 0) baseName = baseName.substring(0, dot);
 
                 // 创建学生（先不写入avatarUri，待复制完成后更新）
+                String desiredSid = String.valueOf(sidBase + index + 1);
+                String uniqueSid = ensureUniqueSid(db, classId, desiredSid);
                 ContentValues values = new ContentValues();
                 values.put("classId", classId);
                 values.put("name", baseName);
-                values.put("sid", String.valueOf(sidBase + index + 1));
+                values.put("sid", uniqueSid);
                 values.put("gender", "O");
                 values.put("status", "ACTIVE");
                 // 使用毫秒时间戳，避免读取 createdAt 发生类型不匹配
@@ -626,10 +635,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     
     public long insertStudent(long classId, String name, String sid, String gender, String avatarUri) {
         SQLiteDatabase db = this.getWritableDatabase();
+        String uniqueSid = ensureUniqueSid(db, classId, sid);
         ContentValues values = new ContentValues();
         values.put("classId", classId);
         values.put("name", name);
-        values.put("sid", sid);
+        values.put("sid", uniqueSid);
         values.put("gender", gender);
         values.put("avatarUri", avatarUri);
         values.put("createdAt", System.currentTimeMillis());
@@ -654,10 +664,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      */
     public boolean updateStudent(long studentId, long classId, String name, String sid, String gender, String avatarUri) {
         SQLiteDatabase db = this.getWritableDatabase();
+        String uniqueSid = ensureUniqueSid(db, classId, sid);
         ContentValues values = new ContentValues();
         values.put("classId", classId);
         values.put("name", name);
-        values.put("sid", sid);
+        values.put("sid", uniqueSid);
         values.put("gender", gender);
         values.put("avatarUri", avatarUri);
         values.put("updatedAt", System.currentTimeMillis());
@@ -714,6 +725,78 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
         
         return students;
+    }
+
+    // ===== 唯一SID辅助与修复 =====
+    private String ensureUniqueSid(SQLiteDatabase db, long classId, String sid) {
+        if (sid == null) sid = "";
+        String base = sid.trim();
+        if (base.isEmpty()) base = "1";
+        if (!sidExists(db, classId, base)) return base;
+        if (base.matches("\\d+")) {
+            try {
+                long v = Long.parseLong(base);
+                while (sidExists(db, classId, String.valueOf(v))) v++;
+                return String.valueOf(v);
+            } catch (Throwable ignore) {}
+        }
+        int n = 1;
+        String candidate = base;
+        while (sidExists(db, classId, candidate)) {
+            candidate = base + "-" + n;
+            n++;
+        }
+        return candidate;
+    }
+
+    private boolean sidExists(SQLiteDatabase db, long classId, String sid) {
+        Cursor c = null;
+        try {
+            c = db.query("Student", new String[]{"id"}, "classId = ? AND sid = ?",
+                    new String[]{String.valueOf(classId), sid}, null, null, null, "1");
+            return c != null && c.moveToFirst();
+        } finally { if (c != null) c.close(); }
+    }
+
+    public void fixDuplicateSids() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        try {
+            Cursor dup = db.rawQuery("SELECT classId, sid, COUNT(*) AS cnt FROM Student GROUP BY classId, sid HAVING cnt > 1", null);
+            if (dup != null && dup.moveToFirst()) {
+                do {
+                    long classId = dup.getLong(dup.getColumnIndexOrThrow("classId"));
+                    String sid = dup.getString(dup.getColumnIndexOrThrow("sid"));
+                    Cursor rows = db.query("Student", new String[]{"id"}, "classId = ? AND sid = ?",
+                            new String[]{String.valueOf(classId), sid}, null, null, "id ASC");
+                    if (rows != null && rows.moveToFirst()) {
+                        rows.moveToNext();
+                        while (!rows.isAfterLast()) {
+                            long id = rows.getLong(rows.getColumnIndexOrThrow("id"));
+                            String newSid = ensureUniqueSid(db, classId, sid);
+                            ContentValues v = new ContentValues();
+                            v.put("sid", newSid);
+                            v.put("updatedAt", System.currentTimeMillis());
+                            db.update("Student", v, "id = ?", new String[]{String.valueOf(id)});
+                            rows.moveToNext();
+                        }
+                        rows.close();
+                    } else if (rows != null) rows.close();
+                } while (dup.moveToNext());
+                dup.close();
+            } else if (dup != null) dup.close();
+        } catch (Throwable t) { Log.e(TAG, "fixDuplicateSids error", t); }
+    }
+
+    public void ensureStudentSidUniqueIndex() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        try {
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_class_sid ON Student(classId, sid)");
+        } catch (Throwable t) {
+            Log.w(TAG, "create unique index failed: " + t.getMessage());
+            fixDuplicateSids();
+            try { db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_class_sid ON Student(classId, sid)"); }
+            catch (Throwable t2) { Log.e(TAG, "retry unique index failed", t2); }
+        }
     }
 
     public List<Student> getStudentsByTeacher(long teacherId) {
@@ -896,6 +979,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "WHERE s.teacherId = ? AND s.startedAt >= ? AND s.startedAt < ? " +
                 "ORDER BY s.classId, ar.studentId, ar.decidedAt ASC";
         return db.rawQuery(sql, new String[]{String.valueOf(teacherId), String.valueOf(startTs), String.valueOf(endTs)});
+    }
+
+    public Cursor getAttendanceResultsByStudentAndDateRange(long studentId, long startTs, long endTs) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT ar.id, ar.sessionId, ar.studentId, ar.status, ar.score, ar.decidedAt, " +
+                "s.classId, c.name AS className " +
+                "FROM AttendanceResult ar " +
+                "INNER JOIN AttendanceSession s ON ar.sessionId = s.id " +
+                "INNER JOIN Classroom c ON s.classId = c.id " +
+                "WHERE ar.studentId = ? AND s.startedAt >= ? AND s.startedAt < ? " +
+                "ORDER BY s.classId, ar.decidedAt ASC";
+        return db.rawQuery(sql, new String[]{String.valueOf(studentId), String.valueOf(startTs), String.valueOf(endTs)});
     }
 
     // ============= 照片资源相关操作 =============

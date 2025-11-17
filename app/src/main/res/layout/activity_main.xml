@@ -83,6 +83,17 @@
                 android:contentDescription="课堂"
                 android:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_slideshow" />
+
+            <ImageButton
+                android:id="@+id/btn_nav_courses"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="选课"
+                android:tint="@color/grey_600"
+                android:src="@drawable/ic_class"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- 右侧动作：考勤、我的；与凹槽、边缘保持间距 -->
@@ -123,6 +134,8 @@
                 android:contentDescription="设置"
                 android:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_manage" />
+
+
         </LinearLayout>
 
     </com.google.android.material.bottomappbar.BottomAppBar>

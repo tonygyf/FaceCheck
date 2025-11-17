@@ -31,6 +31,7 @@ public class LoginActivity extends AppCompatActivity {
     private CheckBox rememberPasswordCheckBox;
     private LottieAnimationView lottieLoginView;
     private View lottieOverlayLogin;
+    private boolean navigated = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,6 +71,18 @@ public class LoginActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+
+        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+        String role = prefs.getString("user_role", "");
+        long teacherId = prefs.getLong("teacher_id", -1);
+        long studentId = prefs.getLong("student_id", -1);
+        if (("teacher".equals(role) && teacherId != -1) || ("student".equals(role) && studentId != -1)) {
+            navigated = true;
+            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            finish();
+        }
     }
     
     private void handleUiState(LoginUiState state) {
@@ -84,9 +97,18 @@ public class LoginActivity extends AppCompatActivity {
             progressBar.setVisibility(View.GONE);
             Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
             
-            // 保存教师ID到SharedPreferences
             SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-            prefs.edit().putLong("teacher_id", success.teacherId).apply();
+            SharedPreferences.Editor ed = prefs.edit();
+            ed.putString("user_role", success.role);
+            if ("teacher".equals(success.role)) {
+                ed.putLong("teacher_id", success.userId).remove("student_id");
+            } else {
+                ed.putLong("student_id", success.userId).remove("teacher_id");
+                // 学生默认进入首页，避免加载教师专用页面
+                getSharedPreferences("ui_prefs", MODE_PRIVATE).edit()
+                        .putInt("nav_selected_id", R.id.nav_home).apply();
+            }
+            ed.apply();
             
             // 记住密码逻辑
             if (rememberPasswordCheckBox.isChecked()) {
@@ -112,20 +134,25 @@ public class LoginActivity extends AppCompatActivity {
                     @Override
                     public void onAnimationEnd(Animator animation) {
                         lottieOverlayLogin.setVisibility(View.GONE);
-                        // 跳转到主页面
-                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                        finish();
+                if (!navigated) {
+                    navigated = true;
+                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    finish();
+                }
                     }
                 });
                 lottieLoginView.playAnimation();
             } else {
                 // 回退：无动画视图则直接跳转
-                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                finish();
+                if (!navigated) {
+                    navigated = true;
+                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    finish();
+                }
             }
         } else if (state instanceof LoginUiState.Error) {
             LoginUiState.Error error = (LoginUiState.Error) state;
@@ -165,18 +192,5 @@ public class LoginActivity extends AppCompatActivity {
         loginViewModel.login(username, password);
     }
     
-    @Override
-    protected void onStart() {
-        super.onStart();
-        // 自动登录逻辑
-        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-        long teacherId = prefs.getLong("teacher_id", -1);
-        if (teacherId != -1) {
-            // 跳转到主页面
-            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
-        }
-    }
+    // 移除 onStart 自动跳转，避免多次回调导致循环
 }

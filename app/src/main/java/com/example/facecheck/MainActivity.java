@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private BottomNavigationView bottomNavigationView;
     private BottomAppBar bottomAppBar;
     private long teacherId = -1;
-    private ImageButton btnNavHome, btnNavClassroom, btnNavAttendance, btnNavProfile, btnNavSettings;
+    private ImageButton btnNavHome, btnNavClassroom, btnNavAttendance, btnNavProfile, btnNavSettings, btnNavCourses;
 
     public long getTeacherId() {
         return teacherId;
@@ -83,16 +83,23 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         // 初始标题在后续按所选页面设置；不在此硬编码，避免主题切换后标题回退
 
-        // 获取教师ID
-        teacherId = getSharedPreferences("user_prefs", MODE_PRIVATE).getLong("teacher_id", -1);
-        if (teacherId == -1) {
+        SharedPreferences userPrefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+        String role = userPrefs.getString("user_role", "teacher");
+        long studentId = userPrefs.getLong("student_id", -1);
+        teacherId = userPrefs.getLong("teacher_id", -1);
+        boolean loggedIn = ("teacher".equals(role) && teacherId != -1) || ("student".equals(role) && studentId != -1);
+        if (!loggedIn) {
             Intent intent = new Intent(this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             finish();
             return;
         }
-        Log.d(TAG, "当前登录教师ID: " + teacherId);
+        if ("teacher".equals(role)) {
+            Log.d(TAG, "当前登录教师ID: " + teacherId);
+        } else {
+            Log.d(TAG, "当前登录学生ID: " + studentId);
+        }
 
         bottomNavigationView = findViewById(R.id.bottom_navigation);
         if (bottomNavigationView != null) {
@@ -106,11 +113,13 @@ public class MainActivity extends AppCompatActivity {
         btnNavAttendance = findViewById(R.id.btn_nav_attendance);
         btnNavProfile = findViewById(R.id.btn_nav_profile);
         btnNavSettings = findViewById(R.id.btn_nav_settings);
+        btnNavCourses = findViewById(R.id.btn_nav_courses);
 
         if (btnNavHome != null) btnNavHome.setOnClickListener(v -> handleNavigation(R.id.nav_home));
         if (btnNavClassroom != null) btnNavClassroom.setOnClickListener(v -> handleNavigation(R.id.nav_classroom));
         if (btnNavAttendance != null) btnNavAttendance.setOnClickListener(v -> handleNavigation(R.id.nav_attendance));
         if (btnNavProfile != null) btnNavProfile.setOnClickListener(v -> handleNavigation(R.id.nav_profile));
+        if (btnNavCourses != null) btnNavCourses.setOnClickListener(v -> handleNavigation(R.id.nav_courses));
         if (btnNavSettings != null) btnNavSettings.setOnClickListener(v -> {
             int selectedColor = ContextCompat.getColor(this, R.color.primary);
             if (btnNavSettings != null) {
@@ -130,6 +139,16 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "设置页打开失败", Toast.LENGTH_SHORT).show();
             }
         });
+
+        // 根据角色适配可见按钮
+        role = getSharedPreferences("user_prefs", MODE_PRIVATE).getString("user_role", "teacher");
+        if ("student".equals(role)) {
+            if (btnNavClassroom != null) btnNavClassroom.setVisibility(View.GONE);
+            if (btnNavAttendance != null) btnNavAttendance.setVisibility(View.VISIBLE);
+            if (btnNavCourses != null) btnNavCourses.setVisibility(View.VISIBLE);
+        } else {
+            if (btnNavCourses != null) btnNavCourses.setVisibility(View.GONE);
+        }
 
         // 恢复上次选中的导航项（默认首页）
         int savedNav = getSharedPreferences("ui_prefs", MODE_PRIVATE)
@@ -190,14 +209,20 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleNavigation(int itemId) {
         Fragment selectedFragment = null;
+        String role = getSharedPreferences("user_prefs", MODE_PRIVATE).getString("user_role", "teacher");
         if (itemId == R.id.nav_home) {
             selectedFragment = new HomeFragment();
             if (getSupportActionBar() != null) getSupportActionBar().setTitle("首页");
             Log.d(TAG, "切换到首页");
         } else if (itemId == R.id.nav_classroom) {
+            if ("student".equals(role)) {
+                Toast.makeText(this, "课堂为教师专用，已为你打开首页", Toast.LENGTH_SHORT).show();
+                selectedFragment = new HomeFragment();
+            } else {
             selectedFragment = new ClassroomFragment();
             if (getSupportActionBar() != null) getSupportActionBar().setTitle("课堂管理");
             Log.d(TAG, "切换到课堂");
+            }
         } else if (itemId == R.id.nav_attendance) {
             selectedFragment = new AttendanceFragment();
             if (getSupportActionBar() != null) getSupportActionBar().setTitle("考勤管理");
@@ -210,6 +235,10 @@ public class MainActivity extends AppCompatActivity {
             selectedFragment = new com.example.facecheck.fragments.SettingsFragment();
             if (getSupportActionBar() != null) getSupportActionBar().setTitle("设置");
             Log.d(TAG, "切换到设置");
+        } else if (itemId == R.id.nav_courses) {
+            selectedFragment = new com.example.facecheck.fragments.StudentCoursesFragment();
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle("选课");
+            Log.d(TAG, "切换到选课");
         }
 
         if (selectedFragment != null) {
@@ -261,5 +290,8 @@ public class MainActivity extends AppCompatActivity {
         if (btnNavSettings != null)
             ImageViewCompat.setImageTintList(btnNavSettings,
                     ColorStateList.valueOf(selectedId == R.id.nav_settings ? selectedColor : defaultColor));
+        if (btnNavCourses != null)
+            ImageViewCompat.setImageTintList(btnNavCourses,
+                    ColorStateList.valueOf(selectedId == R.id.nav_courses ? selectedColor : defaultColor));
     }
 }

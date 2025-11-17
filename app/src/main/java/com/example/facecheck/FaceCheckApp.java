@@ -21,6 +21,15 @@ public class FaceCheckApp extends Application {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
             }
         } catch (Throwable ignore) {}
+        // 后台修复学生sid唯一性
+        new Thread(() -> {
+            try {
+                com.example.facecheck.database.DatabaseHelper dbh = new com.example.facecheck.database.DatabaseHelper(this);
+                dbh.ensureStudentSidUniqueIndex();
+            } catch (Throwable t) {
+                Log.w("FaceCheckApp", "修复学生sid唯一性失败: " + t.getMessage());
+            }
+        }).start();
         if (BuildConfig.DEBUG) {
             try {
                 StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()

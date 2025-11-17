@@ -84,13 +84,10 @@ public class AttendanceFragment extends Fragment {
     private void loadAttendanceData(String date) {
         if (getActivity() == null) return;
         try {
-            // 当前登录教师ID
             android.content.SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE);
+            String role = prefs.getString("user_role", "teacher");
             long teacherId = prefs.getLong("teacher_id", -1);
-            if (teacherId == -1) {
-                dayAdapter.updateItems(java.util.Collections.emptyList());
-                return;
-            }
+            long studentId = prefs.getLong("student_id", -1);
 
             // 计算当日起止时间戳
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
@@ -105,13 +102,21 @@ public class AttendanceFragment extends Fragment {
             long endTs = startTs + 24L * 60 * 60 * 1000;
 
             // 查询当日所有考勤结果（按班级、学生聚合）
-            android.database.Cursor cursor = dbHelper.getAttendanceResultsByTeacherAndDateRange(teacherId, startTs, endTs);
+            android.database.Cursor cursor;
+            if ("student".equals(role) && studentId != -1) {
+                cursor = dbHelper.getAttendanceResultsByStudentAndDateRange(studentId, startTs, endTs);
+            } else if (teacherId != -1) {
+                cursor = dbHelper.getAttendanceResultsByTeacherAndDateRange(teacherId, startTs, endTs);
+            } else {
+                dayAdapter.updateItems(java.util.Collections.emptyList());
+                return;
+            }
             java.util.Map<String, java.util.LinkedHashMap<Long, StudentAgg>> grouped = new java.util.LinkedHashMap<>();
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     String className = cursor.getString(cursor.getColumnIndexOrThrow("className"));
-                    long studentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
+                    long resStudentId = cursor.getLong(cursor.getColumnIndexOrThrow("studentId"));
                     String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
                     long decidedAt = cursor.getLong(cursor.getColumnIndexOrThrow("decidedAt"));
 
@@ -121,10 +126,10 @@ public class AttendanceFragment extends Fragment {
                         grouped.put(className, students);
                     }
 
-                    StudentAgg agg = students.get(studentId);
+                    StudentAgg agg = students.get(resStudentId);
                     if (agg == null) {
                         // 查询学生基本信息
-                        android.database.Cursor sc = dbHelper.getStudentById(studentId);
+                        android.database.Cursor sc = dbHelper.getStudentById(resStudentId);
                         String name = "未知";
                         String sid = "";
                         if (sc != null && sc.moveToFirst()) {
@@ -135,7 +140,7 @@ public class AttendanceFragment extends Fragment {
                             sc.close();
                         }
                         agg = new StudentAgg(name, sid);
-                        students.put(studentId, agg);
+                        students.put(resStudentId, agg);
                     }
 
                     if ("Present".equals(status)) {

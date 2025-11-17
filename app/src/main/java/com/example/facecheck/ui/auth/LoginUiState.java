@@ -9,12 +9,14 @@ public class LoginUiState {
     }
     
     public static class Success extends LoginUiState {
-        public final long teacherId;
-        public final String teacherName;
-        
-        public Success(long teacherId, String teacherName) {
-            this.teacherId = teacherId;
-            this.teacherName = teacherName;
+        public final long userId;
+        public final String role; // "teacher" 或 "student"
+        public final String displayName;
+
+        public Success(long userId, String role, String displayName) {
+            this.userId = userId;
+            this.role = role;
+            this.displayName = displayName;
         }
     }
     

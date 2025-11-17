@@ -15,31 +15,60 @@ public class UserRepository {
         this.databaseHelper = new DatabaseHelper(context);
     }
     
-    public Teacher login(String username, String password) {
+    public static class UserLoginResult {
+        public final long userId;
+        public final String role; // "teacher" 或 "student"
+        public final String displayName;
+        public UserLoginResult(long userId, String role, String displayName) {
+            this.userId = userId;
+            this.role = role;
+            this.displayName = displayName;
+        }
+    }
+
+    public UserLoginResult loginAny(String username, String password) {
         SQLiteDatabase db = databaseHelper.getReadableDatabase();
+        // 先尝试教师
         Cursor cursor = db.query(
-            "Teacher",
-            new String[]{"id", "name", "username", "password"},
-            "username = ?",
-            new String[]{username},
-            null, null, null
+                "Teacher",
+                new String[]{"id", "name", "username", "password"},
+                "username = ?",
+                new String[]{username},
+                null, null, null
         );
-        
-        Teacher teacher = null;
         if (cursor != null && cursor.moveToFirst()) {
             long teacherId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
             String storedPassword = cursor.getString(cursor.getColumnIndexOrThrow("password"));
             String teacherName = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-            String teacherUsername = cursor.getString(cursor.getColumnIndexOrThrow("username"));
-            
+            cursor.close();
             if (password.equals(storedPassword)) {
-                teacher = new Teacher(teacherId, teacherName, teacherUsername, storedPassword, "",
-                                   System.currentTimeMillis(), System.currentTimeMillis());
+                return new UserLoginResult(teacherId, "teacher", teacherName);
             }
+        } else if (cursor != null) {
             cursor.close();
         }
-        
-        return teacher;
+
+        // 再尝试学生：使用学号 sid 登录
+        Cursor sc = db.query(
+                "Student",
+                new String[]{"id", "name", "sid", "password"},
+                "sid = ?",
+                new String[]{username},
+                null, null, null
+        );
+        if (sc != null && sc.moveToFirst()) {
+            long studentId = sc.getLong(sc.getColumnIndexOrThrow("id"));
+            String storedPassword = sc.getString(sc.getColumnIndexOrThrow("password"));
+            String studentName = sc.getString(sc.getColumnIndexOrThrow("name"));
+            sc.close();
+            if (password.equals(storedPassword)) {
+                return new UserLoginResult(studentId, "student", studentName);
+            }
+        } else if (sc != null) {
+            sc.close();
+        }
+
+        return null;
     }
     
     public boolean registerTeacher(String name, String username, String password) {

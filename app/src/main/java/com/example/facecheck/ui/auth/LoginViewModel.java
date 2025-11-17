@@ -30,11 +30,9 @@ public class LoginViewModel extends AndroidViewModel {
         
         _uiState.setValue(new LoginUiState.Loading());
         
-        // 使用Repository验证用户
-        Teacher teacher = userRepository.login(username, password);
-        
-        if (teacher != null) {
-            _uiState.setValue(new LoginUiState.Success(teacher.getId(), teacher.getName()));
+        UserRepository.UserLoginResult res = userRepository.loginAny(username, password);
+        if (res != null) {
+            _uiState.setValue(new LoginUiState.Success(res.userId, res.role, res.displayName));
         } else {
             _uiState.setValue(new LoginUiState.Error("用户名或密码错误"));
         }

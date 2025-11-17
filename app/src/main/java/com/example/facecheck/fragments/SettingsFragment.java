@@ -185,7 +185,12 @@ public class SettingsFragment extends Fragment {
         scheduleWebDavPeriodicCheck();
     }
 
+    private final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable periodicRunnable;
+    private View currentOverlay;
+
     private void scheduleWebDavPeriodicCheck() {
+        if (!isAdded()) return;
         android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
         boolean enabled = prefs.getBoolean("webdav_enabled", false);
         if (!enabled) return;
@@ -193,10 +198,16 @@ public class SettingsFragment extends Fragment {
         String user = prefs.getString("webdav_username", "");
         String pass = prefs.getString("webdav_password", "");
         if (url.isEmpty() || user.isEmpty() || pass.isEmpty()) return;
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> checkAndPromptWebDavSync(false), 5000);
+        if (periodicRunnable != null) uiHandler.removeCallbacks(periodicRunnable);
+        periodicRunnable = () -> {
+            if (!isAdded()) return;
+            checkAndPromptWebDavSync(false);
+        };
+        uiHandler.postDelayed(periodicRunnable, 5000);
     }
 
     private void checkAndPromptWebDavSync(boolean forcePrompt) {
+        if (!isAdded()) return;
         android.content.SharedPreferences prefs = requireContext().getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE);
         String url = prefs.getString("webdav_url", "");
         String user = prefs.getString("webdav_username", "");
@@ -206,13 +217,16 @@ public class SettingsFragment extends Fragment {
         long localTs = new java.io.File(localDbPath).lastModified();
 
         new Thread(() -> {
-            com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(requireContext(), url, user, pass);
+            android.content.Context ctx = getContext();
+            if (ctx == null) return;
+            com.example.facecheck.webdav.WebDavManager mgr = new com.example.facecheck.webdav.WebDavManager(ctx, url, user, pass);
             java.util.Date remoteDbMod = mgr.getResourceModified(com.example.facecheck.webdav.WebDavManager.ROOT_DIR + "/database7.db");
             long remoteTs = remoteDbMod != null ? remoteDbMod.getTime() : 0;
             long delta = Math.abs(remoteTs - localTs);
             if (forcePrompt || delta > 60_000) {
                 String msg = String.format("本地DB: %s\n云端DB: %s\n选择同步方向", formatTime(localTs), formatTime(remoteTs));
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    if (!isAdded()) return;
                     final View overlay = showUploadingOverlayWithTimeout();
                     new android.app.AlertDialog.Builder(requireContext())
                             .setTitle("WebDAV 差异检测")
@@ -228,6 +242,7 @@ public class SettingsFragment extends Fragment {
                                     if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
                                     final boolean success = ok;
                                     new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                        if (!isAdded()) return;
                                         dismissUploadingOverlay(overlay);
                                         android.widget.Toast.makeText(requireContext(), success ? "上传完成" : "上传失败", android.widget.Toast.LENGTH_SHORT).show();
                                     });
@@ -244,6 +259,7 @@ public class SettingsFragment extends Fragment {
                                     if (ok) prefs.edit().putLong("webdav_last_sync", System.currentTimeMillis()).apply();
                                     final boolean success = ok;
                                     new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                        if (!isAdded()) return;
                                         dismissUploadingOverlay(overlay);
                                         android.widget.Toast.makeText(requireContext(), success ? "下载并同步到本地完成" : "下载失败", android.widget.Toast.LENGTH_SHORT).show();
                                     });
@@ -459,9 +475,11 @@ public class SettingsFragment extends Fragment {
     }
 
     private View showUploadingOverlayWithTimeout() {
-        ViewGroup root = (ViewGroup) requireActivity().getWindow().getDecorView();
-        View overlay = LayoutInflater.from(requireContext()).inflate(R.layout.uploading_overlay, root, false);
+        if (!isAdded() || getActivity() == null) return null;
+        ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+        View overlay = LayoutInflater.from(getContext()).inflate(R.layout.uploading_overlay, root, false);
         root.addView(overlay);
+        currentOverlay = overlay;
         com.airbnb.lottie.LottieAnimationView lav = overlay.findViewById(R.id.lottieUploading);
         android.view.View spinner = overlay.findViewById(R.id.progressFallback);
         try {
@@ -486,13 +504,22 @@ public class SettingsFragment extends Fragment {
                 return false;
             }
         });
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> dismissUploadingOverlay(overlay), 5000);
+        uiHandler.postDelayed(() -> dismissUploadingOverlay(overlay), 5000);
         return overlay;
     }
 
     private void dismissUploadingOverlay(View overlay) {
         if (overlay == null) return;
-        ViewGroup root = (ViewGroup) requireActivity().getWindow().getDecorView();
-        root.removeView(overlay);
+        if (!isAdded() || getActivity() == null) return;
+        ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+        try { root.removeView(overlay); } catch (Throwable ignore) {}
+        if (overlay == currentOverlay) currentOverlay = null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (periodicRunnable != null) uiHandler.removeCallbacks(periodicRunnable);
+        if (currentOverlay != null) dismissUploadingOverlay(currentOverlay);
     }
 }
