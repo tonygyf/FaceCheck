@@ -31,14 +31,16 @@ public class StudentCoursesFragment extends Fragment {
             @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_student_courses, container, false);
 
-        ListView listView = view.findViewById(R.id.list_courses);
-        Button btnSelect = view.findViewById(R.id.btn_select_course);
+        androidx.recyclerview.widget.RecyclerView recyclerView = view.findViewById(R.id.recycler_courses);
+        recyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(getContext()));
+        // 可选：添加分割线
+        // recyclerView.addItemDecoration(new
+        // androidx.recyclerview.widget.DividerItemDecoration(getContext(),
+        // androidx.recyclerview.widget.DividerItemDecoration.VERTICAL));
 
         courseList = generateMockCourses();
-        adapter = new StudentCourseAdapter(courseList);
-        listView.setAdapter(adapter);
-
-        btnSelect.setOnClickListener(v -> {
+        adapter = new StudentCourseAdapter(courseList, () -> {
+            // Confirm button clicked (via Adapter footer)
             Course selectedCourse = adapter.getSelectedCourse();
             if (selectedCourse == null) {
                 Toast.makeText(requireContext(), "请先选择一个课程", Toast.LENGTH_SHORT).show();
@@ -51,11 +53,16 @@ public class StudentCoursesFragment extends Fragment {
                     .putString("selected_course_id", selectedCourse.getId())
                     .apply();
 
-            Toast.makeText(requireContext(), "已选课程: " + selectedCourse.getName() + "\n即将进入考勤系统", Toast.LENGTH_LONG)
-                    .show();
+            Toast.makeText(requireContext(), "已选课程: " + selectedCourse.getName() + " 已确认", Toast.LENGTH_SHORT).show();
 
-            // 可以在这里跳转到考勤页面，或者让用户手动点击中间的打卡按钮
+            // 跳转到考勤页面 (AttendanceFragment)
+            if (getActivity() instanceof com.example.facecheck.MainActivity) {
+                ((com.example.facecheck.MainActivity) getActivity()).getBottomNavigationView()
+                        .setSelectedItemId(R.id.nav_attendance);
+            }
         });
+
+        recyclerView.setAdapter(adapter);
 
         return view;
     }

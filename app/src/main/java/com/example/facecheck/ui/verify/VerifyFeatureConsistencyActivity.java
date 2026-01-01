@@ -57,6 +57,9 @@ public class VerifyFeatureConsistencyActivity extends AppCompatActivity {
         });
 
         btnPickAndVerify.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+
+        // 显式设置使用 MobileFaceNet 模型，确保与考勤主流程默认模型一致
+        recognitionManager.setSelectedModel("MobileFaceNet");
     }
 
     private void startVerification(Uri imageUri) {
@@ -102,8 +105,7 @@ public class VerifyFeatureConsistencyActivity extends AppCompatActivity {
                             simDirect,
                             simRoundTrip,
                             (Math.abs(1.0f - simDirect) < 1e-5f ? "一致(≈1.0)" : "不一致"),
-                            (Math.abs(1.0f - simRoundTrip) < 1e-5f ? "一致(≈1.0)" : "不一致")
-                    );
+                            (Math.abs(1.0f - simRoundTrip) < 1e-5f ? "一致(≈1.0)" : "不一致"));
                     runOnUiThread(() -> tvResult.setText(msg));
                 }
 

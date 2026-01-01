@@ -1,0 +1,49 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugKotlin
+
+> Task :app:compileDebugJavaWithJavac FAILED
+D:\typer\android_demo\FaceCheck\app\src\main\java\com\example\facecheck\ui\attendance\AttendanceActivity.java:297: 错误: 不兼容的类型: boolean无法转换为String
+                                results.add(new FaceRecognitionManager.RecognitionResult(sid, randomSim, true));
+                                                                                                         ^
+注: 某些输入文件使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+注: 某些消息已经过简化; 请使用 -Xdiags:verbose 重新编译以获得完整输出
+1 个错误
+[Incubating] Problems report is available at: file:///D:/typer/android_demo/FaceCheck/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler output below.
+  D:\typer\android_demo\FaceCheck\app\src\main\java\com\example\facecheck\ui\attendance\AttendanceActivity.java:297: 错误: 不兼容的类型: boolean无法转换为String
+                                  results.add(new FaceRecognitionManager.RecognitionResult(sid, randomSim, true));
+                                                                                                           ^
+  注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+  注: 某些输入文件使用或覆盖了已过时的 API。
+  注: 某些消息已经过简化; 请使用 -Xdiags:verbose 重新编译以获得完整输出
+  1 个错误
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1s
+17 actionable tasks: 2 executed, 15 up-to-date

@@ -24,7 +24,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 7; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 9; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -74,7 +74,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             createIndexes(db);
             // 10. 创建触发器
             createTriggers(db);
-            
+
             Log.d(TAG, "所有数据库表创建完成");
         } catch (Exception e) {
             Log.e(TAG, "创建数据库表失败", e);
@@ -257,11 +257,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         // 教师表索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_teacher_username ON Teacher(username)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_teacher_email ON Teacher(email)");
-        
+
         // 班级表索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_classroom_teacher ON Classroom(teacherId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_classroom_year ON Classroom(year)");
-        
+
         // 学生表索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_class ON Student(classId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_sid ON Student(sid)");
@@ -272,33 +272,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         } catch (Throwable t) {
             Log.w(TAG, "创建uniq_student_class_sid失败: " + t.getMessage());
         }
-        
+
         // 人脸特征索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_face_embedding_student ON FaceEmbedding(studentId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_face_embedding_active ON FaceEmbedding(isActive)");
-        
+
         // 考勤会话索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_session_class ON AttendanceSession(classId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_session_teacher ON AttendanceSession(teacherId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_session_status ON AttendanceSession(status)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_session_started ON AttendanceSession(startedAt)");
-        
+
         // 考勤结果索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_result_session ON AttendanceResult(sessionId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_result_student ON AttendanceResult(studentId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_result_status ON AttendanceResult(status)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_result_time ON AttendanceResult(checkInTime)");
-        
+
         // 照片资源索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_asset_session ON PhotoAsset(sessionId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_asset_student ON PhotoAsset(studentId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_asset_type ON PhotoAsset(type)");
-        
+
         // 同步日志索引
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sync_log_entity ON SyncLog(entity, entityId)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sync_log_status ON SyncLog(status)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sync_log_ts ON SyncLog(ts)");
-        
+
         Log.d(TAG, "所有索引创建完成");
     }
 
@@ -312,21 +312,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "BEGIN " +
                 "UPDATE Teacher SET updatedAt = CURRENT_TIMESTAMP WHERE id = NEW.id; " +
                 "END");
-        
+
         // 更新班级表的updatedAt字段
         db.execSQL("CREATE TRIGGER IF NOT EXISTS update_classroom_timestamp " +
                 "AFTER UPDATE ON Classroom " +
                 "BEGIN " +
                 "UPDATE Classroom SET updatedAt = CURRENT_TIMESTAMP WHERE id = NEW.id; " +
                 "END");
-        
+
         // 更新学生表的updatedAt字段
         db.execSQL("CREATE TRIGGER IF NOT EXISTS update_student_timestamp " +
                 "AFTER UPDATE ON Student " +
                 "BEGIN " +
                 "UPDATE Student SET updatedAt = CURRENT_TIMESTAMP WHERE id = NEW.id; " +
                 "END");
-        
+
         Log.d(TAG, "所有触发器创建完成");
     }
 
@@ -356,10 +356,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put("password", "admin123");
             values.put("email", "admin@example.com");
             values.put("phone", "13800138000");
-            
+
             long adminId = db.insert("Teacher", null, values);
             Log.d(TAG, "默认管理员教师插入成功，ID: " + adminId);
-            
+
             // 再插入一个测试教师
             values.clear();
             values.put("name", "李老师");
@@ -367,19 +367,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put("password", "123456");
             values.put("email", "li@example.com");
             values.put("phone", "13900139000");
-            
+
             long teacherId = db.insert("Teacher", null, values);
             Log.d(TAG, "测试教师插入成功，ID: " + teacherId);
-            
+
             // 初始化指定班级与学生（从assets拷贝头像）
             insertCustomClassroomsWithAssetPhotos(db, adminId);
-            insertCustomClassroomsWithAssetPhotos(db, teacherId);
-            
+            // insertCustomClassroomsWithAssetPhotos(db, teacherId); // 避免重复生成相同Mock数据
+
         } catch (Exception e) {
             Log.e(TAG, "插入默认教师数据失败", e);
         }
     }
-    
+
     /**
      * 插入默认班级数据（用于测试）
      */
@@ -403,6 +403,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private long insertClassroomRecord(SQLiteDatabase db, long teacherId, String name, int year, String meta) {
+        // 先检查是否存在同名班级
+        Cursor cursor = db.query("Classroom", new String[] { "id" },
+                "teacherId = ? AND name = ?",
+                new String[] { String.valueOf(teacherId), name },
+                null, null, null);
+
+        long existingId = -1;
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                existingId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+            }
+            cursor.close();
+        }
+
+        if (existingId != -1) {
+            Log.d(TAG, "班级已存在，跳过插入: " + name);
+            return existingId;
+        }
+
         ContentValues values = new ContentValues();
         values.put("teacherId", teacherId);
         values.put("name", name);
@@ -410,16 +429,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("meta", meta);
         return db.insert("Classroom", null, values);
     }
-    
+
     /**
      * 插入默认学生数据（用于测试）
      */
     /**
      * 读取assets/<assetFolder> 下图片，创建学生并复制头像到内部 avatars 目录
-     * @param db SQLiteDatabase
-     * @param classId 班级ID
+     * 
+     * @param db          SQLiteDatabase
+     * @param classId     班级ID
      * @param assetFolder 资产目录名称（如："北约峰会"、"三巨头"）
-     * @param sidBase 学号基数（如：1000、2000）
+     * @param sidBase     学号基数（如：1000、2000）
      */
     private void seedStudentsFromAssets(SQLiteDatabase db, long classId, String assetFolder, int sidBase) {
         try {
@@ -441,7 +461,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
                 String baseName = fileName;
                 int dot = baseName.lastIndexOf('.');
-                if (dot > 0) baseName = baseName.substring(0, dot);
+                if (dot > 0)
+                    baseName = baseName.substring(0, dot);
 
                 // 创建学生（先不写入avatarUri，待复制完成后更新）
                 String desiredSid = String.valueOf(sidBase + index + 1);
@@ -464,7 +485,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
                 // 复制头像到内部存储 avatars 目录，以 studentId 命名
                 try (java.io.InputStream is = am.open(assetFolder + "/" + fileName);
-                     java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.File(avatarsDir, "avatar_" + studentId + ".jpg"))) {
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                                new java.io.File(avatarsDir, "avatar_" + studentId + ".jpg"))) {
                     byte[] buf = new byte[4096];
                     int r;
                     while ((r = is.read(buf)) != -1) {
@@ -481,7 +503,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     // 存储为 file:// 绝对路径，兼容 Glide 与 MediaStore 加载
                     String fileUri = "file://" + avatarFile.getAbsolutePath();
                     update.put("avatarUri", fileUri);
-                    db.update("Student", update, "id = ?", new String[]{String.valueOf(studentId)});
+                    db.update("Student", update, "id = ?", new String[] { String.valueOf(studentId) });
                     Log.d(TAG, "学生头像更新完成: " + baseName + " -> " + fileUri);
                 }
             }
@@ -501,7 +523,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         ensureClassSeed(db, teacherId, "三巨头", 2024, "三巨头", 2000);
     }
 
-    private void ensureClassSeed(SQLiteDatabase db, long teacherId, String className, int year, String folder, int sidBase) {
+    private void ensureClassSeed(SQLiteDatabase db, long teacherId, String className, int year, String folder,
+            int sidBase) {
         long classId = findClassroomIdByName(db, teacherId, className);
         if (classId == -1) {
             classId = insertClassroomRecord(db, teacherId, className, year,
@@ -516,9 +539,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private long findClassroomIdByName(SQLiteDatabase db, long teacherId, String name) {
-        Cursor c = db.query("Classroom", new String[]{"id"},
+        Cursor c = db.query("Classroom", new String[] { "id" },
                 "teacherId = ? AND name = ?",
-                new String[]{String.valueOf(teacherId), name}, null, null, null, "1");
+                new String[] { String.valueOf(teacherId), name }, null, null, null, "1");
         long id = -1;
         if (c != null && c.moveToFirst()) {
             id = c.getLong(c.getColumnIndexOrThrow("id"));
@@ -531,7 +554,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     private int getStudentCountByClass(SQLiteDatabase db, long classId) {
         Cursor c = db.rawQuery("SELECT COUNT(*) FROM Student WHERE classId = ?",
-                new String[]{String.valueOf(classId)});
+                new String[] { String.valueOf(classId) });
         int count = 0;
         if (c != null && c.moveToFirst()) {
             count = c.getInt(0);
@@ -543,13 +566,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     // ============= 教师相关操作 =============
-    
+
     public Teacher getTeacherById(long id) {
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.query("Teacher", 
-                new String[]{"id", "name", "username", "password", "email", "phone", "avatarUri", "createdAt", "updatedAt"},
+        Cursor cursor = db.query("Teacher",
+                new String[] { "id", "name", "username", "password", "email", "phone", "avatarUri", "createdAt",
+                        "updatedAt" },
                 "id = ?",
-                new String[]{String.valueOf(id)},
+                new String[] { String.valueOf(id) },
                 null, null, null);
 
         Teacher teacher = null;
@@ -561,8 +585,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     cursor.getString(cursor.getColumnIndexOrThrow("password")),
                     cursor.getString(cursor.getColumnIndexOrThrow("avatarUri")),
                     cursor.getLong(cursor.getColumnIndexOrThrow("createdAt")),
-                    cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt"))
-            );
+                    cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt")));
             cursor.close();
         }
         return teacher;
@@ -591,17 +614,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("updatedAt", System.currentTimeMillis());
 
         int rowsAffected = db.update("Teacher", values,
-                "id = ?", new String[]{String.valueOf(teacher.getId())});
+                "id = ?", new String[] { String.valueOf(teacher.getId()) });
         return rowsAffected > 0;
     }
 
     public Cursor getTeacherByUsername(String username) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("Teacher", null, "username = ?", new String[]{username}, null, null, null);
+        return db.query("Teacher", null, "username = ?", new String[] { username }, null, null, null);
     }
 
     // ============= 班级相关操作 =============
-    
+
     public long insertClassroom(long teacherId, String name, int year, String meta) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -615,8 +638,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getClassroomsByTeacher(long teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("Classroom", null, "teacherId = ?", 
-                new String[]{String.valueOf(teacherId)}, null, null, "year DESC, name");
+        return db.query("Classroom", null, "teacherId = ?",
+                new String[] { String.valueOf(teacherId) }, null, null, "year DESC, name");
     }
 
     /**
@@ -627,12 +650,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         android.content.ContentValues values = new android.content.ContentValues();
         values.put("name", newName);
         values.put("updatedAt", System.currentTimeMillis());
-        int rows = db.update("Classroom", values, "id = ?", new String[]{String.valueOf(classroomId)});
+        int rows = db.update("Classroom", values, "id = ?", new String[] { String.valueOf(classroomId) });
         return rows > 0;
     }
 
     // ============= 学生相关操作 =============
-    
+
     public long insertStudent(long classId, String name, String sid, String gender, String avatarUri) {
         SQLiteDatabase db = this.getWritableDatabase();
         String uniqueSid = ensureUniqueSid(db, classId, sid);
@@ -650,19 +673,20 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         // 按学号升序排列（将 sid 作为整数排序，保证数值顺序）
         return db.query("Student", null, "classId = ?",
-                new String[]{String.valueOf(classId)}, null, null, "CAST(sid AS INTEGER) ASC");
+                new String[] { String.valueOf(classId) }, null, null, "CAST(sid AS INTEGER) ASC");
     }
 
     public Cursor getStudentById(long studentId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("Student", null, "id = ?", 
-                new String[]{String.valueOf(studentId)}, null, null, null);
+        return db.query("Student", null, "id = ?",
+                new String[] { String.valueOf(studentId) }, null, null, null);
     }
 
     /**
      * 更新学生信息
      */
-    public boolean updateStudent(long studentId, long classId, String name, String sid, String gender, String avatarUri) {
+    public boolean updateStudent(long studentId, long classId, String name, String sid, String gender,
+            String avatarUri) {
         SQLiteDatabase db = this.getWritableDatabase();
         String uniqueSid = ensureUniqueSid(db, classId, sid);
         ContentValues values = new ContentValues();
@@ -672,9 +696,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("gender", gender);
         values.put("avatarUri", avatarUri);
         values.put("updatedAt", System.currentTimeMillis());
-        
-        int result = db.update("Student", values, "id = ?", 
-                              new String[]{String.valueOf(studentId)});
+
+        int result = db.update("Student", values, "id = ?",
+                new String[] { String.valueOf(studentId) });
         return result > 0;
     }
 
@@ -683,23 +707,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      */
     public boolean deleteStudent(long studentId) {
         SQLiteDatabase db = this.getWritableDatabase();
-        
+
         // 首先删除相关的考勤结果
-        db.delete("AttendanceResult", "studentId = ?", 
-                 new String[]{String.valueOf(studentId)});
-        
+        db.delete("AttendanceResult", "studentId = ?",
+                new String[] { String.valueOf(studentId) });
+
         // 删除相关的人脸特征数据
-        db.delete("FaceEmbedding", "studentId = ?", 
-                 new String[]{String.valueOf(studentId)});
-        
+        db.delete("FaceEmbedding", "studentId = ?",
+                new String[] { String.valueOf(studentId) });
+
         // 删除相关的照片资源
-        db.delete("PhotoAsset", "studentId = ?", 
-                 new String[]{String.valueOf(studentId)});
-        
+        db.delete("PhotoAsset", "studentId = ?",
+                new String[] { String.valueOf(studentId) });
+
         // 最后删除学生记录
-        int result = db.delete("Student", "id = ?", 
-                              new String[]{String.valueOf(studentId)});
-        
+        int result = db.delete("Student", "id = ?",
+                new String[] { String.valueOf(studentId) });
+
         return result > 0;
     }
 
@@ -707,7 +731,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         List<Student> students = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.query("Student", null, null, null, null, null, "name");
-        
+
         if (cursor != null && cursor.moveToFirst()) {
             do {
                 long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
@@ -717,28 +741,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
                 String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
                 long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
-                
+
                 Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
                 students.add(student);
             } while (cursor.moveToNext());
             cursor.close();
         }
-        
+
         return students;
     }
 
     // ===== 唯一SID辅助与修复 =====
     private String ensureUniqueSid(SQLiteDatabase db, long classId, String sid) {
-        if (sid == null) sid = "";
+        if (sid == null)
+            sid = "";
         String base = sid.trim();
-        if (base.isEmpty()) base = "1";
-        if (!sidExists(db, classId, base)) return base;
+        if (base.isEmpty())
+            base = "1";
+        if (!sidExists(db, classId, base))
+            return base;
         if (base.matches("\\d+")) {
             try {
                 long v = Long.parseLong(base);
-                while (sidExists(db, classId, String.valueOf(v))) v++;
+                while (sidExists(db, classId, String.valueOf(v)))
+                    v++;
                 return String.valueOf(v);
-            } catch (Throwable ignore) {}
+            } catch (Throwable ignore) {
+            }
         }
         int n = 1;
         String candidate = base;
@@ -752,22 +781,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private boolean sidExists(SQLiteDatabase db, long classId, String sid) {
         Cursor c = null;
         try {
-            c = db.query("Student", new String[]{"id"}, "classId = ? AND sid = ?",
-                    new String[]{String.valueOf(classId), sid}, null, null, null, "1");
+            c = db.query("Student", new String[] { "id" }, "classId = ? AND sid = ?",
+                    new String[] { String.valueOf(classId), sid }, null, null, null, "1");
             return c != null && c.moveToFirst();
-        } finally { if (c != null) c.close(); }
+        } finally {
+            if (c != null)
+                c.close();
+        }
     }
 
     public void fixDuplicateSids() {
         SQLiteDatabase db = this.getWritableDatabase();
         try {
-            Cursor dup = db.rawQuery("SELECT classId, sid, COUNT(*) AS cnt FROM Student GROUP BY classId, sid HAVING cnt > 1", null);
+            Cursor dup = db.rawQuery(
+                    "SELECT classId, sid, COUNT(*) AS cnt FROM Student GROUP BY classId, sid HAVING cnt > 1", null);
             if (dup != null && dup.moveToFirst()) {
                 do {
                     long classId = dup.getLong(dup.getColumnIndexOrThrow("classId"));
                     String sid = dup.getString(dup.getColumnIndexOrThrow("sid"));
-                    Cursor rows = db.query("Student", new String[]{"id"}, "classId = ? AND sid = ?",
-                            new String[]{String.valueOf(classId), sid}, null, null, "id ASC");
+                    Cursor rows = db.query("Student", new String[] { "id" }, "classId = ? AND sid = ?",
+                            new String[] { String.valueOf(classId), sid }, null, null, "id ASC");
                     if (rows != null && rows.moveToFirst()) {
                         rows.moveToNext();
                         while (!rows.isAfterLast()) {
@@ -776,15 +809,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             ContentValues v = new ContentValues();
                             v.put("sid", newSid);
                             v.put("updatedAt", System.currentTimeMillis());
-                            db.update("Student", v, "id = ?", new String[]{String.valueOf(id)});
+                            db.update("Student", v, "id = ?", new String[] { String.valueOf(id) });
                             rows.moveToNext();
                         }
                         rows.close();
-                    } else if (rows != null) rows.close();
+                    } else if (rows != null)
+                        rows.close();
                 } while (dup.moveToNext());
                 dup.close();
-            } else if (dup != null) dup.close();
-        } catch (Throwable t) { Log.e(TAG, "fixDuplicateSids error", t); }
+            } else if (dup != null)
+                dup.close();
+        } catch (Throwable t) {
+            Log.e(TAG, "fixDuplicateSids error", t);
+        }
     }
 
     public void ensureStudentSidUniqueIndex() {
@@ -794,23 +831,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         } catch (Throwable t) {
             Log.w(TAG, "create unique index failed: " + t.getMessage());
             fixDuplicateSids();
-            try { db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_class_sid ON Student(classId, sid)"); }
-            catch (Throwable t2) { Log.e(TAG, "retry unique index failed", t2); }
+            try {
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uniq_student_class_sid ON Student(classId, sid)");
+            } catch (Throwable t2) {
+                Log.e(TAG, "retry unique index failed", t2);
+            }
         }
     }
 
     public List<Student> getStudentsByTeacher(long teacherId) {
         List<Student> students = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-        
+
         // 通过班级表关联查询该教师的所有学生，按学号升序排列
         String query = "SELECT s.* FROM Student s " +
-                      "INNER JOIN Classroom c ON s.classId = c.id " +
-                      "WHERE c.teacherId = ? " +
-                      "ORDER BY CAST(s.sid AS INTEGER) ASC";
-        
-        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
-        
+                "INNER JOIN Classroom c ON s.classId = c.id " +
+                "WHERE c.teacherId = ? " +
+                "ORDER BY CAST(s.sid AS INTEGER) ASC";
+
+        Cursor cursor = db.rawQuery(query, new String[] { String.valueOf(teacherId) });
+
         if (cursor != null && cursor.moveToFirst()) {
             do {
                 long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
@@ -820,18 +860,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
                 String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
                 long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
-                
+
                 Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
                 students.add(student);
             } while (cursor.moveToNext());
             cursor.close();
         }
-        
+
         return students;
     }
 
     // ============= 人脸特征相关操作 =============
-    
+
     public long insertFaceEmbedding(long studentId, String modelVer, byte[] vector, float quality) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -845,8 +885,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getFaceEmbeddingsByStudent(long studentId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("FaceEmbedding", null, "studentId = ?", 
-                new String[]{String.valueOf(studentId)}, null, null, "quality DESC");
+        return db.query("FaceEmbedding", null, "studentId = ?",
+                new String[] { String.valueOf(studentId) }, null, null, "quality DESC");
     }
 
     /**
@@ -858,16 +898,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // 兼容旧版数据库：某些设备上的 FaceEmbedding 表可能没有 isActive 列
             if (hasColumn(db, "FaceEmbedding", "isActive")) {
                 return db.query("FaceEmbedding", null, "modelVer = ? AND isActive = 1",
-                        new String[]{modelVer}, null, null, "quality DESC");
+                        new String[] { modelVer }, null, null, "quality DESC");
             } else {
                 Log.w(TAG, "FaceEmbedding 表缺少 isActive 列，回退为不带 isActive 的查询");
                 return db.query("FaceEmbedding", null, "modelVer = ?",
-                        new String[]{modelVer}, null, null, "quality DESC");
+                        new String[] { modelVer }, null, null, "quality DESC");
             }
         } catch (Exception e) {
             Log.w(TAG, "按 isActive 查询失败，回退为仅 modelVer 的查询: " + e.getMessage());
             return db.query("FaceEmbedding", null, "modelVer = ?",
-                    new String[]{modelVer}, null, null, "quality DESC");
+                    new String[] { modelVer }, null, null, "quality DESC");
         }
     }
 
@@ -896,7 +936,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         } catch (Throwable t) {
             Log.w(TAG, "PRAGMA table_info 查询失败: " + t.getMessage());
         } finally {
-            if (cursor != null) cursor.close();
+            if (cursor != null)
+                cursor.close();
         }
         return false;
     }
@@ -910,12 +951,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("vector", vector);
         values.put("quality", quality);
         values.put("createdAt", System.currentTimeMillis());
-        int result = db.update("FaceEmbedding", values, "id = ?", new String[]{String.valueOf(id)});
+        int result = db.update("FaceEmbedding", values, "id = ?", new String[] { String.valueOf(id) });
         return result > 0;
     }
 
     // ============= 考勤会话相关操作 =============
-    
+
     public long insertAttendanceSession(long classId, long teacherId, String location, String photoUri, String note) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -929,9 +970,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     // ============= 考勤结果相关操作 =============
-    
-    public long insertAttendanceResult(long sessionId, long studentId, String status, 
-                                     float score, String decidedBy) {
+
+    public long insertAttendanceResult(long sessionId, long studentId, String status,
+            float score, String decidedBy) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put("sessionId", sessionId);
@@ -949,14 +990,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("status", status);
         values.put("decidedBy", decidedBy);
         values.put("decidedAt", System.currentTimeMillis());
-        return db.update("AttendanceResult", values, "id = ?", 
-                new String[]{String.valueOf(id)}) > 0;
+        return db.update("AttendanceResult", values, "id = ?",
+                new String[] { String.valueOf(id) }) > 0;
     }
 
     public Cursor getAttendanceResultsBySession(long sessionId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("AttendanceResult", null, "sessionId = ?", 
-                new String[]{String.valueOf(sessionId)}, null, null, "decidedAt DESC");
+        return db.query("AttendanceResult", null, "sessionId = ?",
+                new String[] { String.valueOf(sessionId) }, null, null, "decidedAt DESC");
     }
 
     /**
@@ -978,7 +1019,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "INNER JOIN Classroom c ON s.classId = c.id " +
                 "WHERE s.teacherId = ? AND s.startedAt >= ? AND s.startedAt < ? " +
                 "ORDER BY s.classId, ar.studentId, ar.decidedAt ASC";
-        return db.rawQuery(sql, new String[]{String.valueOf(teacherId), String.valueOf(startTs), String.valueOf(endTs)});
+        return db.rawQuery(sql,
+                new String[] { String.valueOf(teacherId), String.valueOf(startTs), String.valueOf(endTs) });
     }
 
     public Cursor getAttendanceResultsByStudentAndDateRange(long studentId, long startTs, long endTs) {
@@ -990,11 +1032,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "INNER JOIN Classroom c ON s.classId = c.id " +
                 "WHERE ar.studentId = ? AND s.startedAt >= ? AND s.startedAt < ? " +
                 "ORDER BY s.classId, ar.decidedAt ASC";
-        return db.rawQuery(sql, new String[]{String.valueOf(studentId), String.valueOf(startTs), String.valueOf(endTs)});
+        return db.rawQuery(sql,
+                new String[] { String.valueOf(studentId), String.valueOf(startTs), String.valueOf(endTs) });
     }
 
     // ============= 照片资源相关操作 =============
-    
+
     public long insertPhotoAsset(long sessionId, Long studentId, String type, String uri, String meta) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -1010,7 +1053,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     // ============= 同步日志相关操作 =============
-    
+
     public long insertSyncLog(String entity, long entityId, String op, long version, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -1024,16 +1067,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getPendingSyncLogs() {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.query("SyncLog", null, "status = ?", 
-                new String[]{"PENDING"}, null, null, "ts ASC");
+        return db.query("SyncLog", null, "status = ?",
+                new String[] { "PENDING" }, null, null, "ts ASC");
     }
 
     public boolean updateSyncLogStatus(long id, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put("status", status);
-        return db.update("SyncLog", values, "id = ?", 
-                new String[]{String.valueOf(id)}) > 0;
+        return db.update("SyncLog", values, "id = ?",
+                new String[] { String.valueOf(id) }) > 0;
     }
 
     /**
@@ -1044,23 +1087,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("faceFeatures", student.getFaceFeatures());
         values.put("faceImagePath", student.getFaceImagePath());
-        
-        int result = db.update("Student", values, "id = ?", 
-                              new String[]{String.valueOf(student.getId())});
+
+        int result = db.update("Student", values, "id = ?",
+                new String[] { String.valueOf(student.getId()) });
         db.close();
-        
+
         return result > 0;
     }
 
     // ============= 统计相关操作 =============
-    
+
     /**
      * 获取指定教师的班级数量
      */
     public int getClassroomCountByTeacher(long teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM Classroom WHERE teacherId = ?", 
-                                   new String[]{String.valueOf(teacherId)});
+        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM Classroom WHERE teacherId = ?",
+                new String[] { String.valueOf(teacherId) });
         int count = 0;
         if (cursor != null && cursor.moveToFirst()) {
             count = cursor.getInt(0);
@@ -1068,16 +1111,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
         return count;
     }
-    
+
     /**
      * 获取指定教师的学生数量
      */
     public int getStudentCountByTeacher(long teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT COUNT(*) FROM Student s " +
-                      "INNER JOIN Classroom c ON s.classId = c.id " +
-                      "WHERE c.teacherId = ?";
-        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+                "INNER JOIN Classroom c ON s.classId = c.id " +
+                "WHERE c.teacherId = ?";
+        Cursor cursor = db.rawQuery(query, new String[] { String.valueOf(teacherId) });
         int count = 0;
         if (cursor != null && cursor.moveToFirst()) {
             count = cursor.getInt(0);
@@ -1085,7 +1128,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
         return count;
     }
-    
+
     /**
      * 获取指定教师的考勤记录数量
      */
@@ -1093,7 +1136,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         // 修改逻辑：每一次考勤会话算一次记录，不再按学生比对次数统计
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT COUNT(*) FROM AttendanceSession WHERE teacherId = ?";
-        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+        Cursor cursor = db.rawQuery(query, new String[] { String.valueOf(teacherId) });
         int count = 0;
         if (cursor != null && cursor.moveToFirst()) {
             count = cursor.getInt(0);

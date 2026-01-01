@@ -46,7 +46,7 @@ import java.io.IOException;
 
 public class AttendanceActivity extends AppCompatActivity {
     private static final String TAG = "AttendanceActivity";
-    
+
     private DatabaseHelper dbHelper;
     private long classroomId;
     private Uri currentPhotoUri;
@@ -55,7 +55,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private FaceRecognitionManager faceRecognitionManager;
     private ImageStorageManager imageStorageManager;
     private CacheManager cacheManager;
-    
+
     private ImageView ivPreview;
     // 缓存按 EXIF 方向纠正后的原始整图，用于特征提取
     private Bitmap originalOrientedBitmap;
@@ -66,14 +66,14 @@ public class AttendanceActivity extends AppCompatActivity {
     private TextView tvStatus;
     private Spinner spinnerModel;
     // 移除检测下拉栏，固定使用 ML Kit 进行检测
-    
+
     // 模型选择相关：仅保留 MobileFaceNet / FaceNet（均为 float32 新模型）
     private String[] modelOptions = {
-        "MobileFaceNet",
-        "FaceNet"
+            "MobileFaceNet",
+            "FaceNet"
     };
     private String selectedModel = "MobileFaceNet";
-    
+
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickImageLauncher;
 
@@ -81,7 +81,7 @@ public class AttendanceActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_attendance);
-        
+
         // 获取班级ID
         classroomId = getIntent().getLongExtra("classroom_id", -1);
         if (classroomId == -1) {
@@ -89,22 +89,22 @@ public class AttendanceActivity extends AppCompatActivity {
             finish();
             return;
         }
-        
+
         // 初始化数据库
         dbHelper = new DatabaseHelper(this);
-        
+
         // 初始化人脸检测管理器
         faceDetectionManager = new FaceDetectionManager(this);
         faceRecognitionManager = new FaceRecognitionManager(this);
         imageStorageManager = new ImageStorageManager(this);
         cacheManager = new CacheManager(this);
-        
+
         // 初始化视图
         initViews();
-        
+
         // 初始化照片选择器
         initPhotoLauncher();
-        
+
         // 创建考勤会话
         createAttendanceSession();
     }
@@ -118,21 +118,21 @@ public class AttendanceActivity extends AppCompatActivity {
         tvStatus = findViewById(R.id.tvStatus);
         spinnerModel = findViewById(R.id.spinnerModel);
         // 已移除 spinnerDetector
-        
+
         // 初始化模型选择器
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, 
-            android.R.layout.simple_spinner_item, modelOptions);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, modelOptions);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerModel.setAdapter(adapter);
-        
+
         spinnerModel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 selectedModel = modelOptions[position];
                 // 将选择同步到识别管理器
                 faceRecognitionManager.setSelectedModel(selectedModel);
-                Toast.makeText(AttendanceActivity.this, 
-                    "已选择模型: " + selectedModel, Toast.LENGTH_SHORT).show();
+                Toast.makeText(AttendanceActivity.this,
+                        "已选择模型: " + selectedModel, Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -142,11 +142,11 @@ public class AttendanceActivity extends AppCompatActivity {
         });
 
         // 检测模型固定为 ML Kit，不再提供选择下拉栏
-        
+
         btnTakePhoto.setOnClickListener(v -> checkCameraPermissionAndTakePhoto());
         btnPickImage.setOnClickListener(v -> pickImageFromGallery());
         btnStartRecognition.setOnClickListener(v -> startRecognition());
-        
+
         // 初始状态
         btnStartRecognition.setEnabled(false);
         progressBar.setVisibility(View.GONE);
@@ -154,65 +154,66 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void initPhotoLauncher() {
         takePhotoLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == RESULT_OK && currentPhotoUri != null) {
-                    try {
-                        // 显示预览图（按EXIF方向与合适尺寸加载）并缓存原始位图
-                        originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-                        if (originalOrientedBitmap != null) {
-                            ivPreview.setImageBitmap(originalOrientedBitmap);
-                        } else {
-                            Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && currentPhotoUri != null) {
+                        try {
+                            // 显示预览图（按EXIF方向与合适尺寸加载）并缓存原始位图
+                            originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this,
+                                    currentPhotoUri, 1600, 1600);
+                            if (originalOrientedBitmap != null) {
+                                ivPreview.setImageBitmap(originalOrientedBitmap);
+                            } else {
+                                Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
+                            }
+
+                            // 保存照片资源记录
+                            long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW",
+                                    currentPhotoUri.toString(), "");
+
+                            if (photoId != -1) {
+                                // 添加同步日志
+                                dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
+                                        System.currentTimeMillis(), "PENDING");
+
+                                // 启用识别按钮
+                                btnStartRecognition.setEnabled(true);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            Toast.makeText(this, "加载照片失败", Toast.LENGTH_SHORT).show();
                         }
-                        
-                        // 保存照片资源记录
-                        long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW", 
-                            currentPhotoUri.toString(), "");
-                            
-                        if (photoId != -1) {
-                            // 添加同步日志
-                            dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT", 
-                                System.currentTimeMillis(), "PENDING");
-                                
-                            // 启用识别按钮
-                            btnStartRecognition.setEnabled(true);
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        Toast.makeText(this, "加载照片失败", Toast.LENGTH_SHORT).show();
                     }
-                }
-            });
+                });
 
         // 选择已有图片
         pickImageLauncher = registerForActivityResult(
-            new ActivityResultContracts.GetContent(),
-            uri -> {
-                if (uri != null) {
-                    try {
-                        currentPhotoUri = uri;
-                        originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-                        if (originalOrientedBitmap != null) {
-                            ivPreview.setImageBitmap(originalOrientedBitmap);
-                        } else {
-                            Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
-                        }
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        try {
+                            currentPhotoUri = uri;
+                            originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this,
+                                    currentPhotoUri, 1600, 1600);
+                            if (originalOrientedBitmap != null) {
+                                ivPreview.setImageBitmap(originalOrientedBitmap);
+                            } else {
+                                Toast.makeText(this, "预览图加载失败", Toast.LENGTH_SHORT).show();
+                            }
 
-                        long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW",
-                            currentPhotoUri.toString(), "Imported from gallery");
-                        if (photoId != -1) {
-                            dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
-                                System.currentTimeMillis(), "PENDING");
-                            btnStartRecognition.setEnabled(true);
+                            long photoId = dbHelper.insertPhotoAsset(sessionId, null, "RAW",
+                                    currentPhotoUri.toString(), "Imported from gallery");
+                            if (photoId != -1) {
+                                dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
+                                        System.currentTimeMillis(), "PENDING");
+                                btnStartRecognition.setEnabled(true);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            Toast.makeText(this, "导入图片失败", Toast.LENGTH_SHORT).show();
                         }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        Toast.makeText(this, "导入图片失败", Toast.LENGTH_SHORT).show();
                     }
-                }
-            }
-        );
+                });
     }
 
     private void pickImageFromGallery() {
@@ -227,11 +228,11 @@ public class AttendanceActivity extends AppCompatActivity {
     private void createAttendanceSession() {
         // 创建考勤会话
         sessionId = dbHelper.insertAttendanceSession(classroomId, 1L, "", "", ""); // 默认使用ID为1的教师
-            
+
         if (sessionId != -1) {
             // 添加同步日志
-            dbHelper.insertSyncLog("AttendanceSession", sessionId, "INSERT", 
-                System.currentTimeMillis(), "PENDING");
+            dbHelper.insertSyncLog("AttendanceSession", sessionId, "INSERT",
+                    System.currentTimeMillis(), "PENDING");
         } else {
             Toast.makeText(this, "创建考勤会话失败", Toast.LENGTH_SHORT).show();
             finish();
@@ -240,8 +241,8 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void checkCameraPermissionAndTakePhoto() {
         // 检查相机权限
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) 
-                != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             // 请求相机权限
             requestCameraPermissionLauncher.launch(android.Manifest.permission.CAMERA);
         } else {
@@ -250,26 +251,26 @@ public class AttendanceActivity extends AppCompatActivity {
         }
     }
 
-    private final ActivityResultLauncher<String> requestCameraPermissionLauncher = 
-        registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-            if (isGranted) {
-                // 权限被授予，拍照
-                takePhoto();
-            } else {
-                // 权限被拒绝
-                Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
-            }
-        });
+    private final ActivityResultLauncher<String> requestCameraPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    // 权限被授予，拍照
+                    takePhoto();
+                } else {
+                    // 权限被拒绝
+                    Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     private void takePhoto() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        File photoFile = new File(PhotoStorageManager.getAttendancePhotosDir(this), 
-            new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                .format(new Date()) + ".jpg");
-            
+        File photoFile = new File(PhotoStorageManager.getAttendancePhotosDir(this),
+                new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                        .format(new Date()) + ".jpg");
+
         currentPhotoUri = FileProvider.getUriForFile(this,
-            "com.example.facecheck.fileprovider", photoFile);
-            
+                "com.example.facecheck.fileprovider", photoFile);
+
         intent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri);
         takePhotoLauncher.launch(intent);
     }
@@ -279,7 +280,7 @@ public class AttendanceActivity extends AppCompatActivity {
             Toast.makeText(this, "请先拍照或导入图片", Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         // 显示进度条
         progressBar.setVisibility(View.VISIBLE);
         btnStartRecognition.setEnabled(false);
@@ -292,17 +293,17 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void showMissingModelDialog(String modelName, String assetPath) {
         String msg = "请将模型文件放入 app/src/main/assets/" + assetPath +
-            "\n文件名需完全匹配。";
+                "\n文件名需完全匹配。";
         new AlertDialog.Builder(this)
-            .setTitle(modelName + " 模型未找到")
-            .setMessage(msg)
-            .setPositiveButton("我知道了", (d, w) -> d.dismiss())
-            .setNegativeButton("改用 ML Kit", (d, w) -> {
-                d.dismiss();
-                selectedModel = "MobileFaceNet";
-                performMLKitFaceDetection();
-            })
-            .show();
+                .setTitle(modelName + " 模型未找到")
+                .setMessage(msg)
+                .setPositiveButton("我知道了", (d, w) -> d.dismiss())
+                .setNegativeButton("改用 ML Kit", (d, w) -> {
+                    d.dismiss();
+                    selectedModel = "MobileFaceNet";
+                    performMLKitFaceDetection();
+                })
+                .show();
     }
 
     private boolean assetExists(String assetPath) {
@@ -336,10 +337,10 @@ public class AttendanceActivity extends AppCompatActivity {
             int w = r.width();
             int h = r.height();
             int margin = (int) (Math.min(w, h) * marginRatio);
-            int left = Math.max(0, cx - w/2 - margin);
-            int top = Math.max(0, cy - h/2 - margin);
-            int right = Math.min(src.getWidth(), cx + w/2 + margin);
-            int bottom = Math.min(src.getHeight(), cy + h/2 + margin);
+            int left = Math.max(0, cx - w / 2 - margin);
+            int top = Math.max(0, cy - h / 2 - margin);
+            int right = Math.min(src.getWidth(), cx + w / 2 + margin);
+            int bottom = Math.min(src.getHeight(), cy + h / 2 + margin);
             int cw = Math.max(1, right - left);
             int ch = Math.max(1, bottom - top);
             return Bitmap.createBitmap(src, left, top, cw, ch);
@@ -348,7 +349,7 @@ public class AttendanceActivity extends AppCompatActivity {
             return null;
         }
     }
-    
+
     /**
      * 使用Google ML Kit进行人脸检测
      */
@@ -364,23 +365,24 @@ public class AttendanceActivity extends AppCompatActivity {
                         Toast.makeText(AttendanceActivity.this, "未检测到人脸，请重新拍照", Toast.LENGTH_SHORT).show();
                     } else {
                         // 保存分割后的人脸图像
-                        List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps, String.valueOf(sessionId));
-                        
+                        List<String> faceImagePaths = faceDetectionManager.saveFaceBitmaps(faceBitmaps,
+                                String.valueOf(sessionId));
+
                         // 显示人脸分割结果
                         showFaceSegmentationResults(faces, faceBitmaps, faceImagePaths);
-                        
+
                         // 处理每个人脸
                         processDetectedFaces(faces, faceBitmaps, faceImagePaths);
-                        
+
                         progressBar.setVisibility(View.GONE);
                         tvStatus.setText("检测到 " + faces.size() + " 个人脸，正在比对...");
-                        
+
                         // 继续后续的人脸比对流程
                         performFaceRecognition(faces, faceBitmaps, faceImagePaths);
                     }
                 });
             }
-            
+
             @Override
             public void onFailure(Exception e) {
                 runOnUiThread(() -> {
@@ -414,7 +416,8 @@ public class AttendanceActivity extends AppCompatActivity {
                 }
 
                 // 资产检查
-                final String assetPath = singlePrecision ? "models/yunet_fp32_single.tflite" : "models/yunet_fp16_multi.tflite";
+                final String assetPath = singlePrecision ? "models/yunet_fp32_single.tflite"
+                        : "models/yunet_fp16_multi.tflite";
                 if (!assetExists(assetPath)) {
                     runOnUiThread(() -> showMissingModelDialog("YuNet TFLite", assetPath));
                     return;
@@ -423,7 +426,8 @@ public class AttendanceActivity extends AppCompatActivity {
                 YuNetTFLiteDetector.ModelVariant variant = singlePrecision
                         ? YuNetTFLiteDetector.ModelVariant.SINGLE_FACE
                         : YuNetTFLiteDetector.ModelVariant.MULTI_FACE;
-                YuNetTFLiteDetector detector = new YuNetTFLiteDetector(AttendanceActivity.this, 320, 0.6f, 0.5f, variant);
+                YuNetTFLiteDetector detector = new YuNetTFLiteDetector(AttendanceActivity.this, 320, 0.6f, 0.5f,
+                        variant);
                 List<Rect> rects = detector.detect(src);
 
                 if (rects == null || rects.isEmpty()) {
@@ -445,7 +449,8 @@ public class AttendanceActivity extends AppCompatActivity {
                     if (fb != null) {
                         faceBitmaps.add(fb);
                         String p = imageStorageManager.saveTempImage(fb, "yunet_face_" + sessionId + "_" + i + ".jpg");
-                        if (p != null) facePaths.add(p);
+                        if (p != null)
+                            facePaths.add(p);
                     }
                 }
 
@@ -459,7 +464,8 @@ public class AttendanceActivity extends AppCompatActivity {
                 List<float[]> embeddings = new ArrayList<>();
                 for (Rect r : rects) {
                     float[] vec = faceRecognitionManager.extractFaceFeatures(src, r);
-                    if (vec != null) embeddings.add(vec);
+                    if (vec != null)
+                        embeddings.add(vec);
                 }
 
                 if (embeddings.isEmpty()) {
@@ -529,42 +535,44 @@ public class AttendanceActivity extends AppCompatActivity {
             }
         }).start();
     }
-    
+
     /**
      * 处理检测到的人脸
      */
-    private void processDetectedFaces(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
+    private void processDetectedFaces(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+            List<String> faceImagePaths) {
         // 对每个人脸进行标准化处理
         for (int i = 0; i < faceBitmaps.size(); i++) {
             Bitmap faceBitmap = faceBitmaps.get(i);
-            
+
             // 标准化人脸图像到224x224
             Bitmap normalizedFace = FaceImageProcessor.normalizeFaceImage(faceBitmap, 224);
-            
+
             // 检查图像质量
             float quality = FaceImageProcessor.calculateImageQuality(normalizedFace);
             if (quality < 0.6f) {
                 // 质量较差的人脸，进行增强处理
                 normalizedFace = FaceImageProcessor.enhanceImage(normalizedFace, 1.2f, 10f);
-                
+
                 // 保存增强后的图像用于后续对比
-                String enhancedImagePath = imageStorageManager.saveTempImage(normalizedFace, 
-                    "enhanced_face_" + sessionId + "_" + i + ".jpg");
-                
+                String enhancedImagePath = imageStorageManager.saveTempImage(normalizedFace,
+                        "enhanced_face_" + sessionId + "_" + i + ".jpg");
+
                 if (enhancedImagePath != null) {
                     Log.d(TAG, "Enhanced face image saved: " + enhancedImagePath);
                 }
             }
-            
+
             // 更新faceBitmaps中的图像
             faceBitmaps.set(i, normalizedFace);
         }
     }
-    
+
     /**
      * 执行人脸识别比对
      */
-    private void performFaceRecognition(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
+    private void performFaceRecognition(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+            List<String> faceImagePaths) {
         new Thread(() -> {
             try {
                 // 先提取向量用于展示与确认
@@ -583,7 +591,8 @@ public class AttendanceActivity extends AppCompatActivity {
                     if (vec != null) {
                         // 调试日志：检查向量维度、范数与前几维采样，便于与校验页比对
                         float norm2 = 0f;
-                        for (float v : vec) norm2 += v * v;
+                        for (float v : vec)
+                            norm2 += v * v;
                         float norm = (float) Math.sqrt(norm2);
                         int sampleCount = Math.min(5, vec.length);
                         android.util.Log.d(TAG, "EMB_DEBUG index=" + i +
@@ -611,7 +620,8 @@ public class AttendanceActivity extends AppCompatActivity {
                         new Thread(() -> {
                             try {
                                 // 使用通用导入向量的班级内比对方法，直接用已生成的向量
-                                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager.recognizeImportedVectorsWithinClass(embeddings, classroomId);
+                                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
+                                        .recognizeImportedVectorsWithinClass(embeddings, classroomId);
 
                                 // 将识别结果持久化到数据库（本次会话）
                                 persistAttendanceResultsForSession(sessionId, results);
@@ -633,14 +643,16 @@ public class AttendanceActivity extends AppCompatActivity {
                                 final List<String> finalRecognizedNames = recognizedStudentNames;
 
                                 runOnUiThread(() -> {
-                                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
+                                    tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size()
+                                            + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
 
                                     // 跳转到结果界面，传递识别结果
                                     Intent intent = new Intent(this, AttendanceResultActivity.class);
                                     intent.putExtra("session_id", sessionId);
                                     intent.putExtra("detected_faces", faces.size());
                                     intent.putExtra("recognized_faces", finalRecognizedCount);
-                                    intent.putStringArrayListExtra("recognized_names", new ArrayList<>(finalRecognizedNames));
+                                    intent.putStringArrayListExtra("recognized_names",
+                                            new ArrayList<>(finalRecognizedNames));
                                     startActivity(intent);
                                     finish();
                                 });
@@ -673,7 +685,8 @@ public class AttendanceActivity extends AppCompatActivity {
      * - 识别成功的学生标记为 Present
      * - 本班未被识别到的学生标记为 Absent
      */
-    private void persistAttendanceResultsForSession(long sessionId, List<FaceRecognitionManager.RecognitionResult> results) {
+    private void persistAttendanceResultsForSession(long sessionId,
+            List<FaceRecognitionManager.RecognitionResult> results) {
         try {
             java.util.Set<Long> presentIds = new java.util.HashSet<>();
             for (FaceRecognitionManager.RecognitionResult r : results) {
@@ -700,11 +713,12 @@ public class AttendanceActivity extends AppCompatActivity {
             android.util.Log.e(TAG, "持久化考勤结果失败: " + t.getMessage(), t);
         }
     }
-    
+
     /**
      * 显示人脸分割结果
      */
-    private void showFaceSegmentationResults(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
+    private void showFaceSegmentationResults(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+            List<String> faceImagePaths) {
         // 创建对话框显示分割结果
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("检测到 " + faces.size() + " 个人脸");
@@ -726,20 +740,20 @@ public class AttendanceActivity extends AppCompatActivity {
             }
             String imagePath = faceImagePaths.get(0);
 
-            String[] options = {"人脸修正", "人脸增强"};
+            String[] options = { "人脸修正", "人脸增强" };
             new AlertDialog.Builder(this)
-                .setTitle("选择处理方式")
-                .setItems(options, (d, idx) -> {
-                    Intent intent;
-                    if (idx == 0) {
-                        intent = new Intent(this, FaceCorrectionActivity.class);
-                    } else {
-                        intent = new Intent(this, FaceEnhancementActivity.class);
-                    }
-                    intent.putExtra("image_path", imagePath);
-                    startActivity(intent);
-                })
-                .show();
+                    .setTitle("选择处理方式")
+                    .setItems(options, (d, idx) -> {
+                        Intent intent;
+                        if (idx == 0) {
+                            intent = new Intent(this, FaceCorrectionActivity.class);
+                        } else {
+                            intent = new Intent(this, FaceEnhancementActivity.class);
+                        }
+                        intent.putExtra("image_path", imagePath);
+                        startActivity(intent);
+                    })
+                    .show();
         });
 
         // 继续识别
@@ -754,7 +768,7 @@ public class AttendanceActivity extends AppCompatActivity {
         AlertDialog dialog = builder.create();
         dialog.show();
     }
-    
+
     /**
      * 显示暂停对话框
      */
@@ -762,12 +776,12 @@ public class AttendanceActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("识别已暂停");
         builder.setMessage("识别过程已暂停，您可以选择继续或取消");
-        
+
         builder.setPositiveButton("继续识别", (dialog, which) -> {
             // 继续识别流程
             dialog.dismiss();
         });
-        
+
         builder.setNegativeButton("取消识别", (dialog, which) -> {
             // 取消识别，重置状态
             progressBar.setVisibility(View.GONE);
@@ -775,7 +789,7 @@ public class AttendanceActivity extends AppCompatActivity {
             tvStatus.setText("识别已取消");
             dialog.dismiss();
         });
-        
+
         AlertDialog dialog = builder.create();
         dialog.show();
     }
@@ -783,7 +797,8 @@ public class AttendanceActivity extends AppCompatActivity {
     /**
      * 简化版分割结果提示（YuNet 路径）
      */
-    private void showFaceSegmentationResultsSimple(int faceCount, List<Bitmap> faceBitmaps, List<String> faceImagePaths) {
+    private void showFaceSegmentationResultsSimple(int faceCount, List<Bitmap> faceBitmaps,
+            List<String> faceImagePaths) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("检测到 " + faceCount + " 个人脸");
         builder.setMessage("是否查看分割后的人脸照片或进行人脸修复/增强？");
@@ -802,20 +817,20 @@ public class AttendanceActivity extends AppCompatActivity {
             }
             String imagePath = faceImagePaths.get(0);
 
-            String[] options = {"人脸修正", "人脸增强"};
+            String[] options = { "人脸修正", "人脸增强" };
             new AlertDialog.Builder(this)
-                .setTitle("选择处理方式")
-                .setItems(options, (d, idx) -> {
-                    Intent intent;
-                    if (idx == 0) {
-                        intent = new Intent(this, FaceCorrectionActivity.class);
-                    } else {
-                        intent = new Intent(this, FaceEnhancementActivity.class);
-                    }
-                    intent.putExtra("image_path", imagePath);
-                    startActivity(intent);
-                })
-                .show();
+                    .setTitle("选择处理方式")
+                    .setItems(options, (d, idx) -> {
+                        Intent intent;
+                        if (idx == 0) {
+                            intent = new Intent(this, FaceCorrectionActivity.class);
+                        } else {
+                            intent = new Intent(this, FaceEnhancementActivity.class);
+                        }
+                        intent.putExtra("image_path", imagePath);
+                        startActivity(intent);
+                    })
+                    .show();
         });
 
         builder.setPositiveButton("继续识别", (dialog, which) -> dialog.dismiss());
@@ -823,7 +838,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
         builder.create().show();
     }
-    
+
     /**
      * 根据学生ID获取学生姓名
      */
@@ -853,9 +868,12 @@ public class AttendanceActivity extends AppCompatActivity {
         builder.setCancelable(false);
 
         // 先定义按钮，但在显示后重写点击逻辑，避免复制按钮关闭弹窗
-        builder.setNegativeButton("复制 CSV", (d, w) -> {});
-        builder.setNeutralButton("复制 JSON", (d, w) -> {});
-        builder.setPositiveButton("继续比对", (d, w) -> {});
+        builder.setNegativeButton("复制 CSV", (d, w) -> {
+        });
+        builder.setNeutralButton("复制 JSON", (d, w) -> {
+        });
+        builder.setPositiveButton("继续比对", (d, w) -> {
+        });
 
         builder.setOnCancelListener(d -> {
             // 用户取消则终止当前流程
@@ -887,7 +905,8 @@ public class AttendanceActivity extends AppCompatActivity {
             if (btnGo != null) {
                 btnGo.setOnClickListener(v -> {
                     dialog.dismiss();
-                    if (onProceed != null) onProceed.run();
+                    if (onProceed != null)
+                        onProceed.run();
                 });
             }
         });
@@ -910,10 +929,12 @@ public class AttendanceActivity extends AppCompatActivity {
             sb.append("[");
             for (int j = 0; j < vec.length; j++) {
                 sb.append(String.format(java.util.Locale.US, "%.6f", vec[j]));
-                if (j < vec.length - 1) sb.append(", ");
+                if (j < vec.length - 1)
+                    sb.append(", ");
             }
             sb.append("]");
-            if (i < embeddings.size() - 1) sb.append(",\n");
+            if (i < embeddings.size() - 1)
+                sb.append(",\n");
         }
         sb.append("]");
         return sb.toString();
@@ -925,9 +946,11 @@ public class AttendanceActivity extends AppCompatActivity {
             float[] vec = embeddings.get(i);
             for (int j = 0; j < vec.length; j++) {
                 sb.append(String.format(java.util.Locale.US, "%.6f", vec[j]));
-                if (j < vec.length - 1) sb.append(",");
+                if (j < vec.length - 1)
+                    sb.append(",");
             }
-            if (i < embeddings.size() - 1) sb.append("\n");
+            if (i < embeddings.size() - 1)
+                sb.append("\n");
         }
         return sb.toString();
     }

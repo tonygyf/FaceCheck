@@ -3,71 +3,94 @@ package com.example.facecheck.adapters;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
+import android.widget.Button;
 import android.widget.RadioButton;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
 import com.example.facecheck.data.model.Course;
 
 import java.util.List;
 
-public class StudentCourseAdapter extends BaseAdapter {
+public class StudentCourseAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    private static final int TYPE_ITEM = 0;
+    private static final int TYPE_FOOTER = 1;
+
     private List<Course> courses;
     private int selectedPosition = -1;
+    private OnConfirmClickListener onConfirmClickListener;
 
-    public StudentCourseAdapter(List<Course> courses) {
+    public interface OnConfirmClickListener {
+        void onConfirm();
+    }
+
+    public StudentCourseAdapter(List<Course> courses, OnConfirmClickListener listener) {
         this.courses = courses;
+        this.onConfirmClickListener = listener;
     }
 
     @Override
-    public int getCount() {
-        return courses.size();
-    }
-
-    @Override
-    public Object getItem(int position) {
-        return courses.get(position);
-    }
-
-    @Override
-    public long getItemId(int position) {
-        return position;
-    }
-
-    @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        ViewHolder holder;
-        if (convertView == null) {
-            convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_student_course, parent, false);
-            holder = new ViewHolder();
-            holder.tvName = convertView.findViewById(R.id.tv_course_name);
-            holder.tvTeacher = convertView.findViewById(R.id.tv_course_teacher);
-            holder.tvTime = convertView.findViewById(R.id.tv_course_time);
-            holder.tvLocation = convertView.findViewById(R.id.tv_course_location);
-            holder.rbSelected = convertView.findViewById(R.id.rb_selected);
-            convertView.setTag(holder);
-        } else {
-            holder = (ViewHolder) convertView.getTag();
+    public int getItemViewType(int position) {
+        if (position == courses.size()) {
+            return TYPE_FOOTER;
         }
-
-        Course course = courses.get(position);
-        holder.tvName.setText(course.getName());
-        holder.tvTeacher.setText("讲师：" + course.getTeacherName());
-        holder.tvTime.setText("时间：" + course.getTime());
-        holder.tvLocation.setText("地点：" + course.getLocation());
-        holder.rbSelected.setChecked(position == selectedPosition);
-
-        convertView.setOnClickListener(v -> {
-            selectedPosition = position;
-            notifyDataSetChanged();
-        });
-
-        return convertView;
+        return TYPE_ITEM;
     }
 
-    public int getSelectedPosition() {
-        return selectedPosition;
+    @NonNull
+    @Override
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == TYPE_FOOTER) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_course_footer, parent, false);
+            return new FooterViewHolder(view);
+        }
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_student_course, parent, false);
+        return new CourseViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        if (holder instanceof CourseViewHolder) {
+            Course course = courses.get(position);
+            CourseViewHolder vh = (CourseViewHolder) holder;
+
+            vh.tvName.setText(course.getName());
+            vh.tvTeacher.setText("讲师：" + course.getTeacherName());
+            vh.tvTime.setText("时间：" + course.getTime());
+            vh.tvLocation.setText("地点：" + course.getLocation());
+            vh.rbSelected.setChecked(position == selectedPosition);
+
+            vh.itemView.setOnClickListener(v -> {
+                int previous = selectedPosition;
+                selectedPosition = holder.getAdapterPosition();
+
+                notifyItemChanged(previous);
+                notifyItemChanged(selectedPosition);
+            });
+            vh.rbSelected.setOnClickListener(v -> {
+                int previous = selectedPosition;
+                selectedPosition = holder.getAdapterPosition();
+
+                notifyItemChanged(previous);
+                notifyItemChanged(selectedPosition);
+            });
+        } else if (holder instanceof FooterViewHolder) {
+            FooterViewHolder vh = (FooterViewHolder) holder;
+            vh.btnConfirm.setOnClickListener(v -> {
+                if (onConfirmClickListener != null) {
+                    onConfirmClickListener.onConfirm();
+                }
+            });
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return courses.size() + 1; // +1 for Footer
     }
 
     public Course getSelectedCourse() {
@@ -77,8 +100,26 @@ public class StudentCourseAdapter extends BaseAdapter {
         return null;
     }
 
-    private static class ViewHolder {
+    static class CourseViewHolder extends RecyclerView.ViewHolder {
         TextView tvName, tvTeacher, tvTime, tvLocation;
         RadioButton rbSelected;
+
+        CourseViewHolder(View itemView) {
+            super(itemView);
+            tvName = itemView.findViewById(R.id.tv_course_name);
+            tvTeacher = itemView.findViewById(R.id.tv_course_teacher);
+            tvTime = itemView.findViewById(R.id.tv_course_time);
+            tvLocation = itemView.findViewById(R.id.tv_course_location);
+            rbSelected = itemView.findViewById(R.id.rb_selected);
+        }
+    }
+
+    static class FooterViewHolder extends RecyclerView.ViewHolder {
+        Button btnConfirm;
+
+        FooterViewHolder(View itemView) {
+            super(itemView);
+            btnConfirm = itemView.findViewById(R.id.btn_select_course);
+        }
     }
 }

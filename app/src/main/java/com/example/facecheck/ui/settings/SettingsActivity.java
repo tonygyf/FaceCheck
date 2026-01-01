@@ -46,6 +46,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     // 关于
     private View itemAbout;
+    private long lastAboutClickTime = 0;
+    private int aboutClickCount = 0;
 
     // 数据与同步
     private DatabaseHelper dbHelper;
@@ -102,15 +104,36 @@ public class SettingsActivity extends AppCompatActivity {
         // 关于入口
         itemAbout = findViewById(R.id.item_about);
         itemAbout.setOnClickListener(v -> {
-            String version = "";
-            try {
-                version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-            } catch (Throwable ignore) {}
-            new AlertDialog.Builder(this)
-                    .setTitle("关于 FaceCheck")
-                    .setMessage("版本：" + version)
-                    .setPositiveButton("确定", null)
-                    .show();
+            long currentTime = System.currentTimeMillis();
+
+            if (currentTime - lastAboutClickTime < 500) {
+                aboutClickCount++;
+            } else {
+                aboutClickCount = 1;
+            }
+            lastAboutClickTime = currentTime;
+
+            if (aboutClickCount == 3) {
+                SharedPreferences demoPrefs = getSharedPreferences("demo_mode_prefs", MODE_PRIVATE);
+                boolean currentState = demoPrefs.getBoolean("demo_mode_enabled", false);
+                boolean newState = !currentState;
+                demoPrefs.edit().putBoolean("demo_mode_enabled", newState).apply();
+
+                String msg = newState ? "演示模式已启用" : "演示模式已关闭";
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                aboutClickCount = 0;
+            } else if (aboutClickCount == 1) {
+                String version = "";
+                try {
+                    version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                } catch (Throwable ignore) {
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("关于 FaceCheck")
+                        .setMessage("版本：" + version)
+                        .setPositiveButton("确定", null)
+                        .show();
+            }
         });
     }
 
@@ -144,9 +167,12 @@ public class SettingsActivity extends AppCompatActivity {
         boolean dark = "dark".equals(mode);
         boolean light = "light".equals(mode);
 
-        btnThemeSystem.setBackgroundResource(sys ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
-        btnThemeDark.setBackgroundResource(dark ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
-        btnThemeLight.setBackgroundResource(light ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+        btnThemeSystem.setBackgroundResource(
+                sys ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+        btnThemeDark.setBackgroundResource(
+                dark ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
+        btnThemeLight.setBackgroundResource(
+                light ? R.drawable.bg_theme_option_selected : R.drawable.bg_theme_option_unselected);
 
         // 仅通过背景体现选中态
     }
@@ -228,7 +254,8 @@ public class SettingsActivity extends AppCompatActivity {
                 return tmp.testConnection();
             }, ok -> {
                 statusText.setText(ok ? "连接成功！" : "连接失败，请检查配置");
-                statusText.setTextColor(ContextCompat.getColor(this, ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
+                statusText.setTextColor(ContextCompat.getColor(this,
+                        ok ? android.R.color.holo_green_dark : android.R.color.holo_red_dark));
             }, t -> {
                 statusText.setText("连接失败: " + t.getMessage());
                 statusText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
@@ -413,9 +440,11 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private String formatFileSize(long size) {
-        if (size <= 0) return "0 B";
-        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
+        if (size <= 0)
+            return "0 B";
+        final String[] units = new String[] { "B", "KB", "MB", "GB", "TB" };
         int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
-        return new java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
+        return new java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " "
+                + units[digitGroups];
     }
 }
