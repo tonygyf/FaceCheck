@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black">
@@ -19,18 +20,24 @@
         android:padding="8dp"
         android:gravity="center_vertical">
         
-        <Switch
+        <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/switchMode"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="绘制模式 "
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
+            android:text="绘制模式"
+            android:textColor="@color/primary"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:checked="false"
-            android:showText="true"
+            app:showText="true"
             android:textOn="开启"
-            android:textOff="关闭"/>
+            android:textOff="关闭"
+            app:thumbTint="@color/primary"
+            app:trackTint="@color/primary_light"
+            android:background="@drawable/bg_theme_option_unselected"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginEnd="12dp"/>
             
         <View
             android:layout_width="0dp"

@@ -10,7 +10,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
-import android.widget.Switch;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -28,7 +28,7 @@ public class ManualFaceCropActivity extends AppCompatActivity {
 
     private TouchImageView ivCropImage;
     private Bitmap originalBitmap;
-    private Switch switchMode;
+    private SwitchMaterial switchMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

@@ -460,11 +460,11 @@ public class FaceRecognitionManager {
                 return null;
             }
 
+            ensureInterpreterLoaded();
             Bitmap crop = Bitmap.createBitmap(sourceBitmap, left, top, w, h);
             Bitmap input = Bitmap.createScaledBitmap(crop, modelInputWidth, modelInputHeight, true);
 
             // 废弃 ML Kit 嵌入，统一走深度模型（MobileFaceNet / FaceNet）
-            ensureInterpreterLoaded();
             float[] features = "Google FaceNet".equals(selectedModelName)
                     ? runFaceNet(input)
                     : runMobileFaceNet(input);
@@ -1430,7 +1430,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
             results.add(result);
         }
         
-        return results;
+        return filterBestResultsPerStudent(results);
     }
 
     // 删除：使用 MobileFaceNet 嵌入进行单人脸识别（已废弃）
@@ -1514,13 +1514,43 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
                 }
             }
 
-            if (bestSim >= SIMILARITY_THRESHOLD) {
+            android.util.Log.d(TAG, "Manual recognition: best student ID=" + bestStudentId + ", best sim=" + bestSim + ", threshold=0.6");
+
+            if (bestSim >= 0.6f) {
                 results.add(new RecognitionResult(bestStudentId, bestSim, "识别成功"));
             } else {
                 results.add(new RecognitionResult(-1, bestSim, "未匹配到合适学生"));
             }
         }
-        return results;
+        return filterBestResultsPerStudent(results);
+    }
+
+    /**
+     * 过滤识别结果，确保每个学生 ID 在结果列表中只出现一次（保留相似度最高的那个）。
+     * 对于未识别成功（studentId = -1）的结果，全部保留。
+     */
+    private List<RecognitionResult> filterBestResultsPerStudent(List<RecognitionResult> results) {
+        if (results == null || results.isEmpty()) return results;
+
+        java.util.Map<Long, RecognitionResult> bestResultsMap = new java.util.HashMap<>();
+        List<RecognitionResult> finalResults = new ArrayList<>();
+
+        for (RecognitionResult result : results) {
+            if (result.getStudentId() == -1) {
+                // 未识别成功的人脸，保留占位
+                finalResults.add(result);
+                continue;
+            }
+
+            long sid = result.getStudentId();
+            if (!bestResultsMap.containsKey(sid) || result.getSimilarity() > bestResultsMap.get(sid).getSimilarity()) {
+                bestResultsMap.put(sid, result);
+            }
+        }
+
+        // 将每个学生的最佳结果添加到最终列表
+        finalResults.addAll(bestResultsMap.values());
+        return finalResults;
     }
 
     /**
@@ -1593,7 +1623,7 @@ private int generateDeepLearningFeatures(Bitmap faceBitmap, float[] features, in
                 results.add(new RecognitionResult(-1, bestSimilarity, "未找到匹配的学生"));
             }
         }
-        return results;
+        return filterBestResultsPerStudent(results);
     }
 
     /**

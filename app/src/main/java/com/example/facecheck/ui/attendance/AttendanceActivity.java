@@ -61,6 +61,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private Bitmap originalOrientedBitmap;
     private Button btnTakePhoto;
     private Button btnPickImage;
+    private Button btnManualCrop;
     private Button btnStartRecognition;
     private ProgressBar progressBar;
     private TextView tvStatus;
@@ -76,6 +77,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickImageLauncher;
+    private ActivityResultLauncher<Intent> manualCropLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,6 +115,7 @@ public class AttendanceActivity extends AppCompatActivity {
         ivPreview = findViewById(R.id.ivPreview);
         btnTakePhoto = findViewById(R.id.btnTakePhoto);
         btnPickImage = findViewById(R.id.btnPickImage);
+        btnManualCrop = findViewById(R.id.btnManualCrop);
         btnStartRecognition = findViewById(R.id.btnStartRecognition);
         progressBar = findViewById(R.id.progressBar);
         tvStatus = findViewById(R.id.tvStatus);
@@ -145,9 +148,11 @@ public class AttendanceActivity extends AppCompatActivity {
 
         btnTakePhoto.setOnClickListener(v -> checkCameraPermissionAndTakePhoto());
         btnPickImage.setOnClickListener(v -> pickImageFromGallery());
+        btnManualCrop.setOnClickListener(v -> startManualCrop());
         btnStartRecognition.setOnClickListener(v -> startRecognition());
 
         // 初始状态
+        btnManualCrop.setEnabled(false);
         btnStartRecognition.setEnabled(false);
         progressBar.setVisibility(View.GONE);
     }
@@ -176,8 +181,9 @@ public class AttendanceActivity extends AppCompatActivity {
                                 dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
                                         System.currentTimeMillis(), "PENDING");
 
-                                // 启用识别按钮
+                                // 启用识别按钮和手动框选按钮
                                 btnStartRecognition.setEnabled(true);
+                                btnManualCrop.setEnabled(true);
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -207,10 +213,23 @@ public class AttendanceActivity extends AppCompatActivity {
                                 dbHelper.insertSyncLog("PhotoAsset", photoId, "INSERT",
                                         System.currentTimeMillis(), "PENDING");
                                 btnStartRecognition.setEnabled(true);
+                                btnManualCrop.setEnabled(true);
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
                             Toast.makeText(this, "导入图片失败", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+
+        // 手动框选返回
+        manualCropLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        List<Rect> rects = result.getData().getParcelableArrayListExtra(com.example.facecheck.ui.face.ManualFaceCropActivity.RESULT_CROP_RECTS);
+                        if (rects != null && !rects.isEmpty()) {
+                            performManualFaceDetection(rects);
                         }
                     }
                 });
@@ -273,6 +292,144 @@ public class AttendanceActivity extends AppCompatActivity {
 
         intent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri);
         takePhotoLauncher.launch(intent);
+    }
+
+    private void startManualCrop() {
+        if (currentPhotoUri == null) {
+            Toast.makeText(this, "请先拍照或导入图片", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, com.example.facecheck.ui.face.ManualFaceCropActivity.class);
+        intent.putExtra(com.example.facecheck.ui.face.ManualFaceCropActivity.EXTRA_IMAGE_URI, currentPhotoUri);
+        manualCropLauncher.launch(intent);
+    }
+
+    private void performManualFaceDetection(List<Rect> manualRects) {
+        // 显示进度条
+        progressBar.setVisibility(View.VISIBLE);
+        btnStartRecognition.setEnabled(false);
+        btnManualCrop.setEnabled(false);
+        tvStatus.setText("正在处理手动框选的人脸...");
+
+        new Thread(() -> {
+            try {
+                Bitmap src = originalOrientedBitmap;
+                if (src == null) {
+                    src = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
+                    originalOrientedBitmap = src;
+                }
+                if (src == null) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        btnStartRecognition.setEnabled(true);
+                        btnManualCrop.setEnabled(true);
+                        tvStatus.setText("图片加载失败");
+                    });
+                    return;
+                }
+
+                // 生成分割位图并保存临时文件
+                List<Bitmap> faceBitmaps = new ArrayList<>();
+                List<String> facePaths = new ArrayList<>();
+                for (int i = 0; i < manualRects.size(); i++) {
+                    Rect r = manualRects.get(i);
+                    // 手动框选通常不需要额外边距，或者给一个极小的边距
+                    Bitmap fb = cropFaceWithMargin(src, r, 0.1f);
+                    if (fb != null) {
+                        faceBitmaps.add(fb);
+                        String p = imageStorageManager.saveTempImage(fb, "manual_face_" + sessionId + "_" + i + ".jpg");
+                        if (p != null)
+                            facePaths.add(p);
+                    }
+                }
+
+                if (faceBitmaps.isEmpty()) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        btnStartRecognition.setEnabled(true);
+                        btnManualCrop.setEnabled(true);
+                        tvStatus.setText("手动裁剪失败");
+                    });
+                    return;
+                }
+
+                // 提取向量
+                List<float[]> embeddings = new ArrayList<>();
+                for (Rect r : manualRects) {
+                    float[] vec = faceRecognitionManager.extractFaceFeatures(src, r);
+                    if (vec != null)
+                        embeddings.add(vec);
+                }
+
+                if (embeddings.isEmpty()) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        btnStartRecognition.setEnabled(true);
+                        btnManualCrop.setEnabled(true);
+                        tvStatus.setText("向量提取失败");
+                    });
+                    return;
+                }
+
+                runOnUiThread(() -> {
+                    // 显示分割结果预览（可选，这里复用 simple 版）
+                    showFaceSegmentationResultsSimple(manualRects.size(), faceBitmaps, facePaths);
+                    tvStatus.setText("已生成向量，待确认后继续比对");
+                    showEmbeddingsDialog(embeddings, () -> {
+                        new Thread(() -> {
+                            try {
+                                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
+                                        .recognizeImportedVectorsWithinClass(embeddings, classroomId);
+
+                                persistAttendanceResultsForSession(sessionId, results);
+
+                                int recognizedCountTmp = 0;
+                                List<String> recognizedNamesTmp = new ArrayList<>();
+                                for (FaceRecognitionManager.RecognitionResult r : results) {
+                                    if (r.isSuccess()) {
+                                        recognizedCountTmp++;
+                                        recognizedNamesTmp.add(getStudentNameById(r.getStudentId()));
+                                    }
+                                }
+
+                                final int finalRecognizedCount = recognizedCountTmp;
+                                final ArrayList<String> finalRecognizedNames = new ArrayList<>(recognizedNamesTmp);
+
+                                runOnUiThread(() -> {
+                                    tvStatus.setText("识别完成 - 手动框选 " + manualRects.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
+
+                                    Intent intent = new Intent(this, AttendanceResultActivity.class);
+                                    intent.putExtra("session_id", sessionId);
+                                    intent.putExtra("detected_faces", manualRects.size());
+                                    intent.putExtra("recognized_faces", finalRecognizedCount);
+                                    intent.putStringArrayListExtra("recognized_names", finalRecognizedNames);
+                                    startActivity(intent);
+                                    finish();
+                                });
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                runOnUiThread(() -> {
+                                    progressBar.setVisibility(View.GONE);
+                                    btnStartRecognition.setEnabled(true);
+                                    btnManualCrop.setEnabled(true);
+                                    tvStatus.setText("识别失败");
+                                    Toast.makeText(this, "识别失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        }).start();
+                    });
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    btnStartRecognition.setEnabled(true);
+                    btnManualCrop.setEnabled(true);
+                    tvStatus.setText("手动处理异常");
+                });
+            }
+        }).start();
     }
 
     private void startRecognition() {
@@ -691,8 +848,9 @@ public class AttendanceActivity extends AppCompatActivity {
             java.util.Set<Long> presentIds = new java.util.HashSet<>();
             for (FaceRecognitionManager.RecognitionResult r : results) {
                 if (r.isSuccess()) {
-                    presentIds.add(r.getStudentId());
-                    dbHelper.insertAttendanceResult(sessionId, r.getStudentId(), "Present", r.getSimilarity(), "AUTO");
+                    long sid = r.getStudentId();
+                    if (!presentIds.add(sid)) continue; // 避免同一次识别中重复插入同一个学生
+                    dbHelper.insertAttendanceResult(sessionId, sid, "Present", r.getSimilarity(), "AUTO");
                 }
             }
 
