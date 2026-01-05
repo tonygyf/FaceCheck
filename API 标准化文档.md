@@ -1,9 +1,9 @@
-# FaceCheck Cloudflare Workers + D1 接口方法说明
+# FaceCheck  接口方法说明
 
-本说明用于指导在 Cloudflare Workers + D1 上实现与对接 FaceCheck 所需的基础接口。内容涵盖：鉴权与 CORS、时间/响应约定、D1 基本用法，以及核心业务接口（认证/账户、学生、班级、课程、考勤、人脸特征、照片资源）。
+本说明用于指导在  上实现与对接 FaceCheck 所需的基础接口。内容涵盖：鉴权与 CORS、时间/响应约定、D1 基本用法，以及核心业务接口（认证/账户、学生、班级、课程、考勤、人脸特征、照片资源）。
 
 ## 使用约定
-- 基地址：自行在 Cloudflare 路由配置，例如 `https://api.example.com`
+- 基地址：自行在 路由配置，例如 `https://api.example.com`
 - 所有接口均返回 `application/json`
 - 时间统一使用毫秒时间戳（Unix ms）
 - 鉴权统一使用 `Authorization: Bearer <token>`
@@ -452,5 +452,4 @@
 - 请参考项目文件：[schema.sql](file:///d:/typer/android_demo/FaceCheck/app/src/main/assets/schema.sql)
 - 学生唯一约束建议：`CREATE UNIQUE INDEX IF NOT EXISTS idx_student_unique ON Student(classId, sid);`
 
-## 备注
-- 图片/头像等二进制不建议存 D1；建议接入 Cloudflare R2（对象存储），此文档暂不包含 R2 上传接口，后续如需我可按你的决策补充。
+
