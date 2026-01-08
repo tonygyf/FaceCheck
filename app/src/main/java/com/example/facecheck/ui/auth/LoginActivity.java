@@ -16,6 +16,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.example.facecheck.R;
 import com.example.facecheck.MainActivity;
+import com.example.facecheck.database.DatabaseHelper;
 import android.content.SharedPreferences;
 import com.airbnb.lottie.LottieAnimationView;
 import android.animation.Animator;
@@ -107,6 +108,23 @@ public class LoginActivity extends AppCompatActivity {
                 // 学生默认进入首页，避免加载教师专用页面
                 getSharedPreferences("ui_prefs", MODE_PRIVATE).edit()
                         .putInt("nav_selected_id", R.id.nav_home).apply();
+                
+                // 查询并保存学生的班级ID
+                DatabaseHelper dbHelper = new DatabaseHelper(LoginActivity.this);
+                android.database.Cursor cursor = dbHelper.getReadableDatabase().query(
+                    "Student",
+                    new String[]{"classId"},
+                    "id = ?",
+                    new String[]{String.valueOf(success.userId)},
+                    null, null, null
+                );
+                if (cursor != null && cursor.moveToFirst()) {
+                    long classId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
+                    ed.putLong("class_id", classId);
+                    cursor.close();
+                } else if (cursor != null) {
+                    cursor.close();
+                }
             }
             ed.apply();
 
@@ -131,9 +149,9 @@ public class LoginActivity extends AppCompatActivity {
                 lottieOverlayLogin.setVisibility(View.VISIBLE);
 
                 // 确保动画重新加载
-                lottieLoginView.cancelAnimation();
-                lottieLoginView.setAnimation("lottie/telegram.json");
-                lottieLoginView.setRepeatCount(0);
+                    lottieLoginView.cancelAnimation();
+                    // 使用XML中已定义的文件名，避免重复设置
+                    lottieLoginView.setRepeatCount(0);
 
                 // 移除旧的监听器以防重复
                 lottieLoginView.removeAllAnimatorListeners();

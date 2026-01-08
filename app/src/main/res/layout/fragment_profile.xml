@@ -4,10 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingLeft="16dp"
-    android:paddingRight="16dp"
-    android:paddingBottom="16dp"
-    android:paddingTop="0dp">
+    android:background="@color/background_gray">
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -19,108 +16,285 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-
-
-
-            <!-- 用户头像 -->
-            <de.hdodenhof.circleimageview.CircleImageView
-                android:id="@+id/profile_image"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_gravity="center_horizontal"
-                android:src="@drawable/ic_person_placeholder"
-                android:layout_marginBottom="16dp" />
-
-            <!-- 更换头像按钮 -->
-            <Button
-                android:id="@+id/btn_change_photo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="更换头像"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/primary" />
-
-            <!-- 用户名显示 -->
-            <TextView
-                android:id="@+id/tv_username"
+            <!-- 用户信息卡片 - 谷歌风格 -->
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="用户名: "
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:background="@drawable/edit_text_background"
-                android:layout_marginBottom="8dp" />
+                android:layout_margin="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
 
-            <!-- 修改用户名按钮 -->
-            <Button
-                android:id="@+id/btn_change_username"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="修改用户名"
-                android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/primary" />
-
-            <!-- 邮箱显示（用 username 代替） -->
-            <TextView
-                android:id="@+id/tv_email"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="邮箱: "
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:background="@drawable/edit_text_background"
-                android:layout_marginBottom="8dp" />
-
-            <!-- 修改密码按钮（保持 ID，逻辑保持） -->
-            <Button
-                android:id="@+id/btn_change_password"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="修改密码"
-                android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/primary" />
-
-            <!-- 更多设置入口 -->
-            <LinearLayout
-                android:id="@+id/item_more_settings"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="12dp"
-                android:background="@drawable/edit_text_background"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp">
-
-                <TextView
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="更多功能"
-                    android:textSize="16sp" />
+                    android:orientation="vertical"
+                    android:padding="24dp">
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_chevron_right_24" />
-            </LinearLayout>
+                    <!-- 头像和基本信息 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
 
+                        <de.hdodenhof.circleimageview.CircleImageView
+                            android:id="@+id/profile_image"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            android:src="@drawable/ic_person_placeholder"
+                            android:layout_marginEnd="20dp" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tv_username"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="用户名"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/text_primary"
+                                android:layout_marginBottom="4dp" />
+
+                            <TextView
+                                android:id="@+id/tv_email"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="邮箱/学号"
+                                android:textSize="14sp"
+                                android:textColor="@color/text_secondary" />
+
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/btn_change_photo"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:src="@drawable/ic_camera"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:padding="8dp"
+                            android:contentDescription="更换头像" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
+            <!-- 设置列表 - 谷歌风格 -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- 修改用户名 -->
+                    <LinearLayout
+                        android:id="@+id/item_change_username"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="16dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_person"
+                            android:layout_marginEnd="16dp"
+                            app:tint="@color/icon_tint" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="修改用户名"
+                                android:textSize="16sp"
+                                android:textColor="@color/text_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="更新您的显示名称"
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary" />
+
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_chevron_right_24"
+                            app:tint="@color/icon_tint" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginStart="56dp" />
+
+                    <!-- 修改密码 -->
+                    <LinearLayout
+                        android:id="@+id/item_change_password"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="16dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_lock"
+                            android:layout_marginEnd="16dp"
+                            app:tint="@color/icon_tint" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="修改密码"
+                                android:textSize="16sp"
+                                android:textColor="@color/text_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="更新您的登录密码"
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary" />
+
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_chevron_right_24"
+                            app:tint="@color/icon_tint" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginStart="56dp" />
+
+                    <!-- 更多设置 -->
+                    <LinearLayout
+                        android:id="@+id/item_more_settings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="16dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_settings"
+                            android:layout_marginEnd="16dp"
+                            app:tint="@color/icon_tint" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="更多设置"
+                                android:textSize="16sp"
+                                android:textColor="@color/text_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="高级功能和选项"
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary" />
+
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_chevron_right_24"
+                            android:tint="@color/icon_tint" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
 
             <!-- 退出登录按钮 -->
-            <Button
-                android:id="@+id/btn_logout"
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="退出登录"
+                android:layout_marginHorizontal="16dp"
                 android:layout_marginBottom="16dp"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@android:color/holo_red_dark" />
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:id="@+id/item_logout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_logout"
+                        android:layout_marginEnd="16dp"
+                        app:tint="@color/error_red" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="退出登录"
+                        android:textSize="16sp"
+                        android:textColor="@color/error_red" />
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
 
         </LinearLayout>
+
     </androidx.core.widget.NestedScrollView>
 
     <!-- 进度条 -->
@@ -131,5 +305,27 @@
         android:layout_gravity="center"
         android:visibility="gone"
         android:layout_marginTop="16dp" />
+
+    <!-- 退出登录动画覆盖层 -->
+    <FrameLayout
+        android:id="@+id/lottieOverlayLogout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:elevation="8dp">
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/lottieLogoutView"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            app:lottie_fileName="lottie/exit.json"
+            app:lottie_autoPlay="false"
+            app:lottie_loop="false"
+            android:layout_gravity="center" />
+    </FrameLayout>
 
 </LinearLayout>

@@ -245,24 +245,11 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "切换到课堂");
             }
         } else if (itemId == R.id.nav_attendance) {
-            if ("teacher".equals(role)) {
-                // 教师端：点击考勤按钮，进入发布自拍签到流程
-                try {
-                    Intent intent = new Intent(this,
-                            com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
-                    intent.putExtra("mode", "attendance");
-                    intent.putExtra("default_type", "MANUAL"); // 默认选中自拍签到
-                    startActivity(intent);
-                    return; // 不切换 Fragment，保持当前界面
-                } catch (Exception e) {
-                    Toast.makeText(this, "打开考勤发布失败", Toast.LENGTH_SHORT).show();
-                }
-            }
-            // 学生端或其他情况：显示考勤历史/统计 Fragment
+            // 统一：底部相机图标用于查看考勤记录（教师/学生）
             selectedFragment = new AttendanceFragment();
             if (getSupportActionBar() != null)
                 getSupportActionBar().setTitle("考勤管理");
-            Log.d(TAG, "切换到考勤");
+            Log.d(TAG, "切换到考勤记录");
         } else if (itemId == R.id.nav_profile) {
             selectedFragment = new ProfileFragment();
             if (getSupportActionBar() != null)

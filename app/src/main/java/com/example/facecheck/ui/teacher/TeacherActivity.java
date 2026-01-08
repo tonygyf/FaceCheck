@@ -254,7 +254,7 @@ public class TeacherActivity extends AppCompatActivity {
     
     private void updateTeacherAvatar(Uri photoUri) {
         // 保存头像文件
-        String avatarPath = photoStorageManager.saveAvatar(photoUri, teacherId);
+        String avatarPath = photoStorageManager.saveAvatar(photoUri, teacherId, /* isStudent */ false);
         
         if (avatarPath != null && currentTeacher != null) {
             // 更新教师头像路径

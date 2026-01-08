@@ -205,13 +205,15 @@ public class PhotoStorageManager {
     /**
      * 保存头像文件
      * @param sourceUri 源文件URI
-     * @param studentId 学生ID
+     * @param userId 用户ID（教师/学生通用）
+     * @param isStudent 是否学生
      * @return 保存后的文件路径
      */
-    public String saveAvatar(Uri sourceUri, long studentId) {
+    public String saveAvatar(Uri sourceUri, long userId, boolean isStudent) {
         try {
             File avatarDir = getAvatarDir();
-            String fileName = "avatar_" + studentId + ".jpg";
+            String prefix = isStudent ? "avatar_s_" : "avatar_t_";
+            String fileName = prefix + userId + ".jpg";
             File targetFile = new File(avatarDir, fileName);
             
             // 复制文件

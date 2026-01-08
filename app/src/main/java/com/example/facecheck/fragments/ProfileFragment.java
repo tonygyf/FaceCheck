@@ -20,6 +20,7 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -29,6 +30,10 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.widget.FrameLayout;
+import com.airbnb.lottie.LottieAnimationView;
 
 import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
@@ -59,11 +64,18 @@ public class ProfileFragment extends Fragment {
     private CircleImageView profileImageView;
     private TextView usernameTextView;
     private TextView emailTextView;
-    private Button changePhotoButton;
+    private View changePhotoButton;
     private Button changeUsernameButton;
     private Button changePasswordButton;
     private Button logoutButton;
     private ProgressBar progressBar;
+    private FrameLayout lottieOverlayLogout;
+    private LottieAnimationView lottieLogoutView;
+    
+    // 新的谷歌风格UI元素
+    private View itemChangeUsername;
+    private View itemChangePassword;
+    private View itemLogout;
     
     // WebDAV与缓存相关入口已收敛到设置页，个人页不再持有视图引用
 
@@ -108,6 +120,8 @@ public class ProfileFragment extends Fragment {
         changePasswordButton = view.findViewById(R.id.btn_change_password);
         logoutButton = view.findViewById(R.id.btn_logout);
         progressBar = view.findViewById(R.id.progress_bar);
+        lottieOverlayLogout = view.findViewById(R.id.lottieOverlayLogout);
+        lottieLogoutView = view.findViewById(R.id.lottieLogoutView);
         
         // 个人页不再初始化 WebDAV/缓存相关视图
 
@@ -117,6 +131,11 @@ public class ProfileFragment extends Fragment {
         themeLightButton = view.findViewById(R.id.btn_theme_light);
         itemMoreSettings = view.findViewById(R.id.item_more_settings);
         itemAbout = view.findViewById(R.id.item_about);
+        
+        // 新的谷歌风格UI元素初始化
+        itemChangeUsername = view.findViewById(R.id.item_change_username);
+        itemChangePassword = view.findViewById(R.id.item_change_password);
+        itemLogout = view.findViewById(R.id.item_logout);
 
         // 初始化主题状态（当布局存在主题按钮时）
         if (themeSystemButton != null && themeDarkButton != null && themeLightButton != null) {
@@ -207,7 +226,19 @@ public class ProfileFragment extends Fragment {
         if (changePhotoButton != null) {
             changePhotoButton.setOnClickListener(v -> {
                 if (!isAdded()) return;
+                // 教师可以更换头像，学生已在loadUserData中禁用按钮
                 showImageSourceDialog();
+            });
+        }
+        if (profileImageView != null) {
+            profileImageView.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                // 仅教师允许通过点击头像更换照片
+                SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                String role = prefs.getString("user_role", "teacher");
+                if ("teacher".equals(role)) {
+                    showImageSourceDialog();
+                }
             });
         }
         
@@ -219,10 +250,29 @@ public class ProfileFragment extends Fragment {
             });
         }
         
-        // 修改密码（Teacher模型没有密码字段，暂时禁用此功能）
+        // 新的谷歌风格UI点击事件
+        if (itemChangeUsername != null) {
+            itemChangeUsername.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showChangeUsernameDialog();
+            });
+        }
+        
+        // 修改密码：复用 UserProfileActivity 的逻辑，仅教师可用
         if (changePasswordButton != null) {
-            changePasswordButton.setEnabled(false);
-            changePasswordButton.setText("密码管理不可用");
+            changePasswordButton.setEnabled(true);
+            changePasswordButton.setText("修改密码");
+            changePasswordButton.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showChangePasswordDialog();
+            });
+        }
+        
+        if (itemChangePassword != null) {
+            itemChangePassword.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showChangePasswordDialog();
+            });
         }
         
         // 个人页不再处理 WebDAV/缓存入口，统一在设置页管理
@@ -231,7 +281,14 @@ public class ProfileFragment extends Fragment {
         if (logoutButton != null) {
             logoutButton.setOnClickListener(v -> {
                 if (!isAdded()) return;
-                navigateToLogin();
+                showLogoutAnimation();
+            });
+        }
+        
+        if (itemLogout != null) {
+            itemLogout.setOnClickListener(v -> {
+                if (!isAdded()) return;
+                showLogoutAnimation();
             });
         }
 
@@ -347,6 +404,7 @@ public class ProfileFragment extends Fragment {
                     "com.example.facecheck.fileprovider",
                     photoFile);
                 takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
             }
         }
@@ -409,6 +467,67 @@ public class ProfileFragment extends Fragment {
         builder.setNegativeButton("取消", null);
         builder.show();
     }
+
+    private void showChangePasswordDialog() {
+        if (currentTeacher == null) {
+            Toast.makeText(requireContext(), "教师信息未加载", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("修改密码");
+        
+        View view = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_change_password, null);
+        final EditText currentPasswordInput = view.findViewById(R.id.et_current_password);
+        final EditText newPasswordInput = view.findViewById(R.id.et_new_password);
+        final EditText confirmPasswordInput = view.findViewById(R.id.et_confirm_password);
+        
+        builder.setView(view);
+        builder.setPositiveButton("保存", null);
+        builder.setNegativeButton("取消", (dialog, which) -> dialog.cancel());
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String currentPassword = currentPasswordInput.getText().toString();
+            String newPassword = newPasswordInput.getText().toString();
+            String confirmPassword = confirmPasswordInput.getText().toString();
+            
+            if (TextUtils.isEmpty(currentPassword) || TextUtils.isEmpty(newPassword) || TextUtils.isEmpty(confirmPassword)) {
+                Toast.makeText(requireContext(), "请输入完整信息", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            if (!currentPassword.equals(currentTeacher.getPassword())) {
+                Toast.makeText(requireContext(), "当前密码不正确", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            if (newPassword.length() < 6) {
+                Toast.makeText(requireContext(), "新密码至少6位", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            if (!newPassword.equals(confirmPassword)) {
+                Toast.makeText(requireContext(), "两次输入的新密码不一致", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            if (newPassword.equals(currentPassword)) {
+                Toast.makeText(requireContext(), "新密码不能与当前密码相同", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            currentTeacher.setPassword(newPassword);
+            boolean success = dbHelper.updateTeacher(currentTeacher);
+            if (success) {
+                Toast.makeText(requireContext(), "密码已更新", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } else {
+                Toast.makeText(requireContext(), "密码更新失败", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
     
     
     
@@ -467,7 +586,7 @@ public class ProfileFragment extends Fragment {
             // 使用PhotoStorageManager的saveAvatar方法保存头像
             if (currentTeacher == null) return null;
             PhotoStorageManager photoStorageManager = new PhotoStorageManager(requireContext());
-            String savedPath = photoStorageManager.saveAvatar(uri, currentTeacher.getId());
+            String savedPath = photoStorageManager.saveAvatar(uri, currentTeacher.getId(), /* isStudent */ false);
             if (savedPath != null) {
                 return savedPath;
             } else {
@@ -520,10 +639,79 @@ public class ProfileFragment extends Fragment {
         changePasswordButton = null;
         logoutButton = null;
         progressBar = null;
+        lottieOverlayLogout = null;
+        lottieLogoutView = null;
         themeSystemButton = null;
         themeDarkButton = null;
         themeLightButton = null;
         itemMoreSettings = null;
         itemAbout = null;
+    }
+
+    private void showLogoutAnimation() {
+        if (!isAdded() || getActivity() == null) {
+            navigateToLogin();
+            return;
+        }
+        android.view.ViewGroup root = (android.view.ViewGroup) getActivity().getWindow().getDecorView();
+        final android.widget.FrameLayout overlay = new android.widget.FrameLayout(requireContext());
+        overlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        overlay.setClickable(true);
+
+        android.view.View dim = new android.view.View(requireContext());
+        dim.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        dim.setBackgroundColor(0xD8000000);
+        overlay.addView(dim);
+
+        LottieAnimationView lottie = new LottieAnimationView(requireContext());
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(600, 600);
+        lp.gravity = android.view.Gravity.CENTER;
+        lottie.setLayoutParams(lp);
+        lottie.setAnimation("lottie/exit.json");
+        lottie.setRepeatCount(0);
+        overlay.addView(lottie);
+
+        root.addView(overlay);
+
+        lottie.addAnimatorListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                try {
+                    ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+                } catch (Throwable ignored) {}
+                navigateToLogin();
+            }
+        });
+
+        lottie.addLottieOnCompositionLoadedListener(composition -> {
+            try {
+                lottie.playAnimation();
+            } catch (Throwable t) {
+                try {
+                    ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+                } catch (Throwable ignored) {}
+                navigateToLogin();
+            }
+        });
+
+        lottie.setFailureListener(throwable -> {
+            try {
+                ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+            } catch (Throwable ignored) {}
+            navigateToLogin();
+        });
+
+        new android.os.Handler().postDelayed(() -> {
+            try {
+                if (overlay.getParent() != null) {
+                    ((android.view.ViewGroup) overlay.getParent()).removeView(overlay);
+                    navigateToLogin();
+                }
+            } catch (Throwable ignored) {}
+        }, 3000);
     }
 }
