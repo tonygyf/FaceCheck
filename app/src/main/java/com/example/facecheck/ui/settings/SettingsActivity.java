@@ -106,12 +106,15 @@ public class SettingsActivity extends AppCompatActivity {
         itemAbout.setOnClickListener(v -> {
             long currentTime = System.currentTimeMillis();
 
-            if (currentTime - lastAboutClickTime < 500) {
+            if (currentTime - lastAboutClickTime < 800) {
                 aboutClickCount++;
             } else {
                 aboutClickCount = 1;
             }
             lastAboutClickTime = currentTime;
+
+            // 移除待显示的关于弹窗，避免连续点击时弹出
+            itemAbout.removeCallbacks(showAboutRunnable);
 
             if (aboutClickCount == 3) {
                 SharedPreferences demoPrefs = getSharedPreferences("demo_mode_prefs", MODE_PRIVATE);
@@ -122,20 +125,30 @@ public class SettingsActivity extends AppCompatActivity {
                 String msg = newState ? "演示模式已启用" : "演示模式已关闭";
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
                 aboutClickCount = 0;
-            } else if (aboutClickCount == 1) {
-                String version = "";
-                try {
-                    version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                } catch (Throwable ignore) {
-                }
-                new AlertDialog.Builder(this)
-                        .setTitle("关于 FaceCheck")
-                        .setMessage("版本：" + version)
-                        .setPositiveButton("确定", null)
-                        .show();
+            } else {
+                // 延迟显示关于弹窗，给用户留出连击的时间
+                itemAbout.postDelayed(showAboutRunnable, 600);
             }
         });
     }
+
+    private final Runnable showAboutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            String version = "";
+            try {
+                version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Throwable ignore) {
+            }
+            new AlertDialog.Builder(SettingsActivity.this)
+                    .setTitle("关于 FaceCheck")
+                    .setMessage("版本：" + version)
+                    .setPositiveButton("确定", null)
+                    .show();
+            // 重置点击计数，避免很久之前的点击影响
+            aboutClickCount = 0;
+        }
+    };
 
     // ===== 主题 =====
     private void initThemeFromPrefs() {

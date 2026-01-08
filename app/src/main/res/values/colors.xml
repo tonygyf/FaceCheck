@@ -35,6 +35,7 @@
     <!-- 背景色 -->
     <color name="background_light">#FAFAFA</color>
     <color name="background_dark">#303030</color>
+    <color name="surface">#FFFFFF</color>
     
     <!-- 文本颜色 -->
     <color name="text_primary">#212121</color>

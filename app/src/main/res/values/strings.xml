@@ -9,4 +9,5 @@
     <string name="image3_description">Cake</string>
     <string name="results_placeholder">(Results will appear here)</string>
     <string name="appbar_scrolling_view_behavior" translatable="false">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+    <string name="preview_image">预览图像</string>
 </resources>

@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ClassroomSelectionActivity extends AppCompatActivity {
-    
+
     private DatabaseHelper dbHelper;
     private RecyclerView recyclerView;
     private ClassroomAdapter adapter;
@@ -31,6 +31,7 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
     private TextView tvTitle;
     private Button btnCancel;
     private String mode; // "attendance" 或其他模式
+    private String defaultType; // "FACE" 或 "MANUAL", 如果有值则跳过选择
     private long teacherId;
 
     @Override
@@ -43,6 +44,8 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
         if (mode == null) {
             mode = "attendance"; // 默认模式
         }
+
+        defaultType = getIntent().getStringExtra("default_type");
 
         // 获取教师ID
         teacherId = getSharedPreferences("user_prefs", MODE_PRIVATE).getLong("teacher_id", -1);
@@ -57,10 +60,12 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
 
         // 初始化视图
         initViews();
-        
+
         // 加载班级数据
         loadClassrooms();
     }
+
+    // ... (initViews and loadClassrooms are unchanged) ...
 
     private void initViews() {
         recyclerView = findViewById(R.id.recycler_classrooms);
@@ -69,7 +74,13 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
 
         // 设置标题
         if ("attendance".equals(mode)) {
-            tvTitle.setText("选择班级 - 快速考勤");
+            if ("FACE".equals(defaultType)) {
+                tvTitle.setText("选择班级 - 教师照片考勤");
+            } else if ("MANUAL".equals(defaultType)) {
+                tvTitle.setText("选择班级 - 发布自拍签到");
+            } else {
+                tvTitle.setText("选择班级 - 快速考勤");
+            }
         } else {
             tvTitle.setText("选择班级");
         }
@@ -91,7 +102,7 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
 
     private void loadClassrooms() {
         classroomList.clear();
-        
+
         // 从数据库加载班级数据
         Cursor cursor = dbHelper.getClassroomsByTeacher(teacherId);
         if (cursor != null && cursor.moveToFirst()) {
@@ -101,7 +112,7 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
                 String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
                 int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
                 String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
-                
+
                 classroomList.add(new Classroom(id, teacherId, name, year, meta));
             } while (cursor.moveToNext());
             cursor.close();
@@ -118,12 +129,31 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
 
     private void onClassroomSelected(Classroom classroom) {
         if ("attendance".equals(mode)) {
-            // 跳转到考勤页面
-            Intent intent = new Intent(this, AttendanceActivity.class);
-            intent.putExtra("classroom_id", classroom.getId());
-            intent.putExtra("classroom_name", classroom.getName());
-            startActivity(intent);
-            finish(); // 关闭选择页面
+            // 如果指定了默认类型，直接使用
+            if (defaultType != null && !defaultType.isEmpty()) {
+                Intent intent = new Intent(this, AttendanceActivity.class);
+                intent.putExtra("classroom_id", classroom.getId());
+                intent.putExtra("classroom_name", classroom.getName());
+                intent.putExtra("attendance_type", defaultType);
+                startActivity(intent);
+                finish();
+                return;
+            }
+
+            // 否则弹出考勤方式选择对话框
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("请选择考勤方式")
+                    .setItems(new String[] { "教师照片考勤 (默认)", "学生自拍考勤" }, (dialog, which) -> {
+                        String type = (which == 0) ? "FACE" : "MANUAL";
+                        Intent intent = new Intent(this, AttendanceActivity.class);
+                        intent.putExtra("classroom_id", classroom.getId());
+                        intent.putExtra("classroom_name", classroom.getName());
+                        intent.putExtra("attendance_type", type);
+                        startActivity(intent);
+                        finish(); // 关闭选择页面
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
         } else {
             // 其他模式的处理
             Intent resultIntent = new Intent();

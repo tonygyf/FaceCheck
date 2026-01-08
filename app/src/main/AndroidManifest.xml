@@ -124,6 +124,12 @@
             android:exported="false"
             android:theme="@style/Theme.FaceCheck.NoActionBar"
             android:label="手动裁切人脸" />
+
+        <activity
+            android:name=".ui.student.StudentSignInActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="自拍签到" />
         
         <!-- 文件提供者配置 -->
         <provider

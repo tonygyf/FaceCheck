@@ -84,7 +84,7 @@ public class LoginActivity extends AppCompatActivity {
             finish();
         }
     }
-    
+
     private void handleUiState(LoginUiState state) {
         if (state instanceof LoginUiState.Initial) {
             progressBar.setVisibility(View.GONE);
@@ -96,7 +96,7 @@ public class LoginActivity extends AppCompatActivity {
             LoginUiState.Success success = (LoginUiState.Success) state;
             progressBar.setVisibility(View.GONE);
             Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
-            
+
             SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
             SharedPreferences.Editor ed = prefs.edit();
             ed.putString("user_role", success.role);
@@ -109,41 +109,63 @@ public class LoginActivity extends AppCompatActivity {
                         .putInt("nav_selected_id", R.id.nav_home).apply();
             }
             ed.apply();
-            
+
             // 记住密码逻辑
             if (rememberPasswordCheckBox.isChecked()) {
                 prefs.edit()
-                    .putBoolean("remember_password", true)
-                    .putString("saved_username", emailEditText.getText().toString().trim())
-                    .putString("saved_password", passwordEditText.getText().toString().trim())
-                    .apply();
+                        .putBoolean("remember_password", true)
+                        .putString("saved_username", emailEditText.getText().toString().trim())
+                        .putString("saved_password", passwordEditText.getText().toString().trim())
+                        .apply();
             } else {
                 prefs.edit()
-                    .putBoolean("remember_password", false)
-                    .remove("saved_username")
-                    .remove("saved_password")
-                    .apply();
+                        .putBoolean("remember_password", false)
+                        .remove("saved_username")
+                        .remove("saved_password")
+                        .apply();
             }
+            // 显示登录成功 Lottie（telegram），执行1次后退出动画再跳转
             // 显示登录成功 Lottie（telegram），执行1次后退出动画再跳转
             if (lottieLoginView != null && lottieOverlayLogin != null) {
                 loginButton.setEnabled(false);
                 lottieOverlayLogin.setVisibility(View.VISIBLE);
+
+                // 确保动画重新加载
+                lottieLoginView.cancelAnimation();
                 lottieLoginView.setAnimation("lottie/telegram.json");
                 lottieLoginView.setRepeatCount(0);
+
+                // 移除旧的监听器以防重复
+                lottieLoginView.removeAllAnimatorListeners();
+
                 lottieLoginView.addAnimatorListener(new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationEnd(Animator animation) {
                         lottieOverlayLogin.setVisibility(View.GONE);
-                if (!navigated) {
-                    navigated = true;
-                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
-                    finish();
-                }
+                        if (!navigated) {
+                            navigated = true;
+                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                            finish();
+                        }
                     }
                 });
+
+                // 播放动画
                 lottieLoginView.playAnimation();
+
+                // 安全回退机制：如果动画3秒内没结束（通常动画2秒左右），强制跳转
+                new android.os.Handler().postDelayed(() -> {
+                    if (!navigated && !isFinishing()) {
+                        navigated = true;
+                        lottieOverlayLogin.setVisibility(View.GONE);
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+                }, 3000);
             } else {
                 // 回退：无动画视图则直接跳转
                 if (!navigated) {
@@ -191,6 +213,6 @@ public class LoginActivity extends AppCompatActivity {
         // 调用ViewModel进行登录
         loginViewModel.login(username, password);
     }
-    
+
     // 移除 onStart 自动跳转，避免多次回调导致循环
 }

@@ -27,22 +27,23 @@ import java.util.List;
  * 使用Google ML Kit进行多人脸检测和分割
  */
 public class FaceDetectionManager {
-    
+
     private static final String TAG = "FaceDetectionManager";
     private final FaceDetector faceDetector;
     private final Context context;
     private final ImageStorageManager storageManager;
-    
+
     // 人脸检测结果回调
     public interface FaceDetectionCallback {
         void onSuccess(List<Face> faces, List<Bitmap> faceBitmaps);
+
         void onFailure(Exception e);
     }
-    
+
     public FaceDetectionManager(Context context) {
         this.context = context;
         this.storageManager = new ImageStorageManager(context);
-        
+
         // 配置人脸检测器选项
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -51,10 +52,10 @@ public class FaceDetectionManager {
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
                 .enableTracking()
                 .build();
-        
+
         faceDetector = FaceDetection.getClient(options);
     }
-    
+
     /**
      * 从URI检测人脸（使用EXIF方向一致的Bitmap进行检测与分割，避免低分辨率缩略图导致识别失败）
      */
@@ -79,13 +80,13 @@ public class FaceDetectionManager {
             callback.onFailure(e);
         }
     }
-    
+
     /**
      * 从Bitmap检测人脸
      */
     public void detectFacesFromBitmap(Bitmap bitmap, FaceDetectionCallback callback) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
-        
+
         faceDetector.process(image)
                 .addOnSuccessListener(faces -> {
                     // 成功检测到人脸
@@ -94,32 +95,64 @@ public class FaceDetectionManager {
                 })
                 .addOnFailureListener(callback::onFailure);
     }
-    
+
+    /**
+     * 同步版人脸检测（阻塞当前线程，需在工作线程调用）
+     */
+    public List<Face> detectFacesSync(Bitmap bitmap) {
+        if (bitmap == null)
+            return null;
+
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final List<Face>[] resultHolder = new List[1];
+
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        faceDetector.process(image)
+                .addOnSuccessListener(faces -> {
+                    resultHolder[0] = faces;
+                    latch.countDown();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "detectFacesSync failed: " + e.getMessage(), e);
+                    resultHolder[0] = null;
+                    latch.countDown();
+                });
+
+        try {
+            latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Log.e(TAG, "detectFacesSync interrupted", e);
+            return null;
+        }
+
+        return resultHolder[0];
+    }
+
     /**
      * 从人脸区域提取单个人脸Bitmap
      */
     private List<Bitmap> extractFaceBitmaps(Bitmap originalBitmap, List<Face> faces) {
         List<Bitmap> faceBitmaps = new ArrayList<>();
-        
+
         for (Face face : faces) {
             Rect bounds = face.getBoundingBox();
-            
+
             // 确保边界在图片范围内
             int left = Math.max(0, bounds.left);
             int top = Math.max(0, bounds.top);
             int right = Math.min(originalBitmap.getWidth(), bounds.right);
             int bottom = Math.min(originalBitmap.getHeight(), bounds.bottom);
-            
+
             // 添加一些边距，确保完整包含人脸
             int width = right - left;
             int height = bottom - top;
             int margin = Math.min(width, height) / 4;
-            
+
             left = Math.max(0, left - margin);
             top = Math.max(0, top - margin);
             right = Math.min(originalBitmap.getWidth(), right + margin);
             bottom = Math.min(originalBitmap.getHeight(), bottom + margin);
-            
+
             try {
                 int w = right - left;
                 int h = bottom - top;
@@ -135,10 +168,10 @@ public class FaceDetectionManager {
                 e.printStackTrace();
             }
         }
-        
+
         return faceBitmaps;
     }
-    
+
     /**
      * 在Bitmap上绘制人脸边界框
      */
@@ -146,82 +179,82 @@ public class FaceDetectionManager {
         Bitmap mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
         Canvas canvas = new Canvas(mutableBitmap);
         Paint paint = new Paint();
-        
+
         paint.setColor(Color.RED);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(5f);
-        
+
         Paint textPaint = new Paint();
         textPaint.setColor(Color.RED);
         textPaint.setTextSize(40f);
         textPaint.setStyle(Paint.Style.FILL);
-        
+
         int faceIndex = 1;
         for (Face face : faces) {
             Rect bounds = face.getBoundingBox();
             canvas.drawRect(bounds, paint);
-            
+
             // 绘制人脸编号
             canvas.drawText("Face " + faceIndex, bounds.left, bounds.top - 10, textPaint);
             faceIndex++;
         }
-        
+
         return mutableBitmap;
     }
-    
+
     /**
      * 保存人脸图片到本地（使用ImageStorageManager）
      */
     public List<String> saveFaceBitmaps(List<Bitmap> faceBitmaps, String sessionId) {
         List<String> faceImagePaths = new ArrayList<>();
-        
+
         for (int i = 0; i < faceBitmaps.size(); i++) {
             String imagePath = storageManager.saveSegmentedFace(faceBitmaps.get(i), sessionId, i);
             if (imagePath != null) {
                 faceImagePaths.add(imagePath);
             }
         }
-        
+
         return faceImagePaths;
     }
-    
+
     /**
      * 保存原始照片（使用ImageStorageManager）
      */
     public String saveOriginalPhoto(Bitmap originalBitmap, String sessionId) {
         return storageManager.saveOriginalPhoto(originalBitmap, sessionId);
     }
-    
+
     /**
      * 保存处理后的人脸（使用ImageStorageManager）
      */
     public List<String> saveProcessedFaces(List<Bitmap> processedFaces, String sessionId) {
         List<String> processedImagePaths = new ArrayList<>();
-        
+
         for (int i = 0; i < processedFaces.size(); i++) {
             String imagePath = storageManager.saveProcessedFace(processedFaces.get(i), sessionId, i);
             if (imagePath != null) {
                 processedImagePaths.add(imagePath);
             }
         }
-        
+
         return processedImagePaths;
     }
-    
+
     /**
      * 获取会话的所有图片
      */
     public List<String> getSessionImages(String sessionId) {
         return storageManager.getSessionImages(sessionId);
     }
-    
+
     /**
      * 删除会话的所有图片
      */
     public boolean deleteSessionImages(String sessionId) {
         return storageManager.deleteSessionImages(sessionId);
     }
-    
+
     /**
      * 清理释放资源
      */

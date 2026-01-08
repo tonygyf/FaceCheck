@@ -74,6 +74,7 @@ public class AttendanceActivity extends AppCompatActivity {
             "FaceNet"
     };
     private String selectedModel = "MobileFaceNet";
+    private String attendanceType = "FACE";
 
     private ActivityResultLauncher<Intent> takePhotoLauncher;
     private ActivityResultLauncher<String> pickImageLauncher;
@@ -86,6 +87,11 @@ public class AttendanceActivity extends AppCompatActivity {
 
         // 获取班级ID
         classroomId = getIntent().getLongExtra("classroom_id", -1);
+        attendanceType = getIntent().getStringExtra("attendance_type");
+        if (attendanceType == null) {
+            attendanceType = "FACE";
+        }
+
         if (classroomId == -1) {
             Toast.makeText(this, "班级信息无效", Toast.LENGTH_SHORT).show();
             finish();
@@ -109,6 +115,10 @@ public class AttendanceActivity extends AppCompatActivity {
 
         // 创建考勤会话
         createAttendanceSession();
+
+        if ("MANUAL".equals(attendanceType)) {
+            setupManualModeUI();
+        }
     }
 
     private void initViews() {
@@ -227,7 +237,8 @@ public class AttendanceActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        List<Rect> rects = result.getData().getParcelableArrayListExtra(com.example.facecheck.ui.face.ManualFaceCropActivity.RESULT_CROP_RECTS);
+                        List<Rect> rects = result.getData().getParcelableArrayListExtra(
+                                com.example.facecheck.ui.face.ManualFaceCropActivity.RESULT_CROP_RECTS);
                         if (rects != null && !rects.isEmpty()) {
                             performManualFaceDetection(rects);
                         }
@@ -245,8 +256,8 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     private void createAttendanceSession() {
-        // 创建考勤会话
-        sessionId = dbHelper.insertAttendanceSession(classroomId, 1L, "", "", ""); // 默认使用ID为1的教师
+        // 创建考勤会话，传入 attendanceType
+        sessionId = dbHelper.insertAttendanceSession(classroomId, 1L, "", "", "", attendanceType);
 
         if (sessionId != -1) {
             // 添加同步日志
@@ -256,6 +267,22 @@ public class AttendanceActivity extends AppCompatActivity {
             Toast.makeText(this, "创建考勤会话失败", Toast.LENGTH_SHORT).show();
             finish();
         }
+    }
+
+    private void setupManualModeUI() {
+        // 隐藏拍照和图片处理相关控件
+        btnTakePhoto.setVisibility(View.GONE);
+        btnPickImage.setVisibility(View.GONE);
+        btnManualCrop.setVisibility(View.GONE);
+        btnStartRecognition.setVisibility(View.GONE);
+        ivPreview.setVisibility(View.GONE);
+        spinnerModel.setVisibility(View.GONE);
+
+        // 显示提示信息
+        tvStatus.setText("已发布学生自拍考勤任务\n\n请通知学生在客户端进入“签到”页面完成自拍打卡。");
+        // 设为居中
+        tvStatus.setGravity(android.view.Gravity.CENTER);
+        tvStatus.setTextSize(18);
     }
 
     private void checkCameraPermissionAndTakePhoto() {
@@ -396,7 +423,8 @@ public class AttendanceActivity extends AppCompatActivity {
                                 final ArrayList<String> finalRecognizedNames = new ArrayList<>(recognizedNamesTmp);
 
                                 runOnUiThread(() -> {
-                                    tvStatus.setText("识别完成 - 手动框选 " + manualRects.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
+                                    tvStatus.setText("识别完成 - 手动框选 " + manualRects.size() + " 个人脸，识别出 "
+                                            + finalRecognizedCount + " 个学生");
 
                                     Intent intent = new Intent(this, AttendanceResultActivity.class);
                                     intent.putExtra("session_id", sessionId);
@@ -849,7 +877,8 @@ public class AttendanceActivity extends AppCompatActivity {
             for (FaceRecognitionManager.RecognitionResult r : results) {
                 if (r.isSuccess()) {
                     long sid = r.getStudentId();
-                    if (!presentIds.add(sid)) continue; // 避免同一次识别中重复插入同一个学生
+                    if (!presentIds.add(sid))
+                        continue; // 避免同一次识别中重复插入同一个学生
                     dbHelper.insertAttendanceResult(sessionId, sid, "Present", r.getSimilarity(), "AUTO");
                 }
             }

@@ -591,6 +591,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return teacher;
     }
 
+    public String getClassroomNameById(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("Classroom", new String[] { "name" }, "id = ?",
+                new String[] { String.valueOf(classId) }, null, null, null);
+        String name = null;
+        if (cursor != null && cursor.moveToFirst()) {
+            name = cursor.getString(0);
+            cursor.close();
+        }
+        return name;
+    }
+
     public boolean addTeacher(Teacher teacher) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -958,6 +970,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     // ============= 考勤会话相关操作 =============
 
     public long insertAttendanceSession(long classId, long teacherId, String location, String photoUri, String note) {
+        return insertAttendanceSession(classId, teacherId, location, photoUri, note, "FACE");
+    }
+
+    public long insertAttendanceSession(long classId, long teacherId, String location, String photoUri, String note,
+            String attendanceType) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put("classId", classId);
@@ -965,8 +982,44 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("location", location);
         values.put("photoUri", photoUri);
         values.put("note", note);
+        values.put("attendanceType", attendanceType);
         values.put("startedAt", System.currentTimeMillis());
         return db.insert("AttendanceSession", null, values);
+    }
+
+    /**
+     * 获取指定班级的活跃考勤会话（MANUAL类型，状态为ACTIVE）
+     */
+    public Cursor getActiveManualAttendanceSessionsByClass(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query("AttendanceSession", null,
+                "classId = ? AND attendanceType = 'MANUAL' AND status = 'ACTIVE'",
+                new String[] { String.valueOf(classId) }, null, null, "startedAt DESC");
+    }
+
+    /**
+     * 获取指定班级的所有活跃考勤会话
+     */
+    public Cursor getActiveAttendanceSessionsByClass(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query("AttendanceSession", null,
+                "classId = ? AND status = 'ACTIVE'",
+                new String[] { String.valueOf(classId) }, null, null, "startedAt DESC");
+    }
+
+    /**
+     * 检查学生在某会话中是否已签到
+     */
+    public boolean isStudentSignedIn(long sessionId, long studentId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("AttendanceResult", new String[] { "id" },
+                "sessionId = ? AND studentId = ? AND status = 'Present'",
+                new String[] { String.valueOf(sessionId), String.valueOf(studentId) },
+                null, null, null);
+        boolean signedIn = cursor != null && cursor.getCount() > 0;
+        if (cursor != null)
+            cursor.close();
+        return signedIn;
     }
 
     // ============= 考勤结果相关操作 =============

@@ -64,14 +64,16 @@ public class MainActivity extends AppCompatActivity {
 
         // 状态栏透明 + 浅色图标
         // 状态栏透明 + 浅色图标（已改为浅灰配置，移除旧逻辑）
-        // WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        // WindowInsetsControllerCompat controller =
+        // WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         // getWindow().setStatusBarColor(Color.TRANSPARENT);
         // if (controller != null) {
-        //     controller.setAppearanceLightStatusBars(false);
+        // controller.setAppearanceLightStatusBars(false);
         // }
 
         // 状态栏浅灰 + 深色图标
-        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(),
+                getWindow().getDecorView());
         getWindow().setStatusBarColor(ContextCompat.getColor(this, R.color.status_bar_bg));
         if (controller != null) {
             // 使用深色图标，适配浅色/浅灰背景
@@ -115,39 +117,50 @@ public class MainActivity extends AppCompatActivity {
         btnNavSettings = findViewById(R.id.btn_nav_settings);
         btnNavCourses = findViewById(R.id.btn_nav_courses);
 
-        if (btnNavHome != null) btnNavHome.setOnClickListener(v -> handleNavigation(R.id.nav_home));
-        if (btnNavClassroom != null) btnNavClassroom.setOnClickListener(v -> handleNavigation(R.id.nav_classroom));
-        if (btnNavAttendance != null) btnNavAttendance.setOnClickListener(v -> handleNavigation(R.id.nav_attendance));
-        if (btnNavProfile != null) btnNavProfile.setOnClickListener(v -> handleNavigation(R.id.nav_profile));
-        if (btnNavCourses != null) btnNavCourses.setOnClickListener(v -> handleNavigation(R.id.nav_courses));
-        if (btnNavSettings != null) btnNavSettings.setOnClickListener(v -> {
-            int selectedColor = ContextCompat.getColor(this, R.color.primary);
-            if (btnNavSettings != null) {
-                ImageViewCompat.setImageTintList(btnNavSettings, ColorStateList.valueOf(selectedColor));
-            }
-            try {
-                Fragment settingsFragment = new com.example.facecheck.fragments.SettingsFragment();
-                getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragment_container, settingsFragment)
-                        .addToBackStack("settings")
-                        .commit();
-                if (getSupportActionBar() != null) getSupportActionBar().setTitle("设置");
-                updateBottomBarButtonsState(R.id.nav_settings);
-                getSharedPreferences("ui_prefs", MODE_PRIVATE)
-                        .edit().putInt("nav_selected_id", R.id.nav_settings).apply();
-            } catch (Throwable t) {
-                Toast.makeText(this, "设置页打开失败", Toast.LENGTH_SHORT).show();
-            }
-        });
+        if (btnNavHome != null)
+            btnNavHome.setOnClickListener(v -> handleNavigation(R.id.nav_home));
+        if (btnNavClassroom != null)
+            btnNavClassroom.setOnClickListener(v -> handleNavigation(R.id.nav_classroom));
+        if (btnNavAttendance != null)
+            btnNavAttendance.setOnClickListener(v -> handleNavigation(R.id.nav_attendance));
+        if (btnNavProfile != null)
+            btnNavProfile.setOnClickListener(v -> handleNavigation(R.id.nav_profile));
+        if (btnNavCourses != null)
+            btnNavCourses.setOnClickListener(v -> handleNavigation(R.id.nav_courses));
+        if (btnNavSettings != null)
+            btnNavSettings.setOnClickListener(v -> {
+                int selectedColor = ContextCompat.getColor(this, R.color.primary);
+                if (btnNavSettings != null) {
+                    ImageViewCompat.setImageTintList(btnNavSettings, ColorStateList.valueOf(selectedColor));
+                }
+                try {
+                    Fragment settingsFragment = new com.example.facecheck.fragments.SettingsFragment();
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.fragment_container, settingsFragment)
+                            .addToBackStack("settings")
+                            .commit();
+                    if (getSupportActionBar() != null)
+                        getSupportActionBar().setTitle("设置");
+                    updateBottomBarButtonsState(R.id.nav_settings);
+                    getSharedPreferences("ui_prefs", MODE_PRIVATE)
+                            .edit().putInt("nav_selected_id", R.id.nav_settings).apply();
+                } catch (Throwable t) {
+                    Toast.makeText(this, "设置页打开失败", Toast.LENGTH_SHORT).show();
+                }
+            });
 
         // 根据角色适配可见按钮
         role = getSharedPreferences("user_prefs", MODE_PRIVATE).getString("user_role", "teacher");
         if ("student".equals(role)) {
-            if (btnNavClassroom != null) btnNavClassroom.setVisibility(View.GONE);
-            if (btnNavAttendance != null) btnNavAttendance.setVisibility(View.VISIBLE);
-            if (btnNavCourses != null) btnNavCourses.setVisibility(View.VISIBLE);
+            if (btnNavClassroom != null)
+                btnNavClassroom.setVisibility(View.GONE);
+            if (btnNavAttendance != null)
+                btnNavAttendance.setVisibility(View.VISIBLE);
+            if (btnNavCourses != null)
+                btnNavCourses.setVisibility(View.VISIBLE);
         } else {
-            if (btnNavCourses != null) btnNavCourses.setVisibility(View.GONE);
+            if (btnNavCourses != null)
+                btnNavCourses.setVisibility(View.GONE);
         }
 
         // 恢复上次选中的导航项（默认首页）
@@ -164,10 +177,15 @@ public class MainActivity extends AppCompatActivity {
         if (fabCameraPunch != null) {
             fabCameraPunch.setOnClickListener(v -> {
                 try {
-                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.face.FaceMiniDetectActivity.class);
+                    // 教师端：点击中间按钮进入"教师照片考勤"流程
+                    // 先进入班级选择，并传递标记表明是"照片考勤"
+                    Intent intent = new Intent(MainActivity.this,
+                            com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
+                    intent.putExtra("mode", "attendance");
+                    intent.putExtra("default_type", "FACE"); // 默认选中照片考勤
                     startActivity(intent);
                 } catch (Throwable t) {
-                    Toast.makeText(MainActivity.this, "打开小人脸识别失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "打开考勤失败", Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -185,7 +203,9 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "开始同步数据库...", Toast.LENGTH_SHORT).show();
                 syncHelper.setOnSyncListener(new WebDAVSyncHelper.OnSyncListener() {
                     @Override
-                    public void onSyncStarted() {}
+                    public void onSyncStarted() {
+                    }
+
                     @Override
                     public void onSyncCompleted(boolean success, String message) {
                         Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
@@ -198,47 +218,66 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private BottomNavigationView.OnItemSelectedListener navListener =
-            new BottomNavigationView.OnItemSelectedListener() {
-                @Override
-                public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-                    handleNavigation(item.getItemId());
-                    return true;
-                }
-            };
+    private BottomNavigationView.OnItemSelectedListener navListener = new BottomNavigationView.OnItemSelectedListener() {
+        @Override
+        public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+            handleNavigation(item.getItemId());
+            return true;
+        }
+    };
 
     private void handleNavigation(int itemId) {
         Fragment selectedFragment = null;
         String role = getSharedPreferences("user_prefs", MODE_PRIVATE).getString("user_role", "teacher");
         if (itemId == R.id.nav_home) {
             selectedFragment = new HomeFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("首页");
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle("首页");
             Log.d(TAG, "切换到首页");
         } else if (itemId == R.id.nav_classroom) {
             if ("student".equals(role)) {
                 Toast.makeText(this, "课堂为教师专用，已为你打开首页", Toast.LENGTH_SHORT).show();
                 selectedFragment = new HomeFragment();
             } else {
-            selectedFragment = new ClassroomFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("课堂管理");
-            Log.d(TAG, "切换到课堂");
+                selectedFragment = new ClassroomFragment();
+                if (getSupportActionBar() != null)
+                    getSupportActionBar().setTitle("课堂管理");
+                Log.d(TAG, "切换到课堂");
             }
         } else if (itemId == R.id.nav_attendance) {
+            if ("teacher".equals(role)) {
+                // 教师端：点击考勤按钮，进入发布自拍签到流程
+                try {
+                    Intent intent = new Intent(this,
+                            com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
+                    intent.putExtra("mode", "attendance");
+                    intent.putExtra("default_type", "MANUAL"); // 默认选中自拍签到
+                    startActivity(intent);
+                    return; // 不切换 Fragment，保持当前界面
+                } catch (Exception e) {
+                    Toast.makeText(this, "打开考勤发布失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+            // 学生端或其他情况：显示考勤历史/统计 Fragment
             selectedFragment = new AttendanceFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("考勤管理");
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle("考勤管理");
             Log.d(TAG, "切换到考勤");
         } else if (itemId == R.id.nav_profile) {
             selectedFragment = new ProfileFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("个人资料");
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle("个人资料");
             Log.d(TAG, "切换到我的");
         } else if (itemId == R.id.nav_settings) {
             selectedFragment = new com.example.facecheck.fragments.SettingsFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("设置");
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle("设置");
             Log.d(TAG, "切换到设置");
         } else if (itemId == R.id.nav_courses) {
             selectedFragment = new com.example.facecheck.fragments.StudentCoursesFragment();
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle("选课");
-            Log.d(TAG, "切换到选课");
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle("班级签到");
+            Log.d(TAG, "切换到班级签到");
         }
 
         if (selectedFragment != null) {
@@ -255,11 +294,13 @@ public class MainActivity extends AppCompatActivity {
     private void showFirstLaunchWelcomeIfNeeded() {
         SharedPreferences prefs = getSharedPreferences("ui_prefs", MODE_PRIVATE);
         boolean shown = prefs.getBoolean("first_launch_welcome_shown", false);
-        if (shown) return;
+        if (shown)
+            return;
         String version = "";
         try {
             version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Throwable ignore) {}
+        } catch (Throwable ignore) {
+        }
         new androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("FaceCheck")
                 .setMessage("版本：" + version + "\n\n人脸考勤·课堂管理·快速打卡\n简约现代的考勤体验")

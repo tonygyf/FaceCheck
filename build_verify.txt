@@ -1,0 +1,55 @@
+﻿> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResValues
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:checkDebugAarMetadata
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
+
+> Task :app:processDebugMainManifest
+[org.tensorflow:tensorflow-lite:2.12.0] C:\Users\15634\.gradle\caches\8.11.1\transforms\db7725a3d490b32cd93771448ef0fe44\transformed\tensorflow-lite-2.12.0\AndroidManifest.xml Warning:
+	Namespace 'org.tensorflow.lite' is used in multiple modules and/or libraries: org.tensorflow:tensorflow-lite:2.12.0, org.tensorflow:tensorflow-lite-api:2.12.0. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:javaPreCompileDebug
+> Task :app:processDebugResources
+> Task :app:compileDebugKotlin
+
+> Task :app:compileDebugJavaWithJavac
+./gradlew : 娉? 鏌愪簺杈撳叆鏂囦欢浣跨敤
+鎴栬鐩栦簡宸茶繃鏃剁殑 API銆?
+所在位置 行:1 字符: 1
++ ./gradlew :app:compileDeb
+ugJavaWithJavac --rerun-tas
+ks 2>&1 | Out-Fil ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (娉?   
+  鏌愪簺杈撳叆鏂囦欢浣跨敤鎴栬鐩栦簡宸茶繃鏃   
+ 剁殑 API銆?:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+娉? 鏈夊叧璇︾粏淇℃伅, 璇蜂娇鐢?-Xlint:d
+eprecation 閲嶆柊缂栬瘧銆?
+娉? D:\typer\android_demo\Fa
+ceCheck\app\src\main\java\c
+om\example\facecheck\utils\
+FaceDetectionManager.java浣跨
+敤浜嗘湭缁忔鏌ユ垨涓嶅畨鍏ㄧ殑鎿嶄綔銆?
+娉? 鏈夊叧璇︾粏淇℃伅, 璇蜂娇鐢?-Xlint:u
+nchecked 閲嶆柊缂栬瘧銆?
+[Incubating] Problems report is available at: file:///D:/typer/android_demo/FaceCheck/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 6s
+17 actionable tasks: 17 executed
