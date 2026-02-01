@@ -1,4 +1,4 @@
-plugins {
+    plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -71,9 +71,7 @@ dependencies {
     // FaceNet 需要 Flex 算子支持（如 FlexFusedBatchNormV3）
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0")
 
-    // （可选，后续将废弃 YuNet ONNX 检测）
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.3")
-    
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
