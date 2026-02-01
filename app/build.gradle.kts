@@ -17,11 +17,28 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // 【新增】只保留主流手机架构，剔除不常用的能省很多空间
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
+        }
+
+    }
+    // 【新增】分架构打包配置：这是解决你 600MB 问题的核心
+    splits {
+        abi {
+            isEnable = true // 开启分包
+            reset() // 重置默认列表
+            include("armeabi-v7a", "arm64-v8a") // 手机端主要这两个就够了，x86一般用于模拟器
+            isUniversalApk = false // 设置为 false，这样就不会生成那个包含所有架构的“巨无霸”包了
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 【修改】开启代码混淆和资源缩减
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
