@@ -139,6 +139,10 @@ public class StudentCoursesFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        // 隐藏系统 ActionBar，仅保留本地蓝色标题栏
+        if (getActivity() != null && getActivity().getActionBar() != null) {
+            getActivity().getActionBar().hide();
+        }
         loadAttendanceSessions();
     }
 

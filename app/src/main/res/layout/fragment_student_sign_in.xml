@@ -11,14 +11,15 @@
         android:id="@+id/tv_class_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:background="?attr/colorPrimary"
         android:text="正在获取班级..."
         android:textSize="18sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
         android:gravity="center"
-        android:elevation="4dp" />
+        android:elevation="2dp" />
 
     <FrameLayout
         android:layout_width="match_parent"
