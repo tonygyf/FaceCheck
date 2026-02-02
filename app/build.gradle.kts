@@ -89,6 +89,7 @@ dependencies {
     implementation(libs.sardine)
 
     implementation("com.airbnb.android:lottie:6.4.0")
+    implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
     implementation("com.google.mlkit:face-detection:16.1.6")
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     // 如果模型能跑，建议尝试注释掉下面这一行来进一步减小体积

@@ -50,6 +50,18 @@
             android:textColor="@color/text_secondary"
             android:alpha="0.8" />
 
+        <Button
+            android:id="@+id/btnToggleMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="仅看失败"
+            android:textSize="12sp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:backgroundTint="@color/colorAccent"
+            android:textColor="@color/white"/>
+
     </LinearLayout>
 
     <!-- 考勤结果列表 -->

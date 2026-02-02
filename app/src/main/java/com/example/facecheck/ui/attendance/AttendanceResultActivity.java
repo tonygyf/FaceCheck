@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.widget.TextView;
+import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,6 +34,9 @@ public class AttendanceResultActivity extends AppCompatActivity {
     private RecyclerView recyclerViewResults;
     private TextView tvSessionInfo;
     private TextView tvSummary;
+    private Button btnToggleMode;
+    private boolean failuresMode = false;
+    private List<AttendanceResult> allResults = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +67,7 @@ public class AttendanceResultActivity extends AppCompatActivity {
         recyclerViewResults = findViewById(R.id.recyclerViewResults);
         tvSessionInfo = findViewById(R.id.tvSessionInfo);
         tvSummary = findViewById(R.id.tvSummary);
+        btnToggleMode = findViewById(R.id.btnToggleMode);
         
         // 设置RecyclerView
         recyclerViewResults.setLayoutManager(new LinearLayoutManager(this));// 设置适配器
@@ -80,6 +85,12 @@ public class AttendanceResultActivity extends AppCompatActivity {
             }
         });
         recyclerViewResults.setAdapter(resultAdapter);
+        
+        btnToggleMode.setOnClickListener(v -> {
+            failuresMode = !failuresMode;
+            btnToggleMode.setText(failuresMode ? "返回全部" : "仅看失败");
+            updateResultsByMode();
+        });
     }
 
     private void loadAttendanceResults() {
@@ -108,11 +119,29 @@ public class AttendanceResultActivity extends AppCompatActivity {
             cursor.close();
         }
         
-        // 更新适配器
-        resultAdapter.updateResults(results);
+        allResults.clear();
+        allResults.addAll(results);
+        updateResultsByMode();
         
         // 更新统计信息
         updateSummary(results);
+    }
+    
+    private void updateResultsByMode() {
+        if (!failuresMode) {
+            resultAdapter.updateResults(new ArrayList<>(allResults));
+            resultAdapter.setFailuresMode(false);
+            return;
+        }
+        List<AttendanceResult> failed = new ArrayList<>();
+        for (AttendanceResult r : allResults) {
+            String s = r.getStatus();
+            if ("Absent".equalsIgnoreCase(s)) {
+                failed.add(r);
+            }
+        }
+        resultAdapter.updateResults(failed);
+        resultAdapter.setFailuresMode(true);
     }
 
     private Student getStudentById(long studentId) {
