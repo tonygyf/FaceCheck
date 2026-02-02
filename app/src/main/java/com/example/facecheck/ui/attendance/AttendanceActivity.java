@@ -68,10 +68,9 @@ public class AttendanceActivity extends AppCompatActivity {
     private Spinner spinnerModel;
     // 移除检测下拉栏，固定使用 ML Kit 进行检测
 
-    // 模型选择相关：仅保留 MobileFaceNet / FaceNet（均为 float32 新模型）
+    // 模型选择相关：仅保留 MobileFaceNet（FaceNet 已删除）
     private String[] modelOptions = {
-            "MobileFaceNet",
-            "FaceNet"
+            "MobileFaceNet"
     };
     private String selectedModel = "MobileFaceNet";
     private String attendanceType = "FACE";
@@ -408,7 +407,7 @@ public class AttendanceActivity extends AppCompatActivity {
                                 List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
                                         .recognizeImportedVectorsWithinClass(embeddings, classroomId);
 
-                                persistAttendanceResultsForSession(sessionId, results);
+                                persistAttendanceResultsForSession(sessionId, embeddings, results);
 
                                 int recognizedCountTmp = 0;
                                 List<String> recognizedNamesTmp = new ArrayList<>();
@@ -671,7 +670,7 @@ public class AttendanceActivity extends AppCompatActivity {
                                 List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
                                         .recognizeImportedVectorsWithinClass(embeddings, classroomId);
 
-                                persistAttendanceResultsForSession(sessionId, results);
+                                persistAttendanceResultsForSession(sessionId, embeddings, results);
 
                                 int recognizedCountTmp = 0;
                                 List<String> recognizedNamesTmp = new ArrayList<>();
@@ -809,7 +808,7 @@ public class AttendanceActivity extends AppCompatActivity {
                                         .recognizeImportedVectorsWithinClass(embeddings, classroomId);
 
                                 // 将识别结果持久化到数据库（本次会话）
-                                persistAttendanceResultsForSession(sessionId, results);
+                                persistAttendanceResultsForSession(sessionId, embeddings, results);
 
                                 // 统计识别结果
                                 int recognizedCount = 0;
@@ -871,30 +870,90 @@ public class AttendanceActivity extends AppCompatActivity {
      * - 本班未被识别到的学生标记为 Absent
      */
     private void persistAttendanceResultsForSession(long sessionId,
+            List<float[]> embeddings,
             List<FaceRecognitionManager.RecognitionResult> results) {
         try {
-            java.util.Set<Long> presentIds = new java.util.HashSet<>();
-            for (FaceRecognitionManager.RecognitionResult r : results) {
-                if (r.isSuccess()) {
-                    long sid = r.getStudentId();
-                    if (!presentIds.add(sid))
-                        continue; // 避免同一次识别中重复插入同一个学生
-                    dbHelper.insertAttendanceResult(sessionId, sid, "Present", r.getSimilarity(), "AUTO");
+            java.util.HashMap<Long, Float> presentBestScore = new java.util.HashMap<>();
+            if (results != null) {
+                for (FaceRecognitionManager.RecognitionResult r : results) {
+                    if (r != null && r.isSuccess()) {
+                        long sid = r.getStudentId();
+                        float score = r.getSimilarity();
+                        Float old = presentBestScore.get(sid);
+                        if (old == null || score > old) {
+                            presentBestScore.put(sid, score);
+                        }
+                    }
                 }
             }
 
-            // 将未识别到的本班学生标记为缺勤
-            android.database.Cursor cursor = dbHelper.getStudentsByClass(classroomId);
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    long sid = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                    if (!presentIds.contains(sid)) {
-                        dbHelper.insertAttendanceResult(sessionId, sid, "Absent", 0f, "AUTO");
+            final java.util.ArrayList<Long> classStudentIds = new java.util.ArrayList<>();
+            android.database.Cursor cursor = null;
+            try {
+                cursor = dbHelper.getStudentsByClass(classroomId);
+                if (cursor != null && cursor.moveToFirst()) {
+                    do {
+                        long sid = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                        classStudentIds.add(sid);
+                    } while (cursor.moveToNext());
+                }
+            } finally {
+                if (cursor != null) cursor.close();
+            }
+
+            final java.util.HashSet<Long> classStudentSet = new java.util.HashSet<>(classStudentIds);
+            final java.util.HashMap<Long, float[]> bestEmbeddingByStudent = new java.util.HashMap<>();
+            android.database.Cursor ec = null;
+            try {
+                String currentVer = faceRecognitionManager.getCurrentModelVersion();
+                ec = dbHelper.getAllFaceEmbeddingsByModel(currentVer);
+                if (ec != null && ec.moveToFirst()) {
+                    do {
+                        long studentId = ec.getLong(ec.getColumnIndexOrThrow("studentId"));
+                        if (!classStudentSet.contains(studentId)) continue;
+                        if (bestEmbeddingByStudent.containsKey(studentId)) continue;
+                        byte[] vecBytes = ec.getBlob(ec.getColumnIndexOrThrow("vector"));
+                        float[] vec = faceRecognitionManager.byteArrayToFloatArray(vecBytes);
+                        if (vec != null && vec.length > 0) {
+                            bestEmbeddingByStudent.put(studentId, vec);
+                        }
+                    } while (ec.moveToNext());
+                }
+            } finally {
+                if (ec != null) ec.close();
+            }
+
+            final java.util.HashMap<Long, Float> bestScoreByStudent = new java.util.HashMap<>();
+            if (embeddings != null && !embeddings.isEmpty() && !bestEmbeddingByStudent.isEmpty()) {
+                for (Long sid : classStudentIds) {
+                    float[] stored = bestEmbeddingByStudent.get(sid);
+                    if (stored == null) {
+                        bestScoreByStudent.put(sid, 0f);
+                        continue;
                     }
-                } while (cursor.moveToNext());
-                cursor.close();
-            } else if (cursor != null) {
-                cursor.close();
+                    float best = 0f;
+                    for (float[] q : embeddings) {
+                        if (q == null || q.length == 0) continue;
+                        float sim = faceRecognitionManager.calculateSimilarity(q, stored);
+                        if (sim > best) best = sim;
+                    }
+                    bestScoreByStudent.put(sid, best);
+                }
+            } else {
+                for (Long sid : classStudentIds) {
+                    bestScoreByStudent.put(sid, 0f);
+                }
+            }
+
+            for (java.util.Map.Entry<Long, Float> e : presentBestScore.entrySet()) {
+                dbHelper.insertAttendanceResult(sessionId, e.getKey(), "Present", e.getValue(), "AUTO");
+            }
+
+            for (Long sid : classStudentIds) {
+                if (presentBestScore.containsKey(sid)) continue;
+                Float score = bestScoreByStudent.get(sid);
+                if (score == null) score = 0f;
+                dbHelper.insertAttendanceResult(sessionId, sid, "Absent", score, "AUTO");
             }
         } catch (Throwable t) {
             android.util.Log.e(TAG, "持久化考勤结果失败: " + t.getMessage(), t);

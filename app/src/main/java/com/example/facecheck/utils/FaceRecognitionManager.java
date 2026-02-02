@@ -79,9 +79,10 @@ public class FaceRecognitionManager {
             this.selectedModelName = "MobileFaceNet";
             this.currentModelVersion = "mfn-new-f32";
         } else if (trimmed.contains("FaceNet")) {
-            this.selectedModelName = "Google FaceNet";
-            this.currentModelVersion = "facenet-new-f32"; // 典型 128 维
-            this.modelOutputDim = 128; // 按输出张量动态覆盖
+            // FaceNet 模型已删除，回退到 MobileFaceNet
+            Log.w(TAG, "FaceNet 模型已删除，自动回退到 MobileFaceNet(new/f32)");
+            this.selectedModelName = "MobileFaceNet";
+            this.currentModelVersion = "mfn-new-f32";
         } else {
             // 回退到 MobileFaceNet(new/f32)
             this.selectedModelName = "MobileFaceNet";
@@ -106,7 +107,9 @@ public class FaceRecognitionManager {
         try {
             String assetPath;
             if ("Google FaceNet".equals(selectedModelName)) {
-                assetPath = "models/new/facenet_float32.tflite";
+                // FaceNet 模型已删除，回退到 MobileFaceNet
+                Log.w(TAG, "FaceNet 模型已删除，自动回退到 MobileFaceNet(new/f32)");
+                assetPath = "models/new/mobilefacenet_float32.tflite";
             } else {
                 // 默认 MobileFaceNet(new/f32)
                 assetPath = "models/new/mobilefacenet_float32.tflite";
@@ -129,16 +132,10 @@ public class FaceRecognitionManager {
                 }
             }
             if (imgIndex == -1) {
-                // 回退：根据模型类型给默认尺寸
-                if ("Google FaceNet".equals(selectedModelName)) {
-                    this.modelInputWidth = 160;
-                    this.modelInputHeight = 160;
-                    this.modelInputChannels = 3;
-                } else {
-                    this.modelInputWidth = 112;
-                    this.modelInputHeight = 112;
-                    this.modelInputChannels = 3;
-                }
+                // 回退：默认 MobileFaceNet 尺寸
+                this.modelInputWidth = 112;
+                this.modelInputHeight = 112;
+                this.modelInputChannels = 3;
             }
 
             // 动态解析输出维度（选择首个二维 FLOAT32 输出作为嵌入向量）
@@ -250,97 +247,11 @@ public class FaceRecognitionManager {
     }
 
     /**
-     * 运行 FaceNet 推理（固定图像标准化 + 额外输入 phase_train=false, batch_size=1）
+     * FaceNet 模型已删除，此方法废弃
      */
     private float[] runFaceNet(Bitmap input) {
-        if (tflite == null) {
-            Log.w(TAG, "TFLite interpreter is null, cannot run FaceNet inference");
-            return null;
-        }
-        // 缩放到模型输入尺寸
-        int w = input.getWidth();
-        int h = input.getHeight();
-        if (w != modelInputWidth || h != modelInputHeight) {
-            input = Bitmap.createScaledBitmap(input, modelInputWidth, modelInputHeight, true);
-            w = modelInputWidth;
-            h = modelInputHeight;
-        }
-
-        // 固定图像标准化（fixed image standardization）：(x - 127.5) / 128
-        int[] pixels = new int[w * h];
-        input.getPixels(pixels, 0, w, 0, 0, w, h);
-        ByteBuffer inBuffer = ByteBuffer.allocateDirect(w * h * modelInputChannels * 4);
-        inBuffer.order(ByteOrder.nativeOrder());
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                int c = pixels[y * w + x];
-                float r = ((c >> 16) & 0xFF);
-                float g = ((c >> 8) & 0xFF);
-                float b = (c & 0xFF);
-                inBuffer.putFloat((r - 127.5f) / 128f);
-                inBuffer.putFloat((g - 127.5f) / 128f);
-                inBuffer.putFloat((b - 127.5f) / 128f);
-            }
-        }
-
-        // 组合多输入
-        int inCount = tflite.getInputTensorCount();
-        Object[] inputs = new Object[inCount];
-        int imageIndex = -1;
-        for (int i = 0; i < inCount; i++) {
-            Tensor t = tflite.getInputTensor(i);
-            DataType dt = t.dataType();
-            int[] shape = t.shape();
-            if (shape != null && shape.length >= 4 && dt == DataType.FLOAT32 && imageIndex == -1) {
-                imageIndex = i;
-                inputs[i] = inBuffer;
-            } else if (dt == DataType.BOOL) {
-                inputs[i] = new boolean[] { false };
-            } else if (dt == DataType.INT32) {
-                inputs[i] = new int[] { 1 };
-            } else if (dt == DataType.FLOAT32 && (shape == null || shape.length <= 1)) {
-                inputs[i] = new float[] { 1.0f };
-            } else {
-                // 不常用输入，给一个合理的默认值
-                inputs[i] = new float[] { 0.0f };
-            }
-        }
-        if (imageIndex == -1 && inCount > 0) {
-            inputs[0] = inBuffer; // 回退：将图像作为第一个输入
-        }
-
-        // 选取首个二维 FLOAT32 输出作为嵌入向量
-        int outCount = tflite.getOutputTensorCount();
-        java.util.Map<Integer, Object> outputs = new java.util.HashMap<>();
-        int mainOutIdx = -1;
-        float[][] mainOut = null;
-        for (int i = 0; i < outCount; i++) {
-            Tensor o = tflite.getOutputTensor(i);
-            int[] os = o.shape();
-            if (o.dataType() == DataType.FLOAT32 && os != null && os.length >= 2) {
-                outputs.put(i, new float[os[0]][os[os.length - 1]]);
-                if (mainOutIdx == -1) {
-                    mainOutIdx = i;
-                    mainOut = (float[][]) outputs.get(i);
-                }
-            }
-        }
-        if (mainOut == null) {
-            // 回退：假设第一个输出是嵌入
-            Tensor o0 = tflite.getOutputTensor(0);
-            int[] os0 = o0.shape();
-            outputs.put(0, new float[os0[0]][os0[os0.length - 1]]);
-            mainOutIdx = 0;
-            mainOut = (float[][]) outputs.get(0);
-        }
-
-        try {
-            tflite.runForMultipleInputsOutputs(inputs, outputs);
-        } catch (Throwable t) {
-            Log.e(TAG, "FaceNet inference failed: " + t.getMessage(), t);
-            return null;
-        }
-        return (mainOut != null && mainOut.length > 0) ? mainOut[0] : null;
+        Log.w(TAG, "FaceNet 模型已删除，回退到 MobileFaceNet");
+        return runMobileFaceNet(input);
     }
 
     /**
@@ -412,7 +323,9 @@ public class FaceRecognitionManager {
             ensureInterpreterLoaded();
             float[] features;
             if ("Google FaceNet".equals(selectedModelName)) {
-                features = runFaceNet(input);
+                // FaceNet 模型已删除，回退到 MobileFaceNet
+                Log.w(TAG, "FaceNet 模型已删除，自动回退到 MobileFaceNet");
+                features = runMobileFaceNet(input);
             } else {
                 features = runMobileFaceNet(input);
             }
@@ -467,9 +380,9 @@ public class FaceRecognitionManager {
             Bitmap crop = Bitmap.createBitmap(sourceBitmap, left, top, w, h);
             Bitmap input = Bitmap.createScaledBitmap(crop, modelInputWidth, modelInputHeight, true);
 
-            // 废弃 ML Kit 嵌入，统一走深度模型（MobileFaceNet / FaceNet）
+            // FaceNet 模型已删除，统一使用 MobileFaceNet
             float[] features = "Google FaceNet".equals(selectedModelName)
-                    ? runFaceNet(input)
+                    ? runMobileFaceNet(input)  // FaceNet 已删除，回退到 MobileFaceNet
                     : runMobileFaceNet(input);
             if (features == null) {
                 Log.e(TAG, "Inference returned null (Rect)");

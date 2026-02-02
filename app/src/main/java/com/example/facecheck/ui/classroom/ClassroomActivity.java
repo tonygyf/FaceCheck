@@ -9,7 +9,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Handler;
 import android.os.Bundle;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -42,6 +44,7 @@ import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Student;
 import com.example.facecheck.sync.SyncManager;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
+import com.example.facecheck.utils.ImageUtils;
 import com.example.facecheck.utils.PhotoStorageManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
@@ -90,10 +93,9 @@ public class ClassroomActivity extends AppCompatActivity {
     private ActivityResultLauncher<String> pickPhotoLauncher;
     private Student currentStudent;
 
-    // 特征模型选择
+    // 特征模型选择（FaceNet 已删除）
     private String[] modelOptions = {
-        "MobileFaceNet",
-        "FaceNet"
+        "MobileFaceNet"
     };
     private String selectedModel = "MobileFaceNet";
 
@@ -234,106 +236,124 @@ public class ClassroomActivity extends AppCompatActivity {
             return;
         }
 
+        processStudentWithRetry(student, 3);
+    }
+
+    private void processStudentWithRetry(Student student, int remainingAttempts) {
         Uri avatar = Uri.parse(student.getAvatarUri());
-        try {
-            Bitmap original = MediaStore.Images.Media.getBitmap(getContentResolver(), avatar);
-            // 检测人脸
-            faceDetectionManager.detectFacesFromBitmap(original, new FaceDetectionManager.FaceDetectionCallback() {
-                @Override
-                public void onSuccess(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps) {
-                    // 在后台线程执行特征提取与后续存储逻辑，避免阻塞主线程
-                    featureExecutor.execute(() -> {
-                        try {
-                            if (faces == null || faces.isEmpty()) {
-                                runOnUiThread(() -> {
-                                    Toast.makeText(ClassroomActivity.this, student.getName() + "：未检测到人脸，跳过", Toast.LENGTH_SHORT).show();
-                                    hadFailure = true;
-                                    processNextStudent();
-                                });
-                                return;
-                            }
-
-                            // 质量评估（使用提取的第一个人脸位图）
-                            float quality = 0.0f;
-                            if (faceBitmaps != null && !faceBitmaps.isEmpty()) {
-                                Bitmap faceBmp = FaceImageProcessor.normalizeFaceImage(faceBitmaps.get(0), 224);
-                                quality = FaceImageProcessor.calculateImageQuality(faceBmp);
-                            }
-
-                            // 提取传统增强特征（256维，内部会进行裁剪与增强）
-                            float[] features = faceRecognitionManager.extractFaceFeatures(original, faces.get(0));
-                            if (features == null || features.length == 0) {
-                                runOnUiThread(() -> {
-                                    Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取失败", Toast.LENGTH_SHORT).show();
-                                    hadFailure = true;
-                                    processNextStudent();
-                                });
-                                return;
-                            }
-
-                            
-
-                            // 已存在则询问是否更新（UI 交互放到主线程）
-                            final Student targetStudent = student;
-                            final float[] targetFeatures = features;
-                            final float targetQuality = quality;
-
-                            List<com.example.facecheck.data.model.FaceEmbedding> existing = faceRecognitionManager.getStudentFaceEmbeddings(targetStudent.getId());
-                            if (existing != null && !existing.isEmpty()) {
-                                runOnUiThread(() -> new AlertDialog.Builder(ClassroomActivity.this)
-                                        .setTitle("更新确认")
-                                        .setMessage("学生 " + targetStudent.getName() + " 已有人脸特征，是否更新为新结果？")
-                                        .setPositiveButton("更新", (d, w) -> {
-                                            boolean ok = updateFaceEmbeddingRecord(targetStudent.getId(), targetFeatures, targetQuality);
-                                            if (ok) {
-                                                appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
-                                                Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已更新", Toast.LENGTH_SHORT).show();
-                                            } else {
-                                                Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：更新失败", Toast.LENGTH_SHORT).show();
-                                                hadFailure = true;
-                                            }
-                                            processNextStudent();
-                                        })
-                                        .setNegativeButton("跳过", (d, w) -> processNextStudent())
-                                        .setCancelable(false)
-                                        .show());
-                            } else {
-                                boolean saved = faceRecognitionManager.saveFaceEmbedding(targetStudent.getId(), targetFeatures, targetQuality, null);
-                                runOnUiThread(() -> {
-                                    if (saved) {
-                                        appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
-                                        Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已保存", Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：保存失败", Toast.LENGTH_SHORT).show();
-                                        hadFailure = true;
-                                    }
-                                    processNextStudent();
-                                });
-                            }
-                        } catch (Throwable t) {
-                            runOnUiThread(() -> {
-                                Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取异常(" + t.getMessage() + ")", Toast.LENGTH_SHORT).show();
-                                hadFailure = true;
-                                processNextStudent();
-                            });
-                        }
-                    });
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(ClassroomActivity.this, student.getName() + "：人脸检测失败(" + e.getMessage() + ")", Toast.LENGTH_SHORT).show();
-                        hadFailure = true;
-                        processNextStudent();
-                    });
-                }
-            });
-        } catch (IOException e) {
+        Bitmap original = ImageUtils.loadAndResizeBitmap(this, avatar, 1600, 1600);
+        if (original == null) {
             Toast.makeText(this, student.getName() + "：头像读取失败", Toast.LENGTH_SHORT).show();
             hadFailure = true;
             processNextStudent();
+            return;
         }
+        final Bitmap originalFinal = original;
+        faceDetectionManager.detectFacesFromBitmap(originalFinal, new FaceDetectionManager.FaceDetectionCallback() {
+            @Override
+            public void onSuccess(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps) {
+                featureExecutor.execute(() -> {
+                    try {
+                        if (faces == null || faces.isEmpty()) {
+                            runOnUiThread(() -> {
+                                if (remainingAttempts > 1) {
+                                    new Handler(Looper.getMainLooper()).postDelayed(
+                                            () -> processStudentWithRetry(student, remainingAttempts - 1), 300);
+                                    return;
+                                }
+                                Toast.makeText(ClassroomActivity.this, student.getName() + "：未检测到人脸，跳过", Toast.LENGTH_SHORT).show();
+                                hadFailure = true;
+                                processNextStudent();
+                            });
+                            return;
+                        }
+
+                        float quality = 0.0f;
+                        if (faceBitmaps != null && !faceBitmaps.isEmpty()) {
+                            Bitmap faceBmp = FaceImageProcessor.normalizeFaceImage(faceBitmaps.get(0), 224);
+                            quality = FaceImageProcessor.calculateImageQuality(faceBmp);
+                        }
+
+                        float[] features = faceRecognitionManager.extractFaceFeatures(originalFinal, faces.get(0));
+                        if (features == null || features.length == 0) {
+                            runOnUiThread(() -> {
+                                if (remainingAttempts > 1) {
+                                    new Handler(Looper.getMainLooper()).postDelayed(
+                                            () -> processStudentWithRetry(student, remainingAttempts - 1), 300);
+                                    return;
+                                }
+                                Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取失败", Toast.LENGTH_SHORT).show();
+                                hadFailure = true;
+                                processNextStudent();
+                            });
+                            return;
+                        }
+
+                        final Student targetStudent = student;
+                        final float[] targetFeatures = features;
+                        final float targetQuality = quality;
+
+                        List<com.example.facecheck.data.model.FaceEmbedding> existing = faceRecognitionManager.getStudentFaceEmbeddings(targetStudent.getId());
+                        if (existing != null && !existing.isEmpty()) {
+                            runOnUiThread(() -> new AlertDialog.Builder(ClassroomActivity.this)
+                                    .setTitle("更新确认")
+                                    .setMessage("学生 " + targetStudent.getName() + " 已有人脸特征，是否更新为新结果？")
+                                    .setPositiveButton("更新", (d, w) -> {
+                                        boolean ok = updateFaceEmbeddingRecord(targetStudent.getId(), targetFeatures, targetQuality);
+                                        if (ok) {
+                                            appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
+                                            Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已更新", Toast.LENGTH_SHORT).show();
+                                        } else {
+                                            Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：更新失败", Toast.LENGTH_SHORT).show();
+                                            hadFailure = true;
+                                        }
+                                        processNextStudent();
+                                    })
+                                    .setNegativeButton("跳过", (d, w) -> processNextStudent())
+                                    .setCancelable(false)
+                                    .show());
+                        } else {
+                            boolean saved = faceRecognitionManager.saveFaceEmbedding(targetStudent.getId(), targetFeatures, targetQuality, null);
+                            runOnUiThread(() -> {
+                                if (saved) {
+                                    appendEmbeddingJson(targetStudent.getId(), targetFeatures, targetQuality);
+                                    Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：已保存", Toast.LENGTH_SHORT).show();
+                                } else {
+                                    Toast.makeText(ClassroomActivity.this, targetStudent.getName() + "：保存失败", Toast.LENGTH_SHORT).show();
+                                    hadFailure = true;
+                                }
+                                processNextStudent();
+                            });
+                        }
+                    } catch (Throwable t) {
+                        runOnUiThread(() -> {
+                            if (remainingAttempts > 1) {
+                                new Handler(Looper.getMainLooper()).postDelayed(
+                                        () -> processStudentWithRetry(student, remainingAttempts - 1), 300);
+                                return;
+                            }
+                            Toast.makeText(ClassroomActivity.this, student.getName() + "：特征提取异常(" + t.getMessage() + ")", Toast.LENGTH_SHORT).show();
+                            hadFailure = true;
+                            processNextStudent();
+                        });
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                runOnUiThread(() -> {
+                    if (remainingAttempts > 1) {
+                        new Handler(Looper.getMainLooper()).postDelayed(
+                                () -> processStudentWithRetry(student, remainingAttempts - 1), 300);
+                        return;
+                    }
+                    Toast.makeText(ClassroomActivity.this, student.getName() + "：人脸检测失败(" + e.getMessage() + ")", Toast.LENGTH_SHORT).show();
+                    hadFailure = true;
+                    processNextStudent();
+                });
+            }
+        });
     }
 
     @Override

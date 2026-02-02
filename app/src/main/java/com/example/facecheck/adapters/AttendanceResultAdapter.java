@@ -1,6 +1,7 @@
 package com.example.facecheck.adapters;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -63,6 +64,7 @@ public class AttendanceResultAdapter extends RecyclerView.Adapter<AttendanceResu
         private TextView tvScore;
         private TextView tvDecidedBy;
         private Button btnCorrect;
+        private final int defaultScoreColor;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -72,6 +74,7 @@ public class AttendanceResultAdapter extends RecyclerView.Adapter<AttendanceResu
             tvScore = itemView.findViewById(R.id.tvScore);
             tvDecidedBy = itemView.findViewById(R.id.tvDecidedBy);
             btnCorrect = itemView.findViewById(R.id.btnCorrect);
+            defaultScoreColor = tvScore.getCurrentTextColor();
         }
 
         public void bind(AttendanceResult result, OnCorrectionClickListener listener) {
@@ -83,9 +86,18 @@ public class AttendanceResultAdapter extends RecyclerView.Adapter<AttendanceResu
                 tvStudentId.setText("");
             }
 
-            tvStatus.setText(getStatusText(result.getStatus()));
-            tvScore.setText(String.format("%.2f", result.getScore()));
+            String status = result.getStatus();
+            tvStatus.setText(getStatusText(status));
+            float score = result.getScore();
+            tvScore.setText(String.format("%.2f", score));
             tvDecidedBy.setText("判定方式: " + result.getDecidedBy());
+
+            boolean isPresent = "PRESENT".equalsIgnoreCase(status) || "Present".equalsIgnoreCase(status);
+            if (!isPresent && score >= 0.75f) {
+                tvScore.setTextColor(Color.RED);
+            } else {
+                tvScore.setTextColor(defaultScoreColor);
+            }
 
             // 设置修正按钮点击监听
             btnCorrect.setOnClickListener(new View.OnClickListener() {
@@ -99,9 +111,12 @@ public class AttendanceResultAdapter extends RecyclerView.Adapter<AttendanceResu
         }
 
         private String getStatusText(String status) {
+            if (status == null) return "未知";
             switch (status) {
+                case "Present":
                 case "PRESENT":
                     return "出勤";
+                case "Absent":
                 case "ABSENT":
                     return "缺勤";
                 default:
