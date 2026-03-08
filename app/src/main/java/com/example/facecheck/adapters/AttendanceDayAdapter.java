@@ -83,8 +83,8 @@ public class AttendanceDayAdapter extends RecyclerView.Adapter<RecyclerView.View
         } else if (holder instanceof StudentVH) {
             ((StudentVH) holder).bind(item);
         }
-        holder.itemView.setScaleX(0.97f);
-        holder.itemView.setScaleY(0.97f);
+        holder.itemView.setScaleX(0.90f);
+        holder.itemView.setScaleY(0.90f);
         SpringAnimation sx = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_X, 1.0f);
         SpringAnimation sy = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_Y, 1.0f);
         sx.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);

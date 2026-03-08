@@ -1,6 +1,5 @@
 package com.example.facecheck.ui.attendance;
 
-import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.widget.TextView;
@@ -13,7 +12,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.activity.MisrecognitionCorrectionActivity;
 import com.example.facecheck.adapters.AttendanceResultAdapter;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.AttendanceResult;
@@ -30,6 +28,7 @@ public class AttendanceResultActivity extends AppCompatActivity {
     private long sessionId;
     private int detectedFacesExtra;
     private int recognizedFacesExtra;
+    private boolean hideScores = false;
     
     private RecyclerView recyclerViewResults;
     private TextView tvSessionInfo;
@@ -47,6 +46,7 @@ public class AttendanceResultActivity extends AppCompatActivity {
         sessionId = getIntent().getLongExtra("session_id", -1);
         detectedFacesExtra = getIntent().getIntExtra("detected_faces", 0);
         recognizedFacesExtra = getIntent().getIntExtra("recognized_faces", 0);
+        hideScores = getIntent().getBooleanExtra("hide_scores", false);
         if (sessionId == -1) {
             Toast.makeText(this, "会话信息无效", Toast.LENGTH_SHORT).show();
             finish();
@@ -72,18 +72,7 @@ public class AttendanceResultActivity extends AppCompatActivity {
         // 设置RecyclerView
         recyclerViewResults.setLayoutManager(new LinearLayoutManager(this));// 设置适配器
         resultAdapter = new AttendanceResultAdapter(new ArrayList<>());
-        resultAdapter.setOnCorrectionClickListener(new AttendanceResultAdapter.OnCorrectionClickListener() {
-            @Override
-            public void onCorrectionClick(AttendanceResult result) {
-                // 跳转到修正界面
-                Intent intent = new Intent(AttendanceResultActivity.this, MisrecognitionCorrectionActivity.class);
-                if (result.getStudent() != null) {
-                    intent.putExtra("student_name", result.getStudent().getName());
-                    intent.putExtra("student_id", result.getStudent().getSid());
-                }
-                startActivityForResult(intent, 1001);
-            }
-        });
+        resultAdapter.setHideScores(hideScores);
         recyclerViewResults.setAdapter(resultAdapter);
         
         btnToggleMode.setOnClickListener(v -> {
@@ -187,13 +176,4 @@ public class AttendanceResultActivity extends AppCompatActivity {
         tvSummary.setText(summary);
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1001 && resultCode == RESULT_OK) {
-            // 修正完成后刷新数据
-            loadAttendanceResults();
-            Toast.makeText(this, "修正已应用", Toast.LENGTH_SHORT).show();
-        }
-    }
 }

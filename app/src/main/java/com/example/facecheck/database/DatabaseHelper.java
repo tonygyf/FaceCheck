@@ -694,6 +694,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 new String[] { String.valueOf(studentId) }, null, null, null);
     }
 
+    public Cursor getClassroomsByStudentSid(String sid) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT DISTINCT c.id AS classId, c.name AS className " +
+                "FROM Student s INNER JOIN Classroom c ON s.classId = c.id " +
+                "WHERE s.sid = ? " +
+                "ORDER BY c.year DESC, c.name";
+        return db.rawQuery(sql, new String[] { sid });
+    }
+
     /**
      * 更新学生信息
      */

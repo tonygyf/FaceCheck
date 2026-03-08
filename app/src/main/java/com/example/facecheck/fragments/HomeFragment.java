@@ -33,7 +33,6 @@ public class HomeFragment extends Fragment {
 
     private DatabaseHelper dbHelper;
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
-    private CardView cardClassroom, cardStudents, cardAttendance, cardQuickAttendance;
     private Button btnSync;
     private static final int PICK_IMAGE_REQUEST = 1001;
     private android.widget.ImageView bannerImage;
@@ -75,17 +74,7 @@ public class HomeFragment extends Fragment {
         tvStudentCount = view.findViewById(R.id.tv_student_count);
         tvAttendanceCount = view.findViewById(R.id.tv_attendance_count);
 
-        cardClassroom = view.findViewById(R.id.card_classroom);
-        cardStudents = view.findViewById(R.id.card_students);
-        cardAttendance = view.findViewById(R.id.card_attendance);
-        cardQuickAttendance = view.findViewById(R.id.card_quick_attendance);
         btnSync = view.findViewById(R.id.btn_sync);
-
-        // 设置点击事件
-        cardClassroom.setOnClickListener(v -> navigateToClassroom());
-        cardStudents.setOnClickListener(v -> navigateToStudents());
-        cardAttendance.setOnClickListener(v -> navigateToAttendance());
-        cardQuickAttendance.setOnClickListener(v -> navigateToQuickAttendance());
 
         // 人脸修复增强入口
         CardView cardFaceEnhancement = view.findViewById(R.id.card_face_enhancement);
@@ -108,10 +97,6 @@ public class HomeFragment extends Fragment {
         btnSync.setOnClickListener(v -> syncDatabase());
 
         // 添加Tooltip提示
-        TooltipCompat.setTooltipText(cardClassroom, "管理您的班级信息");
-        TooltipCompat.setTooltipText(cardStudents, "管理学生信息和人脸数据");
-        TooltipCompat.setTooltipText(cardAttendance, "查看和管理考勤记录");
-        TooltipCompat.setTooltipText(cardQuickAttendance, "快速开始人脸识别考勤");
         TooltipCompat.setTooltipText(btnSync, "与WebDAV服务器同步数据");
 
         // 加载统计数据
@@ -192,21 +177,7 @@ public class HomeFragment extends Fragment {
             updateLabel(statsLayout.getChildAt(2), "本月打卡");
         }
 
-        // 隐藏教师专用功能卡片
-        if (cardClassroom != null)
-            cardClassroom.setVisibility(View.GONE);
-        if (cardStudents != null)
-            cardStudents.setVisibility(View.GONE);
-        if (cardQuickAttendance != null)
-            cardQuickAttendance.setVisibility(View.GONE);
-
-        // 确保考勤记录卡片可见（学生也可以看自己的记录）
-        if (cardAttendance != null) {
-            cardAttendance.setVisibility(View.VISIBLE);
-            TextView tv = cardAttendance.findViewById(android.R.id.text1); // 这是一个假设，通常需要找到对应的ID
-            // 直接遍历查找文字为“考勤记录”的TextView
-            findAndSetText(cardAttendance, "我的考勤");
-        }
+        // 快捷入口已移除
     }
 
     private void updateLabel(View card, String text) {

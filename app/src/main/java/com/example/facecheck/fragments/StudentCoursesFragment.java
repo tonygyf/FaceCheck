@@ -41,8 +41,10 @@ public class StudentCoursesFragment extends Fragment {
     private DatabaseHelper dbHelper;
     private long studentId = -1;
     private long classId = -1;
+    private String studentSid;
     private SignInSessionAdapter adapter;
     private List<SessionItem> sessionItems = new ArrayList<>();
+    private List<ClassItem> classItems = new ArrayList<>();
 
     @Nullable
     @Override
@@ -63,6 +65,7 @@ public class StudentCoursesFragment extends Fragment {
         classId = prefs.getLong("class_id", -1);
 
         initViews(view);
+        loadStudentInfo();
         loadAttendanceSessions();
 
         return view;
@@ -81,6 +84,26 @@ public class StudentCoursesFragment extends Fragment {
         fabRefresh.setOnClickListener(v -> {
             Toast.makeText(requireContext(), "刷新中...", Toast.LENGTH_SHORT).show();
             loadAttendanceSessions();
+        });
+        
+        tvClassName.setOnClickListener(v -> {
+            if (classItems.size() <= 1) return;
+            String[] names = new String[classItems.size()];
+            int checked = 0;
+            for (int i = 0; i < classItems.size(); i++) {
+                names[i] = classItems.get(i).className;
+                if (classItems.get(i).classId == classId) checked = i;
+            }
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("切换班级")
+                    .setSingleChoiceItems(names, checked, (d, which) -> {
+                        classId = classItems.get(which).classId;
+                        requireContext().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE)
+                                .edit().putLong("class_id", classId).apply();
+                        loadAttendanceSessions();
+                        d.dismiss();
+                    })
+                    .show();
         });
     }
 
@@ -133,7 +156,7 @@ public class StudentCoursesFragment extends Fragment {
     private void showEmptyState(String message) {
         tvEmptyHint.setText(message);
         tvEmptyHint.setVisibility(View.VISIBLE);
-        recyclerView.setVisibility(View.GONE);
+        recyclerView.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -170,12 +193,20 @@ public class StudentCoursesFragment extends Fragment {
     // ========== Adapter ==========
 
     private class SignInSessionAdapter extends RecyclerView.Adapter<SignInSessionAdapter.ViewHolder> {
+        private static final int TYPE_EMPTY = 100;
 
         private final SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
 
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            if (viewType == TYPE_EMPTY) {
+                View v = new View(parent.getContext());
+                int h = parent.getResources().getDisplayMetrics().heightPixels + 200;
+                v.setLayoutParams(new RecyclerView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, h));
+                return new ViewHolder(v);
+            }
             View v = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_sign_in_session, parent, false);
             return new ViewHolder(v);
@@ -183,6 +214,7 @@ public class StudentCoursesFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            if (getItemViewType(position) == TYPE_EMPTY) return;
             SessionItem item = sessionItems.get(position);
 
             holder.tvTime.setText(sdf.format(new Date(item.startedAt)));
@@ -203,7 +235,12 @@ public class StudentCoursesFragment extends Fragment {
 
         @Override
         public int getItemCount() {
-            return sessionItems.size();
+            return sessionItems.isEmpty() ? 1 : sessionItems.size();
+        }
+        
+        @Override
+        public int getItemViewType(int position) {
+            return sessionItems.isEmpty() ? TYPE_EMPTY : 0;
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
@@ -227,5 +264,54 @@ public class StudentCoursesFragment extends Fragment {
         intent.putExtra("class_id", item.classId);
         intent.putExtra("student_id", studentId);
         startActivity(intent);
+    }
+
+    private void loadStudentInfo() {
+        classItems.clear();
+        if (studentId <= 0) return;
+        Cursor c = dbHelper.getStudentById(studentId);
+        if (c != null && c.moveToFirst()) {
+            studentSid = c.getString(c.getColumnIndexOrThrow("sid"));
+            if (classId <= 0) {
+                classId = c.getLong(c.getColumnIndexOrThrow("classId"));
+            }
+            c.close();
+        } else if (c != null) {
+            c.close();
+        }
+        if (studentSid != null && !studentSid.isEmpty()) {
+            Cursor cc = dbHelper.getClassroomsByStudentSid(studentSid);
+            if (cc != null && cc.moveToFirst()) {
+                do {
+                    long cid = cc.getLong(cc.getColumnIndexOrThrow("classId"));
+                    String cname = cc.getString(cc.getColumnIndexOrThrow("className"));
+                    classItems.add(new ClassItem(cid, cname));
+                } while (cc.moveToNext());
+                cc.close();
+            } else if (cc != null) {
+                cc.close();
+            }
+        }
+        if (!classItems.isEmpty()) {
+            boolean found = false;
+            for (ClassItem item : classItems) {
+                if (item.classId == classId) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                classId = classItems.get(0).classId;
+            }
+        }
+    }
+
+    private static class ClassItem {
+        long classId;
+        String className;
+        ClassItem(long classId, String className) {
+            this.classId = classId;
+            this.className = className;
+        }
     }
 }

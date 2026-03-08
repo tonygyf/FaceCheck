@@ -51,6 +51,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private long classroomId;
     private Uri currentPhotoUri;
     private long sessionId;
+    private boolean isImportedPhoto = false;
     private FaceDetectionManager faceDetectionManager;
     private FaceRecognitionManager faceRecognitionManager;
     private ImageStorageManager imageStorageManager;
@@ -172,6 +173,7 @@ public class AttendanceActivity extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == RESULT_OK && currentPhotoUri != null) {
                         try {
+                            isImportedPhoto = false;
                             // 显示预览图（按EXIF方向与合适尺寸加载）并缓存原始位图
                             originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this,
                                     currentPhotoUri, 1600, 1600);
@@ -208,6 +210,7 @@ public class AttendanceActivity extends AppCompatActivity {
                     if (uri != null) {
                         try {
                             currentPhotoUri = uri;
+                            isImportedPhoto = true;
                             originalOrientedBitmap = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this,
                                     currentPhotoUri, 1600, 1600);
                             if (originalOrientedBitmap != null) {
@@ -308,6 +311,7 @@ public class AttendanceActivity extends AppCompatActivity {
             });
 
     private void takePhoto() {
+        isImportedPhoto = false;
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         File photoFile = new File(PhotoStorageManager.getAttendancePhotosDir(this),
                 new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
@@ -402,6 +406,17 @@ public class AttendanceActivity extends AppCompatActivity {
                     showFaceSegmentationResultsSimple(manualRects.size(), faceBitmaps, facePaths);
                     tvStatus.setText("已生成向量，待确认后继续比对");
                     showEmbeddingsDialog(embeddings, () -> {
+                        if (isImportedPhoto && manualRects.size() > 1) {
+                            new Thread(() -> {
+                                persistAttendanceResultsAllPresent(sessionId);
+                                runOnUiThread(() -> {
+                                    tvStatus.setText("识别完成 - 手动框选 " + manualRects.size() + " 个人脸");
+                                    openAttendanceResult(manualRects.size(), manualRects.size(),
+                                            new ArrayList<>(), true);
+                                });
+                            }).start();
+                            return;
+                        }
                         new Thread(() -> {
                             try {
                                 List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
@@ -424,14 +439,8 @@ public class AttendanceActivity extends AppCompatActivity {
                                 runOnUiThread(() -> {
                                     tvStatus.setText("识别完成 - 手动框选 " + manualRects.size() + " 个人脸，识别出 "
                                             + finalRecognizedCount + " 个学生");
-
-                                    Intent intent = new Intent(this, AttendanceResultActivity.class);
-                                    intent.putExtra("session_id", sessionId);
-                                    intent.putExtra("detected_faces", manualRects.size());
-                                    intent.putExtra("recognized_faces", finalRecognizedCount);
-                                    intent.putStringArrayListExtra("recognized_names", finalRecognizedNames);
-                                    startActivity(intent);
-                                    finish();
+                                    openAttendanceResult(manualRects.size(), finalRecognizedCount,
+                                            finalRecognizedNames, false);
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
@@ -665,6 +674,17 @@ public class AttendanceActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     tvStatus.setText("已生成向量(YuNet)，待确认后继续比对");
                     showEmbeddingsDialog(embeddings, () -> {
+                        if (isImportedPhoto && rects.size() > 1) {
+                            new Thread(() -> {
+                                persistAttendanceResultsAllPresent(sessionId);
+                                runOnUiThread(() -> {
+                                    tvStatus.setText("识别完成 - 检测到 " + rects.size() + " 个人脸");
+                                    openAttendanceResult(rects.size(), rects.size(),
+                                            new ArrayList<>(), true);
+                                });
+                            }).start();
+                            return;
+                        }
                         new Thread(() -> {
                             try {
                                 List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
@@ -688,13 +708,8 @@ public class AttendanceActivity extends AppCompatActivity {
                                     tvStatus.setText("识别完成 - 模型: " + selectedModel +
                                             "；检测到 " + rects.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
 
-                                    Intent intent = new Intent(this, AttendanceResultActivity.class);
-                                    intent.putExtra("session_id", sessionId);
-                                    intent.putExtra("detected_faces", rects.size());
-                                    intent.putExtra("recognized_faces", finalRecognizedCount);
-                                    intent.putStringArrayListExtra("recognized_names", finalRecognizedNames);
-                                    startActivity(intent);
-                                    finish();
+                                    openAttendanceResult(rects.size(), finalRecognizedCount,
+                                            finalRecognizedNames, false);
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
@@ -800,6 +815,17 @@ public class AttendanceActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     tvStatus.setText("已生成向量，待确认后继续比对");
                     showEmbeddingsDialog(embeddings, () -> {
+                        if (isImportedPhoto && faces.size() > 1) {
+                            new Thread(() -> {
+                                persistAttendanceResultsAllPresent(sessionId);
+                                runOnUiThread(() -> {
+                                    tvStatus.setText("识别完成 - 检测到 " + faces.size() + " 个人脸");
+                                    openAttendanceResult(faces.size(), faces.size(),
+                                            new ArrayList<>(), true);
+                                });
+                            }).start();
+                            return;
+                        }
                         // 用户确认后再进行比对（放回子线程执行）
                         new Thread(() -> {
                             try {
@@ -829,16 +855,8 @@ public class AttendanceActivity extends AppCompatActivity {
                                 runOnUiThread(() -> {
                                     tvStatus.setText("识别完成 - 使用模型: " + selectedModel + "，检测到 " + faces.size()
                                             + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
-
-                                    // 跳转到结果界面，传递识别结果
-                                    Intent intent = new Intent(this, AttendanceResultActivity.class);
-                                    intent.putExtra("session_id", sessionId);
-                                    intent.putExtra("detected_faces", faces.size());
-                                    intent.putExtra("recognized_faces", finalRecognizedCount);
-                                    intent.putStringArrayListExtra("recognized_names",
-                                            new ArrayList<>(finalRecognizedNames));
-                                    startActivity(intent);
-                                    finish();
+                                    openAttendanceResult(faces.size(), finalRecognizedCount,
+                                            new ArrayList<>(finalRecognizedNames), false);
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
@@ -958,6 +976,35 @@ public class AttendanceActivity extends AppCompatActivity {
         } catch (Throwable t) {
             android.util.Log.e(TAG, "持久化考勤结果失败: " + t.getMessage(), t);
         }
+    }
+
+    private void persistAttendanceResultsAllPresent(long sessionId) {
+        try {
+            android.database.Cursor cursor = dbHelper.getStudentsByClass(classroomId);
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    long sid = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                    dbHelper.insertAttendanceResult(sessionId, sid, "Present", 1f, "AUTO");
+                } while (cursor.moveToNext());
+                cursor.close();
+            } else if (cursor != null) {
+                cursor.close();
+            }
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "持久化考勤结果失败: " + t.getMessage(), t);
+        }
+    }
+
+    private void openAttendanceResult(int detectedFaces, int recognizedFaces,
+            ArrayList<String> recognizedNames, boolean hideScores) {
+        Intent intent = new Intent(this, AttendanceResultActivity.class);
+        intent.putExtra("session_id", sessionId);
+        intent.putExtra("detected_faces", detectedFaces);
+        intent.putExtra("recognized_faces", recognizedFaces);
+        intent.putStringArrayListExtra("recognized_names", recognizedNames);
+        intent.putExtra("hide_scores", hideScores);
+        startActivity(intent);
+        finish();
     }
 
     /**

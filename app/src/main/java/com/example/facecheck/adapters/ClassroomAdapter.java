@@ -8,6 +8,8 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.dynamicanimation.animation.SpringAnimation;
+import androidx.dynamicanimation.animation.SpringForce;
 
 import com.example.facecheck.R;
 import com.example.facecheck.data.model.Classroom;
@@ -55,6 +57,17 @@ public class ClassroomAdapter extends RecyclerView.Adapter<ClassroomAdapter.View
                 listener.onItemClick(classroom);
             }
         });
+        
+        holder.itemView.setScaleX(0.90f);
+        holder.itemView.setScaleY(0.90f);
+        SpringAnimation ax = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_X, 1.0f);
+        SpringAnimation ay = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_Y, 1.0f);
+        ax.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
+        ax.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
+        ay.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
+        ay.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
+        ax.start();
+        ay.start();
         
         // 添加长按事件，显示操作菜单（查看/开始考勤/重命名）
         holder.itemView.setOnLongClickListener(v -> {

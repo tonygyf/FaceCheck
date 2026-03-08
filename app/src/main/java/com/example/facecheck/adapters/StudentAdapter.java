@@ -9,6 +9,8 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.dynamicanimation.animation.SpringAnimation;
+import androidx.dynamicanimation.animation.SpringForce;
 
 import com.bumptech.glide.Glide;
 import com.example.facecheck.R;
@@ -69,6 +71,17 @@ public class StudentAdapter extends RecyclerView.Adapter<StudentAdapter.ViewHold
                 listener.onItemClick(student);
             }
         });
+        
+        holder.itemView.setScaleX(0.90f);
+        holder.itemView.setScaleY(0.90f);
+        SpringAnimation ax = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_X, 1.0f);
+        SpringAnimation ay = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_Y, 1.0f);
+        ax.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
+        ax.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
+        ay.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
+        ay.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
+        ax.start();
+        ay.start();
     }
 
     @Override

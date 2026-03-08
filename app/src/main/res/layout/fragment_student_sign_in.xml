@@ -1,25 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/background_light">
 
-    <!-- 班级标题 -->
-    <TextView
-        android:id="@+id/tv_class_name"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp"
+        android:orientation="horizontal"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
         android:background="?attr/colorPrimary"
-        android:text="正在获取班级..."
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"
-        android:gravity="center"
-        android:elevation="2dp" />
+        android:gravity="center_vertical"
+        android:elevation="2dp">
+
+        <TextView
+            android:id="@+id/tv_class_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="正在获取班级..."
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:gravity="center_vertical" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="刷新"
+            app:fabSize="mini"
+            app:tint="@android:color/white"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -41,18 +61,6 @@
             android:textSize="16sp"
             android:textColor="@color/text_secondary"
             android:visibility="gone" />
-
-        <!-- 刷新按钮 -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fab_refresh"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:src="@drawable/ic_refresh"
-            android:contentDescription="刷新"
-            app:tint="@android:color/white"
-            xmlns:app="http://schemas.android.com/apk/res-auto" />
 
     </FrameLayout>
 </LinearLayout>
