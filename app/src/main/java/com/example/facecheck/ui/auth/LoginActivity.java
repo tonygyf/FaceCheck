@@ -21,6 +21,7 @@ import android.content.SharedPreferences;
 import com.airbnb.lottie.LottieAnimationView;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import com.airbnb.lottie.LottieDrawable;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -90,12 +91,18 @@ public class LoginActivity extends AppCompatActivity {
         if (state instanceof LoginUiState.Initial) {
             progressBar.setVisibility(View.GONE);
             loginButton.setEnabled(true);
+            lottieOverlayLogin.setVisibility(View.GONE);
+            lottieLoginView.cancelAnimation();
         } else if (state instanceof LoginUiState.Loading) {
-            progressBar.setVisibility(View.VISIBLE);
+            progressBar.setVisibility(View.GONE); // 使用Lottie替代
             loginButton.setEnabled(false);
+            lottieOverlayLogin.setVisibility(View.VISIBLE);
+            lottieLoginView.setRepeatCount(LottieDrawable.INFINITE);
+            lottieLoginView.playAnimation();
         } else if (state instanceof LoginUiState.Success) {
             LoginUiState.Success success = (LoginUiState.Success) state;
-            progressBar.setVisibility(View.GONE);
+            lottieOverlayLogin.setVisibility(View.GONE);
+            lottieLoginView.cancelAnimation();
             Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
 
             SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
@@ -159,61 +166,19 @@ public class LoginActivity extends AppCompatActivity {
                         .remove("saved_password")
                         .apply();
             }
-            // 显示登录成功 Lottie（telegram），执行1次后退出动画再跳转
-            // 显示登录成功 Lottie（telegram），执行1次后退出动画再跳转
-            if (lottieLoginView != null && lottieOverlayLogin != null) {
-                loginButton.setEnabled(false);
-                lottieOverlayLogin.setVisibility(View.VISIBLE);
 
-                // 确保动画重新加载
-                    lottieLoginView.cancelAnimation();
-                    // 使用XML中已定义的文件名，避免重复设置
-                    lottieLoginView.setRepeatCount(0);
-
-                // 移除旧的监听器以防重复
-                lottieLoginView.removeAllAnimatorListeners();
-
-                lottieLoginView.addAnimatorListener(new AnimatorListenerAdapter() {
-                    @Override
-                    public void onAnimationEnd(Animator animation) {
-                        lottieOverlayLogin.setVisibility(View.GONE);
-                        if (!navigated) {
-                            navigated = true;
-                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(intent);
-                            finish();
-                        }
-                    }
-                });
-
-                // 播放动画
-                lottieLoginView.playAnimation();
-
-                // 安全回退机制：如果动画3秒内没结束（通常动画2秒左右），强制跳转
-                new android.os.Handler().postDelayed(() -> {
-                    if (!navigated && !isFinishing()) {
-                        navigated = true;
-                        lottieOverlayLogin.setVisibility(View.GONE);
-                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                        finish();
-                    }
-                }, 3000);
-            } else {
-                // 回退：无动画视图则直接跳转
-                if (!navigated) {
-                    navigated = true;
-                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
-                    finish();
-                }
+            // 优化：登录成功后立即跳转，移除Lottie成功动画和延迟
+            if (!navigated) {
+                navigated = true;
+                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                finish();
             }
         } else if (state instanceof LoginUiState.Error) {
             LoginUiState.Error error = (LoginUiState.Error) state;
-            progressBar.setVisibility(View.GONE);
+            lottieOverlayLogin.setVisibility(View.GONE);
+            lottieLoginView.cancelAnimation();
             loginButton.setEnabled(true);
             Toast.makeText(LoginActivity.this, error.message, Toast.LENGTH_SHORT).show();
         }
