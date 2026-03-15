@@ -35,15 +35,19 @@ public class UserRepository {
     
     public static class UserLoginResult {
         public final long userId;
-        public final String role; // "teacher" 或 "student"
-        public final String displayName;
+        public final String role;
+        public final String username;
+        public final String name;
+        public final String avatarUri;
         public final String accessToken;
         public final String refreshToken;
 
-        public UserLoginResult(long userId, String role, String displayName, String accessToken, String refreshToken) {
+        public UserLoginResult(long userId, String role, String username, String name, String avatarUri, String accessToken, String refreshToken) {
             this.userId = userId;
             this.role = role;
-            this.displayName = displayName;
+            this.username = username;
+            this.name = name;
+            this.avatarUri = avatarUri;
             this.accessToken = accessToken;
             this.refreshToken = refreshToken;
         }
@@ -97,10 +101,12 @@ public class UserRepository {
                                 JSONObject data = json.getJSONObject("data");
                                 long userId = data.getLong("id");
                                 String role = data.getString("role");
-                                String displayName = data.getString("name");
+                                String name = data.getString("name");
+                                String username = data.getString("username");
+                                String avatarUri = data.optString("avatarUri", null);
                                 String accessToken = data.getString("token");
                                 String refreshToken = data.optString("refreshToken", "");
-                                callback.onSuccess(new UserLoginResult(userId, role, displayName, accessToken, refreshToken));
+                                callback.onSuccess(new UserLoginResult(userId, role, username, name, avatarUri, accessToken, refreshToken));
                             } else {
                                 callback.onError(json.optString("error", "登录失败，响应格式不正确"));
                             }

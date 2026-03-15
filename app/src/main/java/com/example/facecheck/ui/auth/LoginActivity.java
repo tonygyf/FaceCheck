@@ -106,6 +106,20 @@ public class LoginActivity extends AppCompatActivity {
 
             if ("teacher".equals(success.role)) {
                 ed.putLong("teacher_id", success.userId).remove("student_id");
+                
+                // 将最新的教师信息写入本地数据库
+                DatabaseHelper dbHelper = new DatabaseHelper(this);
+                com.example.facecheck.data.model.Teacher teacher = new com.example.facecheck.data.model.Teacher(
+                    success.userId,
+                    success.name,
+                    success.username,
+                    "", // 密码字段不应在客户端明文存储，此处留空
+                    success.avatarUri,
+                    System.currentTimeMillis(),
+                    System.currentTimeMillis()
+                );
+                dbHelper.addOrUpdateTeacher(teacher);
+
             } else {
                 ed.putLong("student_id", success.userId).remove("teacher_id");
                 // 学生默认进入首页，避免加载教师专用页面

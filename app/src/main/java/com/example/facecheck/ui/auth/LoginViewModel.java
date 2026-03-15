@@ -33,7 +33,7 @@ public class LoginViewModel extends AndroidViewModel {
         userRepository.loginAny(username, password, new UserRepository.LoginCallback() {
             @Override
             public void onSuccess(UserRepository.UserLoginResult result) {
-                _uiState.postValue(new LoginUiState.Success(result.userId, result.role, result.displayName, result.accessToken, result.refreshToken));
+                _uiState.postValue(new LoginUiState.Success(result.userId, result.role, result.username, result.name, result.avatarUri, result.accessToken, result.refreshToken));
             }
 
             @Override

@@ -638,6 +638,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rowsAffected > 0;
     }
 
+    /**
+     * 添加或更新教师信息
+     */
+    public void addOrUpdateTeacher(Teacher teacher) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("id", teacher.getId());
+        values.put("name", teacher.getName());
+        values.put("username", teacher.getUsername());
+        values.put("password", teacher.getPassword());
+        values.put("avatarUri", teacher.getAvatarUri());
+        values.put("createdAt", teacher.getCreatedAt());
+        values.put("updatedAt", System.currentTimeMillis());
+
+        // 使用 insertWithOnConflict 策略，如果ID已存在则替换
+        db.insertWithOnConflict("Teacher", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
     public Cursor getTeacherByUsername(String username) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query("Teacher", null, "username = ?", new String[] { username }, null, null, null);
