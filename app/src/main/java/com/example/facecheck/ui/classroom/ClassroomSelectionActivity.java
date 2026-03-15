@@ -101,22 +101,9 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
     }
 
     private void loadClassrooms() {
+        List<Classroom> newClassrooms = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
         classroomList.clear();
-
-        // 从数据库加载班级数据
-        Cursor cursor = dbHelper.getClassroomsByTeacher(teacherId);
-        if (cursor != null && cursor.moveToFirst()) {
-            do {
-                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                long teacherId = cursor.getLong(cursor.getColumnIndexOrThrow("teacherId"));
-                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
-                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
-
-                classroomList.add(new Classroom(id, teacherId, name, year, meta));
-            } while (cursor.moveToNext());
-            cursor.close();
-        }
+        classroomList.addAll(newClassrooms);
 
         // 通知适配器数据已更新
         adapter.notifyDataSetChanged();

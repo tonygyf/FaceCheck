@@ -1,137 +1,77 @@
 package com.example.facecheck.adapters;
 
-import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.dynamicanimation.animation.SpringAnimation;
-import androidx.dynamicanimation.animation.SpringForce;
-
 import com.example.facecheck.R;
 import com.example.facecheck.data.model.Classroom;
-import com.example.facecheck.ui.attendance.AttendanceActivity;
-
 import java.util.List;
 
-public class ClassroomAdapter extends RecyclerView.Adapter<ClassroomAdapter.ViewHolder> {
-    private List<Classroom> classrooms;
+public class ClassroomAdapter extends RecyclerView.Adapter<ClassroomAdapter.ClassroomViewHolder> {
+
+    private List<Classroom> classroomList;
     private OnItemClickListener listener;
 
     public interface OnItemClickListener {
         void onItemClick(Classroom classroom);
     }
 
-    public ClassroomAdapter(List<Classroom> classrooms) {
-        this.classrooms = classrooms;
-    }
-
     public void setOnItemClickListener(OnItemClickListener listener) {
         this.listener = listener;
     }
 
-    public void updateClassrooms(List<Classroom> newClassrooms) {
-        this.classrooms = newClassrooms;
-        notifyDataSetChanged();
+    public ClassroomAdapter(List<Classroom> classroomList) {
+        this.classroomList = classroomList;
     }
 
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_classroom, parent, false);
-        return new ViewHolder(view);
+    public ClassroomViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.list_item_classroom_card, parent, false);
+        return new ClassroomViewHolder(view);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        Classroom classroom = classrooms.get(position);
-        holder.tvClassName.setText(classroom.getName());
-        holder.tvYear.setText(String.valueOf(classroom.getYear()));
-        
-        holder.itemView.setOnClickListener(v -> {
-            if (listener != null) {
-                listener.onItemClick(classroom);
-            }
-        });
-        
-        holder.itemView.setScaleX(0.90f);
-        holder.itemView.setScaleY(0.90f);
-        SpringAnimation ax = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_X, 1.0f);
-        SpringAnimation ay = new SpringAnimation(holder.itemView, SpringAnimation.SCALE_Y, 1.0f);
-        ax.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
-        ax.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
-        ay.getSpring().setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY);
-        ay.getSpring().setStiffness(SpringForce.STIFFNESS_LOW);
-        ax.start();
-        ay.start();
-        
-        // 添加长按事件，显示操作菜单（查看/开始考勤/重命名）
-        holder.itemView.setOnLongClickListener(v -> {
-            // 显示选项对话框
-            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(holder.itemView.getContext());
-            builder.setTitle("选择操作")
-                   .setItems(new String[]{"查看班级", "开始考勤", "重命名班级"}, (dialog, which) -> {
-                       if (which == 0) {
-                           // 查看班级
-                           if (listener != null) {
-                               listener.onItemClick(classroom);
-                           }
-                       } else if (which == 1) {
-                           // 开始考勤
-                           Intent intent = new Intent(holder.itemView.getContext(), 
-                               com.example.facecheck.ui.attendance.AttendanceActivity.class);
-                           intent.putExtra("classroom_id", classroom.getId());
-                           holder.itemView.getContext().startActivity(intent);
-                       } else {
-                           // 重命名班级
-                           android.widget.EditText editText = new android.widget.EditText(holder.itemView.getContext());
-                           editText.setSingleLine(true);
-                           editText.setText(classroom.getName());
-                           new android.app.AlertDialog.Builder(holder.itemView.getContext())
-                               .setTitle("重命名班级")
-                               .setView(editText)
-                               .setPositiveButton("保存", (d, w) -> {
-                                   String newName = editText.getText().toString().trim();
-                                   if (!newName.isEmpty()) {
-                                       com.example.facecheck.database.DatabaseHelper db = new com.example.facecheck.database.DatabaseHelper(holder.itemView.getContext());
-                                       boolean ok = db.updateClassroomName(classroom.getId(), newName);
-                                       if (ok) {
-                                           classroom.setName(newName);
-                                           notifyItemChanged(holder.getAdapterPosition());
-                                           android.widget.Toast.makeText(holder.itemView.getContext(), "班级名称已更新", android.widget.Toast.LENGTH_SHORT).show();
-                                       } else {
-                                           android.widget.Toast.makeText(holder.itemView.getContext(), "更新失败", android.widget.Toast.LENGTH_SHORT).show();
-                                       }
-                                   } else {
-                                       android.widget.Toast.makeText(holder.itemView.getContext(), "名称不能为空", android.widget.Toast.LENGTH_SHORT).show();
-                                   }
-                               })
-                               .setNegativeButton("取消", null)
-                               .show();
-                       }
-                   })
-                   .show();
-            return true;
-        });
+    public void onBindViewHolder(@NonNull ClassroomViewHolder holder, int position) {
+        Classroom classroom = classroomList.get(position);
+        holder.bind(classroom, listener);
     }
 
     @Override
     public int getItemCount() {
-        return classrooms.size();
+        return classroomList == null ? 0 : classroomList.size();
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvClassName;
-        TextView tvYear;
+    public void updateClassrooms(List<Classroom> newClassrooms) {
+        this.classroomList = newClassrooms;
+        notifyDataSetChanged();
+    }
 
-        ViewHolder(View itemView) {
+    static class ClassroomViewHolder extends RecyclerView.ViewHolder {
+        TextView tvClassroomName;
+        TextView tvClassroomYear;
+        TextView tvStudentCount;
+
+        ClassroomViewHolder(View itemView) {
             super(itemView);
-            tvClassName = itemView.findViewById(R.id.tvClassName);
-            tvYear = itemView.findViewById(R.id.tvYear);
+            tvClassroomName = itemView.findViewById(R.id.tvClassroomName);
+            tvClassroomYear = itemView.findViewById(R.id.tvClassroomYear);
+            tvStudentCount = itemView.findViewById(R.id.tvStudentCount);
+        }
+
+        void bind(final Classroom classroom, final OnItemClickListener listener) {
+            tvClassroomName.setText(classroom.getName());
+            tvClassroomYear.setText(String.format("%d级", classroom.getYear()));
+            tvStudentCount.setText(String.format("学生人数: %d", classroom.getStudentCount()));
+
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onItemClick(classroom);
+                }
+            });
         }
     }
 }

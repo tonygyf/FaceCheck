@@ -41,6 +41,7 @@ import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.data.model.Student;
 import com.example.facecheck.ui.auth.LoginActivity;
+import com.example.facecheck.utils.ImageLoader;
 import com.example.facecheck.utils.PhotoStorageManager;
 import androidx.core.content.FileProvider;
 
@@ -163,7 +164,7 @@ public class ProfileFragment extends Fragment {
                 if (avatarUri != null && !avatarUri.isEmpty() && profileImageView != null) {
                     File avatarFile = new File(avatarUri.startsWith("file://") ? avatarUri.replace("file://", "") : avatarUri);
                     if (avatarFile.exists()) {
-                        Glide.with(this).load(avatarFile).into(profileImageView);
+                        ImageLoader.loadAvatar(this.getContext(), avatarFile, profileImageView, String.valueOf(avatarFile.lastModified()));
                     }
                 }
                 // 学生角色：禁用教师专属操作
@@ -209,7 +210,7 @@ public class ProfileFragment extends Fragment {
                 if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
                     File avatarFile = new File(currentTeacher.getAvatarUri());
                     if (avatarFile.exists() && profileImageView != null) {
-                        Glide.with(this).load(avatarFile).into(profileImageView);
+                        ImageLoader.loadAvatar(this.getContext(), avatarFile, profileImageView, String.valueOf(avatarFile.lastModified()));
                     }
                 }
             } else {
@@ -610,9 +611,8 @@ public class ProfileFragment extends Fragment {
     
     private void updateProfileImage(String photoPath) {
         if (!isAdded() || profileImageView == null) return;
-        Glide.with(this)
-            .load(photoPath)
-            .into(profileImageView);
+        File photoFile = new File(photoPath);
+        ImageLoader.loadAvatar(getContext(), photoFile, profileImageView, String.valueOf(System.currentTimeMillis()));
         
         // 更新教师对象
         if (currentTeacher != null) {

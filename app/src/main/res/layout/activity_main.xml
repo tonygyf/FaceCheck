@@ -71,7 +71,7 @@
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="首页"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_compass" />
 
             <ImageButton

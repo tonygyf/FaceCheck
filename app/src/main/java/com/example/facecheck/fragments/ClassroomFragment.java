@@ -78,22 +78,7 @@ public class ClassroomFragment extends Fragment {
     }
     
     private void loadClassrooms() {
-        classroomList = new ArrayList<>();
-        
-        // 从数据库加载实际班级数据
-        Cursor cursor = dbHelper.getClassroomsByTeacher(teacherId);
-        if (cursor != null && cursor.moveToFirst()) {
-            do {
-                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                long teacherId = cursor.getLong(cursor.getColumnIndexOrThrow("teacherId"));
-                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
-                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
-                
-                classroomList.add(new Classroom(id, teacherId, name, year, meta));
-            } while (cursor.moveToNext());
-            cursor.close();
-        }
+        classroomList = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
         
         adapter = new ClassroomAdapter(classroomList);
         adapter.setOnItemClickListener(classroom -> {

@@ -6,6 +6,7 @@ public class Classroom {
     private String name;
     private int year;
     private String meta;
+    private int studentCount; // This field is for query results, not a DB column
 
     public Classroom() {
     }
@@ -62,5 +63,13 @@ public class Classroom {
 
     public void setMeta(String meta) {
         this.meta = meta;
+    }
+
+    public int getStudentCount() {
+        return studentCount;
+    }
+
+    public void setStudentCount(int studentCount) {
+        this.studentCount = studentCount;
     }
 }

@@ -680,6 +680,36 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 new String[] { String.valueOf(teacherId) }, null, null, "year DESC, name");
     }
 
+    public Cursor getAllClassroomsWithStudentCount(long teacherId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT c.*, COUNT(s.id) AS studentCount " +
+                       "FROM Classroom c " +
+                       "LEFT JOIN Student s ON c.id = s.classId " +
+                       "WHERE c.teacherId = ? " +
+                       "GROUP BY c.id";
+        return db.rawQuery(query, new String[]{String.valueOf(teacherId)});
+    }
+
+    public List<com.example.facecheck.data.model.Classroom> getAllClassroomsWithStudentCountAsList(long teacherId) {
+        List<com.example.facecheck.data.model.Classroom> classroomList = new ArrayList<>();
+        Cursor cursor = getAllClassroomsWithStudentCount(teacherId);
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
+                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
+                int studentCount = cursor.getInt(cursor.getColumnIndexOrThrow("studentCount"));
+
+                com.example.facecheck.data.model.Classroom classroom = new com.example.facecheck.data.model.Classroom(id, teacherId, name, year, meta);
+                classroom.setStudentCount(studentCount);
+                classroomList.add(classroom);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+        return classroomList;
+    }
+
     /**
      * 更新班级名称
      */
