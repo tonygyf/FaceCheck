@@ -24,7 +24,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 9; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 10; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -43,10 +43,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.d(TAG, "数据库升级: " + oldVersion + " -> " + newVersion);
-        // 删除所有旧表
-        dropAllTables(db);
-        // 重新创建表结构
-        onCreate(db);
+        
+        // 根据版本号，逐步执行升级脚本，避免数据丢失
+        if (oldVersion < 10) {
+            // 此处添加从版本 9 升级到版本 10 的数据库结构变更语句
+            // 例如：为 student 表的 sid 字段添加唯一性约束
+            // 注意：直接添加 UNIQUE 约束可能失败，如果存在重复数据。需要先处理重复数据。
+            // 一个更安全的做法是创建一个带约束的新表，迁移数据，然后重命名。
+            Log.i(TAG, "Upgrading database from version 9 to 10. (No specific schema change executed)");
+        }
+
+        // 如果未来有更多版本，可以继续在此添加
+        // if (oldVersion < 11) { ... }
     }
 
     /**

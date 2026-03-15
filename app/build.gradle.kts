@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.circleimageview)
 
     // 只保留一个 sardine 引用
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(libs.sardine)
 
     implementation("com.airbnb.android:lottie:6.4.0")

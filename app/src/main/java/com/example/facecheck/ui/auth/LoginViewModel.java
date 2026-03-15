@@ -30,12 +30,17 @@ public class LoginViewModel extends AndroidViewModel {
         
         _uiState.setValue(new LoginUiState.Loading());
         
-        UserRepository.UserLoginResult res = userRepository.loginAny(username, password);
-        if (res != null) {
-            _uiState.setValue(new LoginUiState.Success(res.userId, res.role, res.displayName));
-        } else {
-            _uiState.setValue(new LoginUiState.Error("用户名或密码错误"));
-        }
+        userRepository.loginAny(username, password, new UserRepository.LoginCallback() {
+            @Override
+            public void onSuccess(UserRepository.UserLoginResult result) {
+                _uiState.postValue(new LoginUiState.Success(result.userId, result.role, result.displayName, result.accessToken, result.refreshToken));
+            }
+
+            @Override
+            public void onError(String message) {
+                _uiState.postValue(new LoginUiState.Error(message));
+            }
+        });
     }
     
     @Override

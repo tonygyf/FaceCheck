@@ -41,6 +41,8 @@ import android.view.View;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
+import com.example.facecheck.database.DatabaseHelper;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
@@ -60,6 +62,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 强制初始化数据库和文件目录，确保PhotoStorageManager能正常工作
+        new DatabaseHelper(this).getReadableDatabase();
+
         setContentView(R.layout.activity_main);
 
         // 状态栏透明 + 浅色图标

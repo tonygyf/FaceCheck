@@ -13,10 +13,15 @@ public class LoginUiState {
         public final String role; // "teacher" 或 "student"
         public final String displayName;
 
-        public Success(long userId, String role, String displayName) {
+        public final String accessToken;
+        public final String refreshToken;
+
+        public Success(long userId, String role, String displayName, String accessToken, String refreshToken) {
             this.userId = userId;
             this.role = role;
             this.displayName = displayName;
+            this.accessToken = accessToken;
+            this.refreshToken = refreshToken;
         }
     }
     

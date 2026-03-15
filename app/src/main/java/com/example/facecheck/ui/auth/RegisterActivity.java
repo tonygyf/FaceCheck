@@ -15,9 +15,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import androidx.lifecycle.ViewModelProvider;
+
 import com.example.facecheck.R;
-import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.ui.auth.LoginActivity;
 
 public class RegisterActivity extends AppCompatActivity {
 
@@ -25,15 +25,15 @@ public class RegisterActivity extends AppCompatActivity {
     private Button registerButton;
     private TextView loginTextView;
     private ProgressBar progressBar;
-    private DatabaseHelper dbHelper;
+    private RegisterViewModel registerViewModel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
 
-        // 初始化数据库
-        dbHelper = new DatabaseHelper(this);
+        // 初始化ViewModel
+        registerViewModel = new ViewModelProvider(this).get(RegisterViewModel.class);
 
         // 初始化视图
         nameEditText = findViewById(R.id.nameEditText);
@@ -44,22 +44,36 @@ public class RegisterActivity extends AppCompatActivity {
         loginTextView = findViewById(R.id.loginTextView);
         progressBar = findViewById(R.id.progressBar);
 
+        // 观察UI状态
+        registerViewModel.uiState.observe(this, this::handleUiState);
+
         // 设置注册按钮点击事件
-        registerButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                registerUser();
-            }
-        });
+        registerButton.setOnClickListener(v -> registerUser());
 
         // 设置登录文本点击事件
-        loginTextView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // 返回登录页面
-                finish();
-            }
-        });
+        loginTextView.setOnClickListener(v -> finish());
+    }
+
+    private void handleUiState(RegisterUiState state) {
+        if (state instanceof RegisterUiState.Initial) {
+            progressBar.setVisibility(View.GONE);
+            registerButton.setEnabled(true);
+        } else if (state instanceof RegisterUiState.Loading) {
+            progressBar.setVisibility(View.VISIBLE);
+            registerButton.setEnabled(false);
+        } else if (state instanceof RegisterUiState.Success) {
+            progressBar.setVisibility(View.GONE);
+            Toast.makeText(this, ((RegisterUiState.Success) state).message, Toast.LENGTH_SHORT).show();
+            // 注册成功后返回登录页
+            Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            finish();
+        } else if (state instanceof RegisterUiState.Error) {
+            progressBar.setVisibility(View.GONE);
+            registerButton.setEnabled(true);
+            Toast.makeText(this, ((RegisterUiState.Error) state).message, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void registerUser() {
@@ -75,7 +89,7 @@ public class RegisterActivity extends AppCompatActivity {
         }
 
         if (TextUtils.isEmpty(username)) {
-            usernameEditText.setError("请输入用户名");
+            usernameEditText.setError("请输入用户名/邮箱");
             return;
         }
 
@@ -94,54 +108,7 @@ public class RegisterActivity extends AppCompatActivity {
             return;
         }
 
-        // 显示进度条
-        progressBar.setVisibility(View.VISIBLE);
-        registerButton.setEnabled(false);
-
-        // 检查用户名是否已注册
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query(
-            "Teacher",
-            new String[]{"id"},
-            "username = ?",
-            new String[]{username},
-            null, null, null);
-
-        if (cursor != null && cursor.moveToFirst()) {
-            cursor.close();
-            progressBar.setVisibility(View.GONE);
-            registerButton.setEnabled(true);
-            usernameEditText.setError("该用户名已注册");
-            return;
-        }
-        if (cursor != null) {
-            cursor.close();
-        }
-
-        // 创建新用户
-        ContentValues values = new ContentValues();
-        values.put("name", name);
-        values.put("username", username);
-        values.put("password", password);
-        values.put("createdAt", System.currentTimeMillis());
-        values.put("updatedAt", System.currentTimeMillis());
-
-        long teacherId = dbHelper.getWritableDatabase().insert("Teacher", null, values);
-        if (teacherId != -1) {
-            // 注册成功
-            progressBar.setVisibility(View.GONE);
-            Toast.makeText(RegisterActivity.this, "注册成功！请登录", Toast.LENGTH_SHORT).show();
-            
-            // 返回登录页面
-            Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
-        } else {
-            // 注册失败
-            progressBar.setVisibility(View.GONE);
-            registerButton.setEnabled(true);
-            Toast.makeText(RegisterActivity.this, "注册失败，请重试", Toast.LENGTH_SHORT).show();
-        }
+        // 调用ViewModel进行注册
+        registerViewModel.registerTeacher(name, username, password);
     }
 }

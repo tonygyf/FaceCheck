@@ -101,6 +101,9 @@ public class LoginActivity extends AppCompatActivity {
             SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
             SharedPreferences.Editor ed = prefs.edit();
             ed.putString("user_role", success.role);
+            ed.putString("access_token", success.accessToken);
+            ed.putString("refresh_token", success.refreshToken);
+
             if ("teacher".equals(success.role)) {
                 ed.putLong("teacher_id", success.userId).remove("student_id");
             } else {
