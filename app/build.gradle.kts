@@ -89,6 +89,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(libs.sardine)
 
+    // Retrofit for network requests
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
     implementation("com.airbnb.android:lottie:6.4.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
     implementation("com.google.mlkit:face-detection:16.1.6")

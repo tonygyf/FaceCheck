@@ -9,6 +9,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.signature.ObjectKey;
 import com.example.facecheck.R;
+import com.example.facecheck.utils.Constants;
 
 import java.io.File;
 
@@ -40,8 +41,16 @@ public class ImageLoader {
         RequestOptions options = getBaseOptions()
                 .signature(new ObjectKey(signature != null ? signature : "default_signature"));
 
+        Object loadableModel = model;
+        if (model instanceof String) {
+            String path = (String) model;
+            if (!path.startsWith("http") && !path.startsWith("/") && !path.startsWith("file://")) {
+                loadableModel = Constants.CDN_BASE_URL + path;
+            }
+        }
+
         Glide.with(context)
-                .load(model)
+                .load(loadableModel)
                 .apply(options)
                 .into(target);
     }

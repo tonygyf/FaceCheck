@@ -722,6 +722,30 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rows > 0;
     }
 
+    public void replaceTeacherClassrooms(long teacherId, List<com.example.facecheck.data.model.Classroom> classrooms) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // Step 1: Delete old classrooms for this teacher
+            db.delete("Classroom", "teacherId = ?", new String[]{String.valueOf(teacherId)});
+
+            // Step 2: Insert new classrooms
+            for (com.example.facecheck.data.model.Classroom classroom : classrooms) {
+                ContentValues values = new ContentValues();
+                // The classroom from network might have a server ID, we should use it.
+                values.put("id", classroom.getId()); 
+                values.put("teacherId", teacherId);
+                values.put("name", classroom.getName());
+                values.put("year", classroom.getYear());
+                // We use insertWithOnConflict to prevent crashes if a classroom somehow still exists.
+                db.insertWithOnConflict("Classroom", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     // ============= 学生相关操作 =============
 
     public long insertStudent(long classId, String name, String sid, String gender, String avatarUri) {

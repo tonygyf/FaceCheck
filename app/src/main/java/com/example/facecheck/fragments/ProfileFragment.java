@@ -162,10 +162,7 @@ public class ProfileFragment extends Fragment {
                     if (emailTextView != null) emailTextView.setText(sid);
                 }
                 if (avatarUri != null && !avatarUri.isEmpty() && profileImageView != null) {
-                    File avatarFile = new File(avatarUri.startsWith("file://") ? avatarUri.replace("file://", "") : avatarUri);
-                    if (avatarFile.exists()) {
-                        ImageLoader.loadAvatar(this.getContext(), avatarFile, profileImageView, String.valueOf(avatarFile.lastModified()));
-                    }
+                    ImageLoader.loadAvatar(getContext(), avatarUri, profileImageView, String.valueOf(updatedAt));
                 }
                 // 学生角色：禁用教师专属操作
                 if (changePhotoButton != null) { changePhotoButton.setEnabled(false); }
@@ -208,10 +205,7 @@ public class ProfileFragment extends Fragment {
                     if (emailTextView != null) emailTextView.setText(currentTeacher.getUsername());
                 }
                 if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
-                    File avatarFile = new File(currentTeacher.getAvatarUri());
-                    if (avatarFile.exists() && profileImageView != null) {
-                        ImageLoader.loadAvatar(this.getContext(), avatarFile, profileImageView, String.valueOf(avatarFile.lastModified()));
-                    }
+                    ImageLoader.loadAvatar(getContext(), currentTeacher.getAvatarUri(), profileImageView, String.valueOf(currentTeacher.getUpdatedAt()));
                 }
             } else {
                 Toast.makeText(requireContext(), "教师信息加载失败", Toast.LENGTH_SHORT).show();
