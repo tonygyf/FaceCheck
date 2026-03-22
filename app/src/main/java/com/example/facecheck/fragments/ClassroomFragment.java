@@ -57,7 +57,8 @@ public class ClassroomFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // 每次Fragment可见时刷新班级列表
+        // KEY-POINT: This is the entry point for triggering classroom data synchronization each time the fragment becomes visible.
+        // It ensures the classroom list is always up-to-date with the server.
         viewModel.loadClassrooms();
     }
 

@@ -9,9 +9,13 @@ import com.example.facecheck.data.model.Classroom;
 import com.example.facecheck.data.repository.ApiCallback;
 import com.example.facecheck.data.repository.ClassroomRepository;
 import com.example.facecheck.data.repository.ClassroomRepositoryImpl;
+import com.example.facecheck.sync.SyncManager;
+import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.AsyncExecutor;
 import com.example.facecheck.utils.SessionManager;
 
 import java.util.List;
+import android.util.Log;
 
 public class ClassroomViewModel extends AndroidViewModel {
 
@@ -36,8 +40,25 @@ public class ClassroomViewModel extends AndroidViewModel {
     public void loadClassrooms() {
         long teacherId = sessionManager.getTeacherId();
         if (teacherId != -1) {
-            classroomRepository.getClassrooms(teacherId).observeForever(data -> {
-                _classrooms.postValue(data);
+            // First, trigger the sync process in the background.
+            AsyncExecutor executor = new AsyncExecutor();
+            executor.run(() -> {
+                Log.e("SYNC_DEBUG", "即将调用performSync");
+                SyncManager syncManager = new SyncManager(getApplication(), new DatabaseHelper(getApplication()));
+                boolean result = syncManager.performSync();
+                Log.e("SYNC_DEBUG", "performSync完成, result=" + result);
+                return result; // Return the result of the sync
+            }, (success) -> {
+                // After sync, load data from the local database to update the UI.
+                classroomRepository.getClassrooms(teacherId).observeForever(data -> {
+                    _classrooms.postValue(data);
+                });
+            }, (error) -> {
+                Log.e("SYNC_DEBUG", "Sync failed", error);
+                // Even if sync fails, still try to load from local DB.
+                classroomRepository.getClassrooms(teacherId).observeForever(data -> {
+                    _classrooms.postValue(data);
+                });
             });
         } else {
             _errorMessage.postValue("教师ID未找到，无法加载班级。");

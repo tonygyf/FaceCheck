@@ -10,6 +10,7 @@ import com.example.facecheck.api.ApiService;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.data.model.Classroom;
 import com.example.facecheck.data.model.ClassroomDeltaSyncResponse;
+import com.example.facecheck.data.model.ClassroomListResponse;
 import com.example.facecheck.data.model.SyncDownloadResponse;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.SessionManager;
@@ -100,32 +101,30 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
 
     @Override
     public void syncAllClassrooms(long teacherId, final ApiCallback<List<Classroom>> callback) {
-        apiService.downloadSyncData(getApiKey(), teacherId).enqueue(new Callback<SyncDownloadResponse>() {
+        // KEY-FIX: Corrected to use the available /api/classrooms endpoint which returns a JSON object.
+        apiService.getClassrooms(getApiKey()).enqueue(new Callback<ClassroomListResponse>() {
             @Override
-            public void onResponse(Call<SyncDownloadResponse> call, Response<SyncDownloadResponse> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    SyncDownloadResponse syncResponse = response.body();
-                    List<Classroom> remoteClassrooms = syncResponse.getClassrooms();
-                    if (remoteClassrooms != null) {
-                        // Clear existing classrooms and insert new ones. This is a full sync.
-                        // Note: This approach assumes that a full sync from the server should completely overwrite
-                        // the local state for classrooms belonging to the given teacherId. 
-                        // For production, consider a more granular merge strategy if local-only changes are expected.
-                        dbHelper.deleteAllClassroomsForTeacher(teacherId);
-                        for (Classroom classroom : remoteClassrooms) {
-                            dbHelper.insertOrUpdateClassroom(classroom);
-                        }
-                        callback.onSuccess(remoteClassrooms);
-                    } else {
-                        callback.onError("No classrooms found in sync response.");
+            public void onResponse(Call<ClassroomListResponse> call, Response<ClassroomListResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getData() != null) {
+                    // KEY-FIX: The server response is a JSON object `{"data": [...]}`.
+                    // We must parse this object and then extract the classroom list from the `data` field.
+                    List<Classroom> remoteClassrooms = response.body().getData();
+                    
+                    // Clear existing classrooms and insert new ones. This is a full sync.
+                    dbHelper.deleteAllClassroomsForTeacher(teacherId);
+                    for (Classroom classroom : remoteClassrooms) {
+                        // The response from /api/classrooms does not include teacherId, so we set it here.
+                        classroom.setTeacherId(teacherId);
+                        dbHelper.insertOrUpdateClassroom(classroom);
                     }
+                    callback.onSuccess(remoteClassrooms);
                 } else {
                     callback.onError("Failed to sync all classrooms: " + response.code());
                 }
             }
 
             @Override
-            public void onFailure(Call<SyncDownloadResponse> call, Throwable t) {
+            public void onFailure(Call<ClassroomListResponse> call, Throwable t) {
                 callback.onError("Network error during full classroom sync: " + t.getMessage());
             }
         });

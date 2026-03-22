@@ -25,7 +25,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 10; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 11; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -45,17 +45,29 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.d(TAG, "数据库升级: " + oldVersion + " -> " + newVersion);
         
-        // 根据版本号，逐步执行升级脚本，避免数据丢失
-        if (oldVersion < 10) {
-            // 此处添加从版本 9 升级到版本 10 的数据库结构变更语句
-            // 例如：为 student 表的 sid 字段添加唯一性约束
-            // 注意：直接添加 UNIQUE 约束可能失败，如果存在重复数据。需要先处理重复数据。
-            // 一个更安全的做法是创建一个带约束的新表，迁移数据，然后重命名。
-            Log.i(TAG, "Upgrading database from version 9 to 10. (No specific schema change executed)");
+        if (oldVersion < 11) {
+            // 修复 SyncLog op 约束（重建表）
+            db.execSQL("DROP TABLE IF EXISTS SyncLog");
+            createSyncLogTable(db);
+            createIndexes(db); // 重建索引（含 SyncLog 索引）
+            
+            // 补写所有存量 Classroom 的 SyncLog
+            Cursor c = db.query("Classroom", new String[]{"id"}, null, null, null, null, null);
+            if (c != null && c.moveToFirst()) {
+                do {
+                    long id = c.getLong(0);
+                    ContentValues log = new ContentValues();
+                    log.put("entity", "Classroom");
+                    log.put("entityId", id);
+                    log.put("op", "UPSERT");
+                    log.put("version", System.currentTimeMillis());
+                    log.put("status", "PENDING");
+                    db.insert("SyncLog", null, log);
+                } while (c.moveToNext());
+                c.close();
+            }
+            Log.i(TAG, "v11升级完成：SyncLog重建，存量Classroom已补写");
         }
-
-        // 如果未来有更多版本，可以继续在此添加
-        // if (oldVersion < 11) { ... }
     }
 
     /**
@@ -250,9 +262,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "entity TEXT NOT NULL, " +
                 "entityId INTEGER NOT NULL, " +
-                "op TEXT NOT NULL CHECK(op IN ('INSERT', 'UPDATE', 'DELETE')), " +
+                "op TEXT NOT NULL CHECK(op IN ('INSERT', 'UPDATE', 'UPSERT', 'DELETE')), " +
                 "version INTEGER NOT NULL, " +
-                "ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "ts TEXT DEFAULT CURRENT_TIMESTAMP, " +
                 "status TEXT NOT NULL CHECK(status IN ('PENDING', 'SYNCED', 'FAILED', 'CONFLICT'))" +
                 ")";
         db.execSQL(sql);
@@ -436,7 +448,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("name", name);
         values.put("year", year);
         values.put("meta", meta);
-        return db.insert("Classroom", null, values);
+        long newId = db.insert("Classroom", null, values);
+
+        if (newId != -1) {
+            ContentValues log = new ContentValues();
+            log.put("entity", "Classroom");
+            log.put("entityId", newId);
+            log.put("op", "UPSERT");
+            log.put("version", System.currentTimeMillis());
+            log.put("status", "PENDING");
+            db.insert("SyncLog", null, log);
+        }
+        return newId;
     }
 
     /**
@@ -668,7 +691,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         // For local creation, assume ID is 0 or doesn't matter for initial insert.
         // The database will assign AUTOINCREMENT ID.
         Classroom newClassroom = new Classroom(0, teacherId, name, year, null, null, meta, System.currentTimeMillis());
-        return insertOrUpdateClassroom(newClassroom);
+        long newId = insertOrUpdateClassroom(newClassroom);
+
+        if (newId > 0) {
+            insertSyncLog("Classroom", newId, "UPSERT", System.currentTimeMillis(), "PENDING");
+        }
+        return newId;
     }
 
     public Cursor getClassroomsByTeacher(long teacherId) {
@@ -793,7 +821,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("semester", classroom.getSemester());
         values.put("courseName", classroom.getCourseName());
         values.put("meta", classroom.getMeta());
-        values.put("createdAt", classroom.getCreatedAt() > 0 ? classroom.getCreatedAt() : System.currentTimeMillis()); // Preserve remote creation time if available
+        long createdAtMillis = classroom.getCreatedAtMillis();
+        values.put("createdAt", createdAtMillis > 0 ? String.valueOf(createdAtMillis) : String.valueOf(System.currentTimeMillis()));
         values.put("updatedAt", System.currentTimeMillis());
 
         long result = db.insertWithOnConflict("Classroom", null, values, SQLiteDatabase.CONFLICT_REPLACE);

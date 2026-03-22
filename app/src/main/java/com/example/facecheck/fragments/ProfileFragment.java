@@ -30,6 +30,9 @@ import androidx.core.content.FileProvider;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.widget.FrameLayout;
+import androidx.lifecycle.ViewModelProvider;
+import android.widget.LinearLayout;
+
 import com.airbnb.lottie.LottieAnimationView;
 
 import com.example.facecheck.R;
@@ -47,6 +50,9 @@ import java.io.FileOutputStream;
 import java.util.Locale;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import com.example.facecheck.ui.profile.ProfileViewModel;
+import com.example.facecheck.ui.profile.ProfileViewModelFactory;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -80,6 +86,7 @@ public class ProfileFragment extends Fragment {
     private DatabaseHelper dbHelper;
     private Teacher currentTeacher;
     private String currentPhotoPath;
+    private ProfileViewModel profileViewModel;
     
     @Nullable
     @Override
@@ -94,6 +101,7 @@ public class ProfileFragment extends Fragment {
         
         loadUserData();
         setupClickListeners();
+        setupViewModel();
         
         return view;
     }
@@ -180,7 +188,10 @@ public class ProfileFragment extends Fragment {
     }
     
     private void setupClickListeners() {
-        // 更换头像
+        // 让头像本身和旁边的按钮都可以触发更换头像
+        if (profileImageView != null) {
+            profileImageView.setOnClickListener(v -> showImageSourceDialog());
+        }
         if (changePhotoButton != null) {
             changePhotoButton.setOnClickListener(v -> showImageSourceDialog());
         }
@@ -268,21 +279,189 @@ public class ProfileFragment extends Fragment {
         currentPhotoPath = image.getAbsolutePath();
         return image;
     }
-    private void showChangeUsernameDialog() { }
-    private void showChangePasswordDialog() { }
-    private void navigateToLogin() { }
+
+    private void showChangeUsernameDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("修改用户名");
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final EditText usernameInput = new EditText(requireContext());
+        usernameInput.setHint("新的用户名");
+        if (currentTeacher != null) {
+            usernameInput.setText(currentTeacher.getName());
+        }
+        layout.addView(usernameInput);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("确认修改", (dialog, which) -> {
+            String newName = usernameInput.getText().toString().trim();
+            if (newName.isEmpty()) {
+                Toast.makeText(getContext(), "用户名不能为空", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            profileViewModel.changeUsername(newName);
+        });
+        builder.setNegativeButton("取消", (dialog, which) -> dialog.cancel());
+
+        builder.show();
+    }
+
+    private void setupViewModel() {
+        profileViewModel = new ViewModelProvider(this, new ProfileViewModelFactory(requireActivity().getApplication()))
+                .get(ProfileViewModel.class);
+
+        profileViewModel.passwordChangeSuccess.observe(getViewLifecycleOwner(), success -> {
+            if (success != null) {
+                if (success) {
+                    Toast.makeText(getContext(), "密码修改成功！", Toast.LENGTH_SHORT).show();
+                } 
+                profileViewModel.clearPasswordChangeStatus(); // Reset status
+            }
+        });
+
+        profileViewModel.errorMessage.observe(getViewLifecycleOwner(), error -> {
+            if (error != null && !error.isEmpty()) {
+                Toast.makeText(getContext(), "操作失败: " + error, Toast.LENGTH_LONG).show();
+                profileViewModel.clearErrorMessage();
+            }
+        });
+
+        profileViewModel.usernameChangeSuccess.observe(getViewLifecycleOwner(), success -> {
+            if (success != null) {
+                if (success) {
+                    Toast.makeText(getContext(), "用户名修改成功！", Toast.LENGTH_SHORT).show();
+                    loadUserData(); // 重新加载以显示新名称
+                } else {
+                    // 错误消息已由 errorMessage LiveData 处理
+                }
+            }
+        });
+
+        profileViewModel.avatarUploadSuccess.observe(getViewLifecycleOwner(), success -> {
+            if (success != null) {
+                progressBar.setVisibility(View.GONE);
+                if (success) {
+                    Toast.makeText(getContext(), "头像上传成功！", Toast.LENGTH_SHORT).show();
+                    // Reload user data to show the new avatar
+                    loadUserData();
+                } else {
+                    Toast.makeText(getContext(), "头像上传失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    private void showChangePasswordDialog() { 
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("修改密码");
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final EditText oldPasswordInput = new EditText(requireContext());
+        oldPasswordInput.setHint("旧密码");
+        oldPasswordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(oldPasswordInput);
+
+        final EditText newPasswordInput = new EditText(requireContext());
+        newPasswordInput.setHint("新密码");
+        newPasswordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(newPasswordInput);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("确认修改", (dialog, which) -> {
+            String oldPassword = oldPasswordInput.getText().toString();
+            String newPassword = newPasswordInput.getText().toString();
+            if (oldPassword.isEmpty() || newPassword.isEmpty()) {
+                Toast.makeText(getContext(), "密码不能为空", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            profileViewModel.changePassword(oldPassword, newPassword);
+        });
+        builder.setNegativeButton("取消", (dialog, which) -> dialog.cancel());
+
+        builder.show();
+    }
+    private void navigateToLogin() {
+        if (getActivity() != null) {
+            Intent intent = new Intent(getActivity(), LoginActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            getActivity().finish();
+        }
+    }
     
     @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) { }
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != Activity.RESULT_OK) return;
+
+        if (requestCode == REQUEST_IMAGE_CAPTURE) {
+            if (currentPhotoPath != null) {
+                updateProfileImage(currentPhotoPath);
+            }
+        } else if (requestCode == REQUEST_PICK_IMAGE && data != null && data.getData() != null) {
+            Uri imageUri = data.getData();
+            String filePath = copyUriToFile(imageUri);
+            if (filePath != null) {
+                updateProfileImage(filePath);
+            }
+        }
+    }
     
-    private String copyUriToFile(Uri uri) { return null; }
+    private String copyUriToFile(Uri uri) {
+        if (getContext() == null) return null;
+        try (InputStream inputStream = getContext().getContentResolver().openInputStream(uri)) {
+            File file = createImageFile();
+            try (FileOutputStream outputStream = new FileOutputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, len);
+                }
+                return file.getAbsolutePath();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to copy URI to file", e);
+            Toast.makeText(getContext(), "无法复制图片文件", Toast.LENGTH_SHORT).show();
+            return null;
+        }
+    }
     
-    private void updateProfileImage(String photoPath) { }
+    private void updateProfileImage(String photoPath) {
+        progressBar.setVisibility(View.VISIBLE);
+        profileViewModel.uploadAvatar(photoPath);
+    }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
     }
 
-    private void showLogoutAnimation() { }
+    private void showLogoutAnimation() {
+        if (lottieOverlayLogout == null || lottieLogoutView == null) return;
+
+        lottieOverlayLogout.setVisibility(View.VISIBLE);
+        lottieLogoutView.setSpeed(0.8f); // 调整动画速度
+        lottieLogoutView.playAnimation();
+
+        lottieLogoutView.addAnimatorListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (getContext() == null) return;
+                // Clear user session
+                SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                prefs.edit().clear().apply();
+
+                // Navigate to login
+                navigateToLogin();
+            }
+        });
+    }
 }

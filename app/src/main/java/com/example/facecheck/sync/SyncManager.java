@@ -2,219 +2,256 @@ package com.example.facecheck.sync;
 
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.webdav.WebDavManager;
+import com.example.facecheck.utils.SessionManager;
 
-import java.io.File;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.io.ByteArrayOutputStream;
 
 public class SyncManager {
     private static final String TAG = "SyncManager";
-    
+    private static final String BASE_URL = "https://omni.gyf123.dpdns.org"; // Replaced placeholder
+
     private final Context context;
     private final DatabaseHelper dbHelper;
-    private final WebDavManager webDavManager;
-    private final String localDbPath;
+    private final SessionManager sessionManager;
 
-    public SyncManager(Context context, DatabaseHelper dbHelper, WebDavManager webDavManager) {
+    public SyncManager(Context context, DatabaseHelper dbHelper) {
+        Log.e("SYNC_DEBUG", "SyncManager 被构造了");
         this.context = context;
         this.dbHelper = dbHelper;
-        this.webDavManager = webDavManager;
-        this.localDbPath = context.getDatabasePath("facecheck.db").getAbsolutePath();
+        this.sessionManager = new SessionManager(context);
     }
-
-    public enum SyncMode { UPLOAD, DOWNLOAD }
 
     /**
-     * 简洁同步：仅初始化目录并选择上传或下载数据库；覆盖式，无备份。
+     * 主同步入口：上传所有 PENDING 的 SyncLog 对应实体到 Worker
      */
-    public boolean performSimpleSync(SyncMode mode) {
-        // 首次连接时初始化目录结构
-        if (!webDavManager.initializeDirectoryStructure()) {
-            Log.e(TAG, "Failed to initialize WebDAV directory structure");
-            return false;
-        }
-        if (mode == SyncMode.UPLOAD) {
-            return webDavManager.syncDatabase(localDbPath);
-        } else {
-            return webDavManager.fetchDatabase(localDbPath);
-        }
-    }
-
-    // 执行同步操作
     public boolean performSync() {
-        // 1. 初始化WebDAV目录结构
-        if (!webDavManager.initializeDirectoryStructure()) {
-            Log.e(TAG, "Failed to initialize WebDAV directory structure");
-            return false;
-        }
+        Cursor logs = dbHelper.getPendingSyncLogs();
+        if (logs == null) return true;
 
-        // 2. 处理待同步的日志
-        Cursor pendingLogs = dbHelper.getPendingSyncLogs();
-        if (pendingLogs != null && pendingLogs.moveToFirst()) {
+        boolean allSuccess = true;
+        if (logs.moveToFirst()) {
             do {
-                long id = pendingLogs.getLong(pendingLogs.getColumnIndexOrThrow("id"));
-                String entity = pendingLogs.getString(pendingLogs.getColumnIndexOrThrow("entity"));
-                long entityId = pendingLogs.getLong(pendingLogs.getColumnIndexOrThrow("entityId"));
-                String op = pendingLogs.getString(pendingLogs.getColumnIndexOrThrow("op"));
-                
-                // 根据实体类型和操作类型执行同步
-                boolean success = syncEntity(entity, entityId, op);
-                
-                // 更新同步状态
-                if (success) {
-                    dbHelper.updateSyncLogStatus(id, "COMPLETED");
-                } else {
-                    dbHelper.updateSyncLogStatus(id, "FAILED");
-                }
-            } while (pendingLogs.moveToNext());
-            pendingLogs.close();
-        }
+                long logId    = logs.getLong(logs.getColumnIndexOrThrow("id"));
+                String entity = logs.getString(logs.getColumnIndexOrThrow("entity"));
+                long entityId = logs.getLong(logs.getColumnIndexOrThrow("entityId"));
+                String op     = logs.getString(logs.getColumnIndexOrThrow("op"));
 
-        // 3. 同步数据库文件
-        return webDavManager.syncDatabase(localDbPath);
+                boolean ok = syncEntity(entity, entityId, op);
+                dbHelper.updateSyncLogStatus(logId, ok ? "SYNCED" : "FAILED");
+                if (!ok) allSuccess = false;
+
+            } while (logs.moveToNext());
+        }
+        logs.close();
+        return allSuccess;
     }
 
-    // 同步单个实体
     private boolean syncEntity(String entity, long entityId, String op) {
         switch (entity) {
-            case "Student":
-                return syncStudent(entityId, op);
-            case "PhotoAsset":
-                return syncPhotoAsset(entityId, op);
-            case "AttendanceSession":
-                return syncAttendanceSession(entityId, op);
+            case "Classroom": return syncClassroom(entityId, op);
+            case "Student":   return syncStudent(entityId, op);
             default:
-                Log.w(TAG, "Unknown entity type: " + entity);
+                Log.w(TAG, "未处理的实体类型: " + entity);
                 return false;
         }
     }
 
-    // 同步学生信息（包括头像）
-    private boolean syncStudent(long studentId, String op) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query("Student", null, "id = ?", 
-            new String[]{String.valueOf(studentId)}, null, null, null);
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-            cursor.close();
-            
-            if (avatarUri != null && !avatarUri.isEmpty()) {
-                File avatarFile = new File(avatarUri);
-                if (avatarFile.exists()) {
-                    // 上传头像文件
-                    return webDavManager.syncAvatar(avatarUri, avatarFile.getName());
-                }
-            }
-        }
-        return true;
-    }
+    // ===================== Classroom =====================
 
-    // 同步照片资源
-    private boolean syncPhotoAsset(long photoAssetId, String op) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query("PhotoAsset", null, "id = ?", 
-            new String[]{String.valueOf(photoAssetId)}, null, null, null);
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            String type = cursor.getString(cursor.getColumnIndexOrThrow("type"));
-            String uri = cursor.getString(cursor.getColumnIndexOrThrow("uri"));
-            cursor.close();
-            
-            if (uri != null && !uri.isEmpty()) {
-                File photoFile = new File(uri);
-                if (photoFile.exists()) {
-                    // 根据照片类型选择同步方法
-                    switch (type) {
-                        case "RAW":
-                        case "ALIGNED":
-                            return webDavManager.syncAttendancePhoto(uri, photoFile.getName());
-                        case "DEBUG":
-                            return webDavManager.syncResultPhoto(uri, photoFile.getName());
-                        default:
-                            Log.w(TAG, "Unknown photo type: " + type);
-                            return false;
-                    }
-                }
-            }
-        }
-        return true;
-    }
+    private boolean syncClassroom(long classroomId, String op) {
+        if ("DELETE".equals(op)) return true; // 暂不处理远程删除
 
-    // 同步考勤会话
-    private boolean syncAttendanceSession(long sessionId, String op) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query("AttendanceSession", null, "id = ?", 
-            new String[]{String.valueOf(sessionId)}, null, null, null);
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            String photoUri = cursor.getString(cursor.getColumnIndexOrThrow("photoUri"));
-            cursor.close();
-            
-            if (photoUri != null && !photoUri.isEmpty()) {
-                File photoFile = new File(photoUri);
-                if (photoFile.exists()) {
-                    // 上传考勤照片
-                    return webDavManager.syncAttendancePhoto(photoUri, photoFile.getName());
-                }
-            }
-        }
-        return true;
-    }
+        Cursor c = dbHelper.getReadableDatabase().query(
+            "Classroom", null, "id = ?",
+            new String[]{String.valueOf(classroomId)}, null, null, null);
 
-    // 从远程获取数据
-    public boolean fetchRemoteData() {
-        // 1. 下载远程数据库文件
-        if (!webDavManager.fetchDatabase(localDbPath)) {
-            Log.e(TAG, "Failed to fetch remote database");
+        if (c == null || !c.moveToFirst()) {
+            if (c != null) c.close();
             return false;
         }
 
-        // 2. 同步头像文件
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor studentCursor = db.query("Student", new String[]{"avatarUri"}, 
-            "avatarUri IS NOT NULL", null, null, null, null);
-        
-        if (studentCursor != null) {
-            while (studentCursor.moveToNext()) {
-                String avatarUri = studentCursor.getString(0);
-                if (avatarUri != null && !avatarUri.isEmpty()) {
-                    File avatarFile = new File(avatarUri);
-                    webDavManager.fetchAvatar(avatarFile.getName(), avatarUri);
-                }
-            }
-            studentCursor.close();
+        try {
+            JSONObject body = new JSONObject();
+            body.put("id",        c.getLong(c.getColumnIndexOrThrow("id")));
+            body.put("teacherId", c.getLong(c.getColumnIndexOrThrow("teacherId")));
+            body.put("name",      c.getString(c.getColumnIndexOrThrow("name")));
+            body.put("year",      c.getInt(c.getColumnIndexOrThrow("year")));
+            body.put("meta",      c.getString(c.getColumnIndexOrThrow("meta")));
+            c.close();
+
+            return postJson("/api/classrooms", body);
+        } catch (Exception e) {
+            Log.e(TAG, "syncClassroom 失败", e);
+            if (!c.isClosed()) c.close();
+            return false;
+        }
+    }
+
+    // ===================== Student =====================
+
+    private boolean syncStudent(long studentId, String op) {
+        if ("DELETE".equals(op)) return true;
+
+        Cursor c = dbHelper.getReadableDatabase().query(
+            "Student", null, "id = ?",
+            new String[]{String.valueOf(studentId)}, null, null, null);
+
+        if (c == null || !c.moveToFirst()) {
+            if (c != null) c.close();
+            return false;
         }
 
-        // 3. 同步考勤照片
-        Cursor photoCursor = db.query("PhotoAsset", new String[]{"type", "uri"}, 
-            "uri IS NOT NULL", null, null, null, null);
-        
-        if (photoCursor != null) {
-            while (photoCursor.moveToNext()) {
-                String type = photoCursor.getString(0);
-                String uri = photoCursor.getString(1);
-                
-                if (uri != null && !uri.isEmpty()) {
-                    File photoFile = new File(uri);
-                    switch (type) {
-                        case "RAW":
-                        case "ALIGNED":
-                            webDavManager.fetchAttendancePhoto(photoFile.getName(), uri);
-                            break;
-                        case "DEBUG":
-                            webDavManager.fetchResultPhoto(photoFile.getName(), uri);
-                            break;
+        try {
+            JSONObject body = new JSONObject();
+            body.put("id",        c.getLong(c.getColumnIndexOrThrow("id")));
+            body.put("classId",   c.getLong(c.getColumnIndexOrThrow("classId")));
+            body.put("name",      c.getString(c.getColumnIndexOrThrow("name")));
+            body.put("sid",       c.getString(c.getColumnIndexOrThrow("sid")));
+            body.put("gender",    c.getString(c.getColumnIndexOrThrow("gender")));
+            body.put("avatarUri", c.getString(c.getColumnIndexOrThrow("avatarUri")));
+            c.close();
+
+            return postJson("/api/students", body);
+        } catch (Exception e) {
+            Log.e(TAG, "syncStudent 失败", e);
+            if (!c.isClosed()) c.close();
+            return false;
+        }
+    }
+
+    // ===================== 从远端拉取班级 =====================
+
+    /**
+     * 从 Worker 拉取该教师的班级列表，替换本地数据
+     */
+    public boolean fetchRemoteClassrooms(long teacherId) {
+        try {
+            // 用 delta 接口，lastSyncTimestamp=0 拉全量
+            String path = "/api/v1/classes/delta?lastSyncTimestamp=0";
+            String resp = getJson(path);
+            if (resp == null) return false;
+
+            JSONObject json = new JSONObject(resp);
+            JSONArray added   = json.optJSONArray("addedClasses");
+            JSONArray updated = json.optJSONArray("updatedClasses");
+
+            List<com.example.facecheck.data.model.Classroom> classrooms = new java.util.ArrayList<>();
+            parseClassrooms(added,   teacherId, classrooms);
+            parseClassrooms(updated, teacherId, classrooms);
+
+            if (!classrooms.isEmpty()) {
+                dbHelper.replaceTeacherClassrooms(teacherId, classrooms);
+            }
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "fetchRemoteClassrooms 失败", e);
+            return false;
+        }
+    }
+
+    private void parseClassrooms(JSONArray arr, long teacherId,
+            List<com.example.facecheck.data.model.Classroom> out) throws Exception {
+        if (arr == null) return;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject o = arr.getJSONObject(i);
+            com.example.facecheck.data.model.Classroom c =
+                new com.example.facecheck.data.model.Classroom(
+                    o.getLong("id"),
+                    teacherId,
+                    o.getString("name"),
+                    o.getInt("year"),
+                    o.optString("meta", null)
+                );
+            out.add(c);
+        }
+    }
+
+    // ===================== HTTP 工具 =====================
+
+    private boolean postJson(String path, JSONObject body) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(BASE_URL + path);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("X-API-Key", sessionManager.getApiKey());
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
+            Log.d(TAG, "POST " + url + " body=" + body);  // ← 加这行
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(data);
+            }
+
+            int code = conn.getResponseCode();
+            // ← 加这段，读取错误响应体
+            if (code != 200 && code != 201) {
+                java.io.InputStream err = conn.getErrorStream();
+                String errBody = "null";
+                if (err != null) {
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[1024];
+                    int len;
+                    while ((len = err.read(buf)) != -1) {
+                        baos.write(buf, 0, len);
                     }
+                    errBody = baos.toString(StandardCharsets.UTF_8.name());
                 }
+                Log.e(TAG, "POST 失败 " + path + " code=" + code + " body=" + errBody);
+                return false;
             }
-            photoCursor.close();
+            Log.d(TAG, "POST " + path + " → " + code);
+            return code == 200 || code == 201;
+        } catch (Exception e) {
+            Log.e(TAG, "postJson 失败: " + path, e);
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
         }
+    }
 
-        return true;
+    private String getJson(String path) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(BASE_URL + path);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("X-API-Key", sessionManager.getApiKey());
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            int code = conn.getResponseCode();
+            if (code != 200) return null;
+
+            java.io.InputStream is = conn.getInputStream();
+            // Note: is.readAllBytes() requires API level 28 (Android 9.0 Pie)
+            // For broader compatibility, a manual read loop would be better.
+            byte[] buf = new byte[1024];
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            int len;
+            while ((len = is.read(buf)) != -1) {
+                baos.write(buf, 0, len);
+            }
+            return baos.toString(StandardCharsets.UTF_8.name());
+        } catch (Exception e) {
+            Log.e(TAG, "getJson 失败: " + path, e);
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 }
