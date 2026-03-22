@@ -248,7 +248,7 @@
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:src="@drawable/ic_chevron_right_24"
-                            android:tint="@color/icon_tint" />
+                            app:tint="@color/icon_tint" />
 
                     </LinearLayout>
 

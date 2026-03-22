@@ -71,7 +71,7 @@
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="首页"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_compass" />
 
             <ImageButton
@@ -81,7 +81,7 @@
                 android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="课堂"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_slideshow" />
 
             <ImageButton
@@ -91,7 +91,7 @@
                 android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="选课"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@drawable/ic_class"
                 android:visibility="gone" />
         </LinearLayout>
@@ -112,7 +112,7 @@
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="考勤"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_camera" />
 
             <ImageButton
@@ -122,7 +122,7 @@
                 android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="我的"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_myplaces" />
 
             <ImageButton
@@ -132,7 +132,7 @@
                 android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="设置"
-                android:tint="@color/grey_600"
+                app:tint="@color/grey_600"
                 android:src="@android:drawable/ic_menu_manage" />
 
 
