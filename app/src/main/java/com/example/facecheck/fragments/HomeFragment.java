@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Button;
 import android.widget.Toast;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,11 +28,20 @@ import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.activity.FaceCorrectionActivity;
 import com.example.facecheck.ui.face.FaceEnhancementActivity;
 import com.example.facecheck.ui.verify.VerifyFeatureConsistencyActivity;
+import com.example.facecheck.utils.SessionManager;
+import com.example.facecheck.data.repository.ClassroomRepository; // Add this import
+import com.example.facecheck.data.repository.ClassroomRepositoryImpl; // Add this import
+import com.example.facecheck.data.repository.ApiCallback; // Add this import
+import com.example.facecheck.data.model.Classroom; // Add this import for syncAllClassrooms callback
+
+import java.util.List; // Add this import
 import androidx.appcompat.widget.TooltipCompat;
 
 public class HomeFragment extends Fragment {
 
     private DatabaseHelper dbHelper;
+    private SessionManager sessionManager;
+    private ClassroomRepository classroomRepository;
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
     private Button btnSync;
     private static final int PICK_IMAGE_REQUEST = 1001;
@@ -67,6 +77,8 @@ public class HomeFragment extends Fragment {
 
         // 初始化数据库
         dbHelper = new DatabaseHelper(getContext());
+        sessionManager = new SessionManager(getContext());
+        classroomRepository = new ClassroomRepositoryImpl(getContext()); // Initialize ClassroomRepository
 
         // 初始化视图
         bannerImage = view.findViewById(R.id.bannerImage);
@@ -130,10 +142,9 @@ public class HomeFragment extends Fragment {
 
     private void loadStatistics() {
         // 获取当前登录的用户信息
-        SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
-        String role = prefs.getString("user_role", "teacher");
-        long teacherId = prefs.getLong("teacher_id", -1);
-        long studentId = prefs.getLong("student_id", -1);
+        String role = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getString("user_role", "teacher");
+        long teacherId = sessionManager.getTeacherId();
+        long studentId = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getLong("student_id", -1);
 
         if ("student".equals(role)) {
             // 学生视角：优化统计标签并更新UI
@@ -154,6 +165,28 @@ public class HomeFragment extends Fragment {
             return;
         }
 
+        // 首先触发远程同步
+        classroomRepository.syncAllClassrooms(teacherId, new ApiCallback<List<Classroom>>() {
+            @Override
+            public void onSuccess(List<Classroom> data) {
+                Log.d("HomeFragment", "远程同步成功，刷新首页统计数据。");
+                // 同步成功后，从本地数据库获取最新统计数据并更新UI
+                updateStatisticsFromLocalDb(teacherId);
+            }
+
+            @Override
+            public void onError(String message) {
+                if (isAdded() && getContext() != null) {
+                    Log.e("HomeFragment", "远程同步失败: " + message + ", 尝试从本地加载。");
+                    // 远程同步失败，从本地数据库获取统计数据并更新UI
+                    updateStatisticsFromLocalDb(teacherId);
+                    Toast.makeText(getContext(), "同步失败，加载本地数据: " + message, Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    private void updateStatisticsFromLocalDb(long teacherId) {
         // 从数据库获取真实统计数据
         int classCount = dbHelper.getClassroomCountByTeacher(teacherId);
         int studentCount = dbHelper.getStudentCountByTeacher(teacherId);

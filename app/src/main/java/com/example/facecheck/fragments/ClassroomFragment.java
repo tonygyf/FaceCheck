@@ -1,30 +1,33 @@
 package com.example.facecheck.fragments;
 
+import android.content.DialogInterface;
 import android.content.Intent;
-import android.database.Cursor;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
-import com.example.facecheck.ui.classroom.ClassroomActivity;
 import com.example.facecheck.adapters.ClassroomAdapter;
-import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Classroom;
+import com.example.facecheck.ui.classroom.ClassroomActivity;
+import com.example.facecheck.ui.classroom.ClassroomViewModel;
+import com.example.facecheck.ui.classroom.ClassroomViewModelFactory;
+import com.example.facecheck.utils.SessionManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import androidx.appcompat.widget.TooltipCompat;
-
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -34,104 +37,114 @@ public class ClassroomFragment extends Fragment {
 
     private RecyclerView recyclerView;
     private ClassroomAdapter adapter;
-    private List<Classroom> classroomList;
-    private DatabaseHelper dbHelper;
-    private FloatingActionButton fabAddClassroom;
-    private long teacherId;
+    private ClassroomViewModel viewModel;
+    private SessionManager sessionManager;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_classroom, container, false);
-        
-        // 初始化数据库
-        dbHelper = new DatabaseHelper(getContext());
-        
-        // 获取教师ID
-        teacherId = getActivity().getSharedPreferences("user_prefs", 0).getLong("teacher_id", -1);
-        // 确保为当前教师生成两班与学生（从 assets 导入），避免学生列表未初始化
-        if (teacherId != -1) {
-            dbHelper.ensureAssetSeedForTeacher(teacherId);
-        }
-        
-        // 初始化视图
-        recyclerView = view.findViewById(R.id.recycler_classrooms);
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        
-        fabAddClassroom = view.findViewById(R.id.fab_add_classroom);
-        fabAddClassroom.setOnClickListener(v -> showAddClassroomDialog());
-        
-        // 添加Tooltip提示
-        TooltipCompat.setTooltipText(fabAddClassroom, "添加新班级");
-        
-        // 加载班级数据
-        loadClassrooms();
-        
+
+        sessionManager = new SessionManager(requireContext());
+
+        setupRecyclerView(view);
+        setupViewModel();
+        setupFab(view);
+
         return view;
     }
-    
+
     @Override
     public void onResume() {
         super.onResume();
-        // 每次恢复时刷新数据
-        loadClassrooms();
+        // 每次Fragment可见时刷新班级列表
+        viewModel.loadClassrooms();
     }
-    
-    private void loadClassrooms() {
-        classroomList = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
-        
-        adapter = new ClassroomAdapter(classroomList);
+
+    private void setupRecyclerView(View view) {
+        recyclerView = view.findViewById(R.id.recycler_classrooms);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        adapter = new ClassroomAdapter(new ArrayList<>());
         adapter.setOnItemClickListener(classroom -> {
-            // 班级点击事件
             Intent intent = new Intent(getActivity(), ClassroomActivity.class);
             intent.putExtra("classroom_id", classroom.getId());
-            intent.putExtra("action", "edit");
             startActivity(intent);
         });
-        
         recyclerView.setAdapter(adapter);
     }
-    
-    private void showAddClassroomDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(getContext());
-        builder.setTitle("添加新班级");
-        
-        LinearLayout container = new LinearLayout(getContext());
-        container.setOrientation(LinearLayout.VERTICAL);
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
-        container.setPadding(padding, padding, padding, padding);
-        
-        final EditText etName = new EditText(getContext());
-        etName.setHint("班级名称");
-        final EditText etYear = new EditText(getContext());
-        etYear.setHint("年份(如 2024)");
-        etYear.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        
-        container.addView(etName);
-        container.addView(etYear);
-        
-        // 默认填入当前年份
-        Calendar calendar = Calendar.getInstance();
-        etYear.setText(String.valueOf(calendar.get(Calendar.YEAR)));
-        
-        builder.setView(container);
-        builder.setPositiveButton("添加", (d, which) -> {
-            String name = etName.getText().toString().trim();
-            String yearStr = etYear.getText().toString().trim();
-            int year = yearStr.isEmpty() ? calendar.get(Calendar.YEAR) : Integer.parseInt(yearStr);
-            if (name.isEmpty()) {
-                Toast.makeText(getContext(), "请输入班级名称", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            long id = dbHelper.insertClassroom(teacherId, name, year, null);
-            if (id != -1) {
-                Toast.makeText(getContext(), "班级创建成功", Toast.LENGTH_SHORT).show();
-                loadClassrooms();
-            } else {
-                Toast.makeText(getContext(), "班级创建失败", Toast.LENGTH_SHORT).show();
+
+    private void setupViewModel() {
+        viewModel = new ViewModelProvider(this, new ClassroomViewModelFactory(requireActivity().getApplication()))
+                .get(ClassroomViewModel.class);
+
+        viewModel.classrooms.observe(getViewLifecycleOwner(), classrooms -> {
+            adapter.updateClassrooms(classrooms);
+        });
+
+        viewModel.errorMessage.observe(getViewLifecycleOwner(), message -> {
+            if (message != null && !message.isEmpty()) {
+                Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show();
+                viewModel.clearErrorMessage(); // Consume the message
             }
         });
-        builder.setNegativeButton("取消", null);
+
+        viewModel.classroomCreated.observe(getViewLifecycleOwner(), isCreated -> {
+            if (isCreated != null && isCreated) {
+                Toast.makeText(getContext(), "班级创建成功！", Toast.LENGTH_SHORT).show();
+                viewModel.clearClassroomCreatedEvent(); // Consume the event
+            }
+        });
+
+        // Initial load
+        viewModel.loadClassrooms();
+    }
+
+    private void setupFab(View view) {
+        FloatingActionButton fabAddClassroom = view.findViewById(R.id.fab_add_classroom);
+        TooltipCompat.setTooltipText(fabAddClassroom, "添加新班级");
+        fabAddClassroom.setOnClickListener(v -> showAddClassroomDialog());
+    }
+
+    private void showAddClassroomDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("添加新班级");
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final EditText classNameInput = new EditText(requireContext());
+        classNameInput.setHint("班级名称 (例如：计算机科学2025级1班)");
+        layout.addView(classNameInput);
+
+        final NumberPicker yearPicker = new NumberPicker(requireContext());
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        yearPicker.setMinValue(currentYear - 5);
+        yearPicker.setMaxValue(currentYear + 5);
+        yearPicker.setValue(currentYear);
+        layout.addView(yearPicker);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("添加", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String className = classNameInput.getText().toString().trim();
+                int classYear = yearPicker.getValue();
+                if (!className.isEmpty()) {
+                    viewModel.createClassroom(className, classYear);
+                } else {
+                    Toast.makeText(getContext(), "班级名称不能为空", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+
         builder.show();
     }
 }

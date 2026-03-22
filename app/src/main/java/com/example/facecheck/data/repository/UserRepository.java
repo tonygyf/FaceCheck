@@ -3,9 +3,11 @@ package com.example.facecheck.data.repository;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.SessionManager;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -24,13 +26,14 @@ public class UserRepository {
 
     private final DatabaseHelper databaseHelper;
     private final OkHttpClient httpClient;
+    private final SessionManager sessionManager;
     // FIXME: 硬编码的API地址与Key，后续应移到BuildConfig
     private static final String API_BASE_URL = "https://omni.gyf123.dpdns.org";
-    private static final String API_KEY = "my-secret-api-key";
 
     public UserRepository(Context context) {
         this.databaseHelper = new DatabaseHelper(context);
         this.httpClient = new OkHttpClient();
+        this.sessionManager = new SessionManager(context);
     }
     
     public static class UserLoginResult {
@@ -69,10 +72,15 @@ public class UserRepository {
                 jsonBody.put("password", password);
 
                 RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
+                String apiKey = sessionManager.getApiKey();
+                if (apiKey == null) {
+                    callback.onError("API Key not available.");
+                    return;
+                }
                 Request request = new Request.Builder()
                         .url(url)
                         .post(body)
-                        .addHeader("X-API-Key", API_KEY)
+                        .addHeader("X-API-Key", apiKey)
                         .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
                         .build();
 
@@ -139,12 +147,23 @@ public class UserRepository {
                 jsonBody.put("password", password);
 
                 RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
-                Request request = new Request.Builder()
+                String apiKey = sessionManager.getApiKey();
+                if (apiKey == null) {
+                    // For registration, if API Key is not yet available (e.g., first-time user),
+                    // it might not be strictly necessary to send it. Depending on the backend API.
+                    // For now, we will proceed without it for registration, or handle it as an error
+                    // if the backend truly requires it for registration.
+                    Log.w("UserRepository", "API Key not available during registration. Proceeding without.");
+                    // Or: callback.onError("API Key not available."); return;
+                }
+                Request.Builder requestBuilder = new Request.Builder()
                         .url(url)
                         .post(body)
-                        .addHeader("X-API-Key", API_KEY)
-                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
-                        .build();
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36");
+                if (apiKey != null) {
+                    requestBuilder.addHeader("X-API-Key", apiKey);
+                }
+                Request request = requestBuilder.build();
 
                 httpClient.newCall(request).enqueue(new Callback() {
                     @Override

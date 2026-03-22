@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
 import com.example.facecheck.data.model.Student;
+import com.example.facecheck.data.model.Classroom;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -664,14 +665,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     // ============= 班级相关操作 =============
 
     public long insertClassroom(long teacherId, String name, int year, String meta) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("teacherId", teacherId);
-        values.put("name", name);
-        values.put("year", year);
-        values.put("meta", meta);
-        values.put("createdAt", System.currentTimeMillis());
-        return db.insert("Classroom", null, values);
+        // For local creation, assume ID is 0 or doesn't matter for initial insert.
+        // The database will assign AUTOINCREMENT ID.
+        Classroom newClassroom = new Classroom(0, teacherId, name, year, null, null, meta, System.currentTimeMillis());
+        return insertOrUpdateClassroom(newClassroom);
     }
 
     public Cursor getClassroomsByTeacher(long teacherId) {
@@ -744,6 +741,69 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         } finally {
             db.endTransaction();
         }
+    }
+
+    /**
+     * 删除指定教师的所有班级
+     */
+    public void deleteAllClassroomsForTeacher(long teacherId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("Classroom", "teacherId = ?", new String[]{String.valueOf(teacherId)});
+        Log.d(TAG, "已删除教师 " + teacherId + " 的所有班级");
+    }
+
+    /**
+     * 更新班级信息 (根据ID)
+     */
+    public boolean updateClassroom(Classroom classroom) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("teacherId", classroom.getTeacherId());
+        values.put("name", classroom.getName());
+        values.put("year", classroom.getYear());
+        values.put("semester", classroom.getSemester()); // Assuming Classroom model has getSemester()
+        values.put("courseName", classroom.getCourseName()); // Assuming Classroom model has getCourseName()
+        values.put("meta", classroom.getMeta());
+        values.put("updatedAt", System.currentTimeMillis());
+
+        int rowsAffected = db.update("Classroom", values, "id = ?", new String[]{String.valueOf(classroom.getId())});
+        return rowsAffected > 0;
+    }
+
+    /**
+     * 删除班级
+     */
+    public boolean deleteClassroom(long classId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete("Classroom", "id = ?", new String[]{String.valueOf(classId)});
+        return rowsAffected > 0;
+    }
+
+    /**
+     * 插入或更新班级 (根据ID存在与否)
+     * 用于处理来自同步的数据，保留远程ID
+     */
+    public long insertOrUpdateClassroom(Classroom classroom) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("id", classroom.getId()); // Use remote ID
+        values.put("teacherId", classroom.getTeacherId());
+        values.put("name", classroom.getName());
+        values.put("year", classroom.getYear());
+        values.put("semester", classroom.getSemester());
+        values.put("courseName", classroom.getCourseName());
+        values.put("meta", classroom.getMeta());
+        values.put("createdAt", classroom.getCreatedAt() > 0 ? classroom.getCreatedAt() : System.currentTimeMillis()); // Preserve remote creation time if available
+        values.put("updatedAt", System.currentTimeMillis());
+
+        long result = db.insertWithOnConflict("Classroom", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        if (result == -1) {
+            // CONFLICT_REPLACE returns the row ID of the new or replaced row, or -1 if an error occurred.
+            // If it's an update, it might return the existing row ID, which might not be -1.
+            // We can just return the classroom ID if it was an update.
+            return classroom.getId();
+        }
+        return result;
     }
 
     // ============= 学生相关操作 =============

@@ -1,27 +1,26 @@
 package com.example.facecheck.api;
 
 import com.example.facecheck.data.model.Classroom;
-import java.util.List;
+import com.example.facecheck.data.model.ClassroomDeltaSyncResponse;
+import com.example.facecheck.data.model.SyncDownloadResponse;
 import retrofit2.Call;
+import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
-
-// 定义一个通用的API响应包装类
-class ApiResponse<T> {
-    public boolean success;
-    public T data;
-    public String error;
-}
+import retrofit2.http.POST;
+import retrofit2.http.Query;
 
 public interface ApiService {
 
     // 基础URL在RetrofitClient中定义
     String BASE_URL = "https://omni.gyf123.dpdns.org/api/";
 
-    @GET("classrooms")
-    Call<ApiResponse<List<Classroom>>> getClassrooms(@Header("X-API-Key") String apiKey);
+    @GET("sync/download")
+    Call<SyncDownloadResponse> downloadSyncData(@Header("X-API-Key") String apiKey, @Query("teacherId") long teacherId);
 
-    // 未来可以添加更多接口，例如：
-    // @GET("students")
-    // Call<ApiResponse<List<Student>>> getStudentsByClass(@Query("classId") long classId, @Header("X-API-Key") String apiKey);
+    @GET("v1/classes/delta")
+    Call<ClassroomDeltaSyncResponse> getClassesDelta(@Header("X-API-Key") String apiKey, @Query("lastSyncTimestamp") long lastSyncTimestamp);
+
+    @POST("classrooms")
+    Call<ApiCreateResponse> createClassroom(@Header("X-API-Key") String apiKey, @Body Classroom classroom);
 }
