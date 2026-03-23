@@ -25,7 +25,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 12; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 13; // 移除CheckinTask的NOT NULL约束
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -283,8 +283,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "classId INTEGER NOT NULL, " +
                 "teacherId INTEGER NOT NULL, " +
                 "title TEXT NOT NULL, " +
-                "startAt TEXT NOT NULL, " +
-                "endAt TEXT NOT NULL, " +
+                "startAt TEXT, " +
+                "endAt TEXT, " +
                 "status TEXT NOT NULL CHECK(status IN ('DRAFT', 'ACTIVE', 'CLOSED')) DEFAULT 'DRAFT', " +
                 "locationLat REAL, " +
                 "locationLng REAL, " +

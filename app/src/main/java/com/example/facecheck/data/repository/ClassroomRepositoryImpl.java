@@ -9,6 +9,7 @@ import com.example.facecheck.api.ApiCreateResponse;
 import com.example.facecheck.api.ApiService;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.data.model.Classroom;
+import com.example.facecheck.api.CheckinTaskListResponse;
 import com.example.facecheck.data.model.ClassroomDeltaSyncResponse;
 import com.example.facecheck.data.model.ClassroomListResponse;
 import com.example.facecheck.data.model.SyncDownloadResponse;
@@ -125,6 +126,26 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
             public void onFailure(Call<ClassroomListResponse> call, Throwable t) {
                 Log.e(TAG, "Sync network failure", t);
                 callback.onError("Network error during full classroom sync: " + t.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void syncCheckinTasks(long teacherId, ApiCallback<List<CheckinTaskListResponse.CheckinTask>> callback) {
+        apiService.getCheckinTasks(getApiKey(), teacherId).enqueue(new Callback<CheckinTaskListResponse>() {
+            @Override
+            public void onResponse(Call<CheckinTaskListResponse> call, Response<CheckinTaskListResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().success) {
+                    List<CheckinTaskListResponse.CheckinTask> tasks = response.body().data;
+                    callback.onSuccess(tasks);
+                } else {
+                    callback.onError("Failed to fetch check-in tasks: " + response.message());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<CheckinTaskListResponse> call, Throwable t) {
+                callback.onError(t.getMessage());
             }
         });
     }

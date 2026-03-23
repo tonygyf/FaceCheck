@@ -109,7 +109,7 @@ public class HomeFragment extends Fragment {
         btnSync.setOnClickListener(v -> syncDatabase());
 
         // 添加Tooltip提示
-        TooltipCompat.setTooltipText(btnSync, "与WebDAV服务器同步数据");
+        TooltipCompat.setTooltipText(btnSync, "与云端同步数据");
 
         // 加载统计数据
         loadStatistics();
@@ -178,7 +178,7 @@ public class HomeFragment extends Fragment {
                     studentCount += classroom.getStudentCount();
                 }
                 // 考勤记录仍然从本地获取，因为它没有在班级接口中返回
-                int attendanceCount = dbHelper.getAttendanceCountByTeacher(teacherId);
+                int attendanceCount = getCheckinTaskCountByTeacher(teacherId);
 
                 tvClassCount.setText(String.valueOf(classCount));
                 tvStudentCount.setText(String.valueOf(studentCount));
@@ -201,12 +201,26 @@ public class HomeFragment extends Fragment {
         // 从数据库获取真实统计数据
         int classCount = dbHelper.getClassroomCountByTeacher(teacherId);
         int studentCount = dbHelper.getStudentCountByTeacher(teacherId);
-        int attendanceCount = dbHelper.getAttendanceCountByTeacher(teacherId);
+        int attendanceCount = getCheckinTaskCountByTeacher(teacherId);
 
         // 更新UI
         tvClassCount.setText(String.valueOf(classCount));
         tvStudentCount.setText(String.valueOf(studentCount));
         tvAttendanceCount.setText(String.valueOf(attendanceCount));
+    }
+
+    private int getCheckinTaskCountByTeacher(long teacherId) {
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getReadableDatabase();
+        String countQuery = "SELECT COUNT(*) FROM " + "CheckinTask" + " WHERE teacherId = ?";
+        android.database.Cursor cursor = db.rawQuery(countQuery, new String[]{String.valueOf(teacherId)});
+        int count = 0;
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0);
+            }
+            cursor.close();
+        }
+        return count;
     }
 
     private void updateStudentHomeUI() {
@@ -291,10 +305,51 @@ public class HomeFragment extends Fragment {
 
     private void syncDatabase() {
         View overlay = showUploadingOverlayWithTimeout();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+        long teacherId = sessionManager.getTeacherId();
+        if (teacherId == -1) {
+            Toast.makeText(getContext(), "请先登录", Toast.LENGTH_SHORT).show();
             dismissUploadingOverlay(overlay);
-        }, 5000);
-        Toast.makeText(getContext(), "正在同步数据...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        classroomRepository.syncCheckinTasks(teacherId, new ApiCallback<List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask>>() {
+            @Override
+            public void onSuccess(List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask> data) {
+                if (getContext() == null) return;
+                // Sync successful, update local database
+                deleteAllCheckinTasks();
+                for (com.example.facecheck.api.CheckinTaskListResponse.CheckinTask task : data) {
+                    insertOrUpdateCheckinTask(task);
+                }
+                // Refresh UI
+                loadStatistics();
+                Toast.makeText(getContext(), "同步成功", Toast.LENGTH_SHORT).show();
+                dismissUploadingOverlay(overlay);
+            }
+
+            @Override
+            public void onError(String message) {
+                if (getContext() == null) return;
+                Toast.makeText(getContext(), "同步失败: " + message, Toast.LENGTH_SHORT).show();
+                dismissUploadingOverlay(overlay);
+            }
+        });
+    }
+
+    private void insertOrUpdateCheckinTask(com.example.facecheck.api.CheckinTaskListResponse.CheckinTask task) {
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put("id", task.id);
+        values.put("classId", task.classId);
+        values.put("teacherId", sessionManager.getTeacherId());
+        values.put("title", task.title);
+        values.put("status", task.status);
+        db.insertWithOnConflict("CheckinTask", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    private void deleteAllCheckinTasks() {
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+        db.delete("CheckinTask", null, null);
     }
 
     /**

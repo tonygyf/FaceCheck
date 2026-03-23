@@ -9,6 +9,8 @@ public class StudentRequest {
     @SerializedName("sid")     public String sid;
     @SerializedName("gender")  public String gender;
     @SerializedName("email")   public String email;
+    @SerializedName("password") public String password;
+    @SerializedName("avatarUri") public String avatarUri;
 
     public StudentRequest(long classId, String name, String sid, String gender) {
         this.classId = classId;

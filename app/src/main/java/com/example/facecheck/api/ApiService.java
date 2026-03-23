@@ -72,10 +72,7 @@ public interface ApiService {
     // ===== 新增：签到任务接口（教师端）=====
 
     @GET("checkin/tasks")
-    Call<CheckinTaskListResponse> getCheckinTasks(
-            @Header("X-API-Key") String apiKey,
-            @Query("classId") String classId,
-            @Query("status") String status);
+    Call<CheckinTaskListResponse> getCheckinTasks(@Header("X-API-Key") String apiKey, @Query("teacherId") long teacherId);
 
     @POST("checkin/tasks")
     Call<ApiCreateResponse> createCheckinTask(
