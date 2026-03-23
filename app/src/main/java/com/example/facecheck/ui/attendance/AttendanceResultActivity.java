@@ -142,7 +142,7 @@ public class AttendanceResultActivity extends AppCompatActivity {
             String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
             String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
             String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-            long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+            String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("createdAt"));
             
             cursor.close();
             return new Student(id, classId, name, sid, gender, avatarUri, createdAt);

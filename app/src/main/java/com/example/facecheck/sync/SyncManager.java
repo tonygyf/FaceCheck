@@ -33,9 +33,19 @@ public class SyncManager {
     }
 
     /**
-     * 主同步入口：上传所有 PENDING 的 SyncLog 对应实体到 Worker
+     * [DANGEROUS] Pushes all pending local changes from SyncLog to the remote server.
+     *
+     * WARNING: This method can cause data loss on the server if the local database contains
+     * stale or incorrect data (e.g., from a previous installation or a bug).
+     * It reads the local SyncLog and blindly pushes creations, updates, or deletions.
+     *
+     * DO NOT CALL THIS METHOD for routine data synchronization. Routine sync should be a PULL-ONLY
+     * operation (fetching data from the server and overwriting local data).
+     *
+     * This method should ONLY be called after an explicit user action to "Upload Local Changes"
+     * and ideally after showing a confirmation dialog.
      */
-    public boolean performSync() {
+    public boolean pushLocalChanges() {
         Cursor logs = dbHelper.getPendingSyncLogs();
         if (logs == null) return true;
 

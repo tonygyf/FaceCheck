@@ -46,6 +46,9 @@ import com.example.facecheck.sync.SyncManager;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.utils.ImageUtils;
 import com.example.facecheck.utils.PhotoStorageManager;
+import androidx.lifecycle.ViewModelProvider;
+import com.example.facecheck.ui.classroom.StudentViewModel;
+import com.example.facecheck.ui.classroom.StudentViewModelFactory;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.airbnb.lottie.LottieAnimationView;
@@ -70,6 +73,7 @@ public class ClassroomActivity extends AppCompatActivity {
     private Uri currentPhotoUri;
     private File currentPhotoFile;
     private ImageView dialogAvatarImageView;
+    private StudentViewModel studentViewModel;
     
     private RecyclerView recyclerView;
     private FloatingActionButton fabAddStudent;
@@ -135,6 +139,7 @@ public class ClassroomActivity extends AppCompatActivity {
         initPhotoLaunchers();
         
         // 加载学生列表
+        setupViewModel();
         loadStudents();
     }
 
@@ -185,6 +190,21 @@ public class ClassroomActivity extends AppCompatActivity {
         studentAdapter.setOnItemClickListener(student -> showStudentDetailsDialog(student));
     }
 
+    private void setupViewModel() {
+        studentViewModel = new ViewModelProvider(this, new StudentViewModelFactory(getApplication()))
+                .get(StudentViewModel.class);
+
+        studentViewModel.students.observe(this, students -> {
+            studentAdapter.updateStudents(students);
+        });
+
+        studentViewModel.errorMessage.observe(this, error -> {
+            if (error != null && !error.isEmpty()) {
+                Toast.makeText(this, "Error: " + error, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
     // ============= 批量特征提取入口 =============
     private void startBatchExtraction() {
         Cursor cursor = dbHelper.getStudentsByClass(classroomId);
@@ -199,7 +219,7 @@ public class ClassroomActivity extends AppCompatActivity {
                 String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
                 String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
                 String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("createdAt"));
 
                 if (!TextUtils.isEmpty(avatarUri)) {
                     Student s = new Student(id, classroomId, name, sid, gender, avatarUri, createdAt);
@@ -460,25 +480,9 @@ public class ClassroomActivity extends AppCompatActivity {
     }
 
     private void loadStudents() {
-        Cursor cursor = dbHelper.getStudentsByClass(classroomId);
-        List<Student> students = new ArrayList<>();
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            do {
-                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
-                String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
-                String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
-                
-                Student student = new Student(id, classroomId, name, sid, gender, avatarUri, createdAt);
-                students.add(student);
-            } while (cursor.moveToNext());
-            cursor.close();
+        if (classroomId != -1) {
+            studentViewModel.loadStudentsForClass(classroomId);
         }
-        
-        studentAdapter.updateStudents(students);
     }
 
     private void showAddStudentDialog() {
@@ -501,27 +505,14 @@ public class ClassroomActivity extends AppCompatActivity {
                    String name = etName.getText().toString().trim();
                    String sid = etSid.getText().toString().trim();
                    String gender = etGender.getText().toString().trim();
+                   String email = ""; // email is not in the dialog, pass empty string
                    
                    if (TextUtils.isEmpty(name) || TextUtils.isEmpty(sid)) {
                        Toast.makeText(ClassroomActivity.this, "请填写完整信息", Toast.LENGTH_SHORT).show();
                        return;
                    }
                    
-                   String avatarUri = currentPhotoUri != null ? currentPhotoUri.toString() : "";
-                   long studentId = dbHelper.insertStudent(classroomId, name, sid, gender, avatarUri);
-                   
-                   // 重置当前照片URI
-                   currentPhotoUri = null;
-                   currentPhotoFile = null;
-                   
-                   if (studentId != -1) {
-                       // 添加同步日志
-                       dbHelper.insertSyncLog("Student", studentId, "INSERT", 
-                           System.currentTimeMillis(), "PENDING");
-                       
-                       // 刷新列表
-                       loadStudents();
-                   }
+                   studentViewModel.createStudent(classroomId, name, sid, gender, email);
                })
                .setNegativeButton("取消", null)
                .show();
@@ -680,20 +671,16 @@ public class ClassroomActivity extends AppCompatActivity {
     }
 
     private void updateStudentAvatar(Student student, Uri photoUri) {
-        // 更新学生头像
-        boolean success = dbHelper.updateStudent(student.getId(), student.getClassId(), 
-            student.getName(), student.getSid(), student.getGender(), photoUri.toString());
+        Student updatedStudent = new Student(student.getId(), student.getClassId(), student.getName(), student.getSid(), student.getGender(), photoUri.toString(), student.getCreatedAt());
+        boolean success = dbHelper.updateStudent(updatedStudent);
         
         if (success) {
-            // 添加同步日志
-            dbHelper.insertSyncLog("Student", student.getId(), "UPDATE", 
-                System.currentTimeMillis(), "PENDING");
-            
             Toast.makeText(this, "头像更新成功", Toast.LENGTH_SHORT).show();
             loadStudents(); // 刷新列表
         } else {
             Toast.makeText(this, "头像更新失败", Toast.LENGTH_SHORT).show();
         }
+
     }
 
     private void showStudentDetailsDialog(Student student) {
@@ -734,38 +721,19 @@ public class ClassroomActivity extends AppCompatActivity {
                    String name = etName.getText().toString().trim();
                    String sid = etSid.getText().toString().trim();
                    String gender = etGender.getText().toString().trim();
-                   
-                   if (TextUtils.isEmpty(name)) {
-                       Toast.makeText(ClassroomActivity.this, "姓名不能为空", Toast.LENGTH_SHORT).show();
+                   String email = ""; // email is not in the dialog, pass empty string
+
+                   if (TextUtils.isEmpty(name) || TextUtils.isEmpty(sid)) {
+                       Toast.makeText(ClassroomActivity.this, "姓名和学号不能为空", Toast.LENGTH_SHORT).show();
                        return;
                    }
 
-                   if (TextUtils.isEmpty(sid)) {
-                       Toast.makeText(ClassroomActivity.this, "学号不能为空", Toast.LENGTH_SHORT).show();
+                   if (TextUtils.isEmpty(name) || TextUtils.isEmpty(sid)) {
+                       Toast.makeText(ClassroomActivity.this, "姓名和学号不能为空", Toast.LENGTH_SHORT).show();
                        return;
                    }
-                   
-                   // 获取新的头像URI，如果 currentPhotoUri 不为空则使用新的，否则使用学生原有的
-                   String newAvatarUri = currentPhotoUri != null ? currentPhotoUri.toString() : student.getAvatarUri();
 
-                   // 更新学生信息
-                    boolean success = dbHelper.updateStudent(student.getId(), student.getClassId(), 
-                        name, sid, gender, newAvatarUri);
-                   
-                   // 重置 currentPhotoUri 和 currentPhotoFile
-                   currentPhotoUri = null;
-                   currentPhotoFile = null;
-                   
-                   if (success) {
-                       // 添加同步日志
-                       dbHelper.insertSyncLog("Student", student.getId(), "UPDATE", 
-                           System.currentTimeMillis(), "PENDING");
-                       
-                       Toast.makeText(ClassroomActivity.this, "学生信息已更新", Toast.LENGTH_SHORT).show();
-                       loadStudents(); // 刷新列表
-                   } else {
-                       Toast.makeText(ClassroomActivity.this, "更新失败", Toast.LENGTH_SHORT).show();
-                   }
+                   studentViewModel.updateStudent(student.getId(), classroomId, name, sid, gender, email);
                })
                .setNegativeButton("取消", null)
                .setNeutralButton("删除", (dialog, which) -> {
@@ -780,17 +748,7 @@ public class ClassroomActivity extends AppCompatActivity {
             .setTitle("确认删除")
             .setMessage("确定要删除学生 " + student.getName() + " 吗？")
             .setPositiveButton("确定", (dialog, which) -> {
-                boolean success = dbHelper.deleteStudent(student.getId());
-                if (success) {
-                    // 添加同步日志
-                    dbHelper.insertSyncLog("Student", student.getId(), "DELETE", 
-                        System.currentTimeMillis(), "PENDING");
-                    
-                    Toast.makeText(ClassroomActivity.this, "学生已删除", Toast.LENGTH_SHORT).show();
-                    loadStudents(); // 刷新列表
-                } else {
-                    Toast.makeText(ClassroomActivity.this, "删除失败", Toast.LENGTH_SHORT).show();
-                }
+                studentViewModel.deleteStudent(student.getId(), classroomId);
             })
             .setNegativeButton("取消", null)
             .show();

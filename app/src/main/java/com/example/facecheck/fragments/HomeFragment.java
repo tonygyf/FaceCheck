@@ -169,9 +169,20 @@ public class HomeFragment extends Fragment {
         classroomRepository.syncAllClassrooms(teacherId, new ApiCallback<List<Classroom>>() {
             @Override
             public void onSuccess(List<Classroom> data) {
+                if (!isAdded()) return; // Fragment not attached
                 Log.d("HomeFragment", "远程同步成功，刷新首页统计数据。");
-                // 同步成功后，从本地数据库获取最新统计数据并更新UI
-                updateStatisticsFromLocalDb(teacherId);
+                // 直接使用远程数据更新UI
+                int classCount = data.size();
+                int studentCount = 0;
+                for (Classroom classroom : data) {
+                    studentCount += classroom.getStudentCount();
+                }
+                // 考勤记录仍然从本地获取，因为它没有在班级接口中返回
+                int attendanceCount = dbHelper.getAttendanceCountByTeacher(teacherId);
+
+                tvClassCount.setText(String.valueOf(classCount));
+                tvStudentCount.setText(String.valueOf(studentCount));
+                tvAttendanceCount.setText(String.valueOf(attendanceCount));
             }
 
             @Override

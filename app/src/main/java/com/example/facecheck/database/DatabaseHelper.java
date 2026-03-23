@@ -25,7 +25,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 11; // 增加版本号以触发数据库重建
+    private static final int DATABASE_VERSION = 12; // 增加版本号以触发数据库重建
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -38,10 +38,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         Log.d(TAG, "创建数据库表结构");
         createAllTables(db);
-        insertDefaultTeacher(db); // 插入默认教师数据用于测试
+        // insertDefaultTeacher(db); // 禁止在数据库创建时插入任何默认或测试数据
     }
-
-    @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.d(TAG, "数据库升级: " + oldVersion + " -> " + newVersion);
         
@@ -68,6 +66,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
             Log.i(TAG, "v11升级完成：SyncLog重建，存量Classroom已补写");
         }
+        if (oldVersion < 12) {
+            Log.w(TAG, "Upgrading database from version " + oldVersion + " to " + newVersion + ", which will destroy all old data");
+            dropAllTables(db);
+            onCreate(db);
+        }
     }
 
     /**
@@ -91,9 +94,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             createPhotoAssetTable(db);
             // 8. 创建同步日志表
             createSyncLogTable(db);
-            // 9. 创建索引
+            // 9. 创建签到任务表
+            createCheckinTaskTable(db);
+            // 10. 创建签到提交表
+            createCheckinSubmissionTable(db);
+            // 11. 创建索引
             createIndexes(db);
-            // 10. 创建触发器
+            // 12. 创建触发器
             createTriggers(db);
 
             Log.d(TAG, "所有数据库表创建完成");
@@ -112,11 +119,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "name TEXT NOT NULL, " +
                 "username TEXT UNIQUE NOT NULL, " +
                 "password TEXT NOT NULL, " +
-                "email TEXT, " +
+                "email TEXT UNIQUE, " +
                 "phone TEXT, " +
                 "avatarUri TEXT, " +
-                "createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                "createdAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
+                "updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP)" +
                 ")";
         db.execSQL(sql);
         Log.d(TAG, "Teacher表创建完成");
@@ -134,8 +141,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "semester TEXT, " +
                 "courseName TEXT, " +
                 "meta TEXT, " +
-                "createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "createdAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
+                "updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
                 "FOREIGN KEY (teacherId) REFERENCES Teacher(id) ON DELETE CASCADE" +
                 ")";
         db.execSQL(sql);
@@ -153,14 +160,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "sid TEXT NOT NULL, " +
                 "password TEXT NOT NULL DEFAULT '123456', " +
                 "gender TEXT CHECK(gender IN ('M', 'F', 'O')), " +
+                "status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'GRADUATED')), " +
                 "birthDate TEXT, " +
                 "email TEXT, " +
                 "phone TEXT, " +
                 "avatarUri TEXT, " +
-                "enrollmentDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'GRADUATED')), " +
-                "createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "createdAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
+                "updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
                 "FOREIGN KEY (classId) REFERENCES Classroom(id) ON DELETE CASCADE" +
                 ")";
         db.execSQL(sql);
@@ -271,6 +277,53 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         Log.d(TAG, "SyncLog表创建完成");
     }
 
+    private void createCheckinTaskTable(SQLiteDatabase db) {
+        String sql = "CREATE TABLE IF NOT EXISTS CheckinTask (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "classId INTEGER NOT NULL, " +
+                "teacherId INTEGER NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "startAt TEXT NOT NULL, " +
+                "endAt TEXT NOT NULL, " +
+                "status TEXT NOT NULL CHECK(status IN ('DRAFT', 'ACTIVE', 'CLOSED')) DEFAULT 'DRAFT', " +
+                "locationLat REAL, " +
+                "locationLng REAL, " +
+                "locationRadiusM INTEGER, " +
+                "gestureSequence TEXT, " +
+                "passwordPlain TEXT, " +
+                "createdAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
+                "FOREIGN KEY (classId) REFERENCES Classroom(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (teacherId) REFERENCES Teacher(id) ON DELETE CASCADE" +
+                ")";
+        db.execSQL(sql);
+        Log.d(TAG, "CheckinTask表创建完成");
+    }
+
+    private void createCheckinSubmissionTable(SQLiteDatabase db) {
+        String sql = "CREATE TABLE IF NOT EXISTS CheckinSubmission (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "taskId INTEGER NOT NULL, " +
+                "studentId INTEGER NOT NULL, " +
+                "submittedAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
+                "lat REAL, " +
+                "lng REAL, " +
+                "gestureInput TEXT, " +
+                "passwordInput TEXT, " +
+                "autoResult TEXT NOT NULL CHECK(autoResult IN ('PASS', 'FAIL')) DEFAULT 'FAIL', " +
+                "manualResult TEXT CHECK(manualResult IN ('APPROVED', 'REJECTED')), " +
+                "finalResult TEXT NOT NULL CHECK(finalResult IN ('APPROVED', 'PENDING_REVIEW', 'REJECTED')) DEFAULT 'PENDING_REVIEW', " +
+                "reason TEXT, " +
+                "isLatest INTEGER NOT NULL DEFAULT 1, " +
+                "reviewerId INTEGER, " +
+                "reviewedAt TEXT, " +
+                "FOREIGN KEY (taskId) REFERENCES CheckinTask(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (reviewerId) REFERENCES Teacher(id) ON DELETE SET NULL" +
+                ")";
+        db.execSQL(sql);
+        Log.d(TAG, "CheckinSubmission表创建完成");
+    }
+
     /**
      * 创建索引
      */
@@ -363,6 +416,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS Student");
         db.execSQL("DROP TABLE IF EXISTS Classroom");
         db.execSQL("DROP TABLE IF EXISTS Teacher");
+        db.execSQL("DROP TABLE IF EXISTS CheckinTask");
+        db.execSQL("DROP TABLE IF EXISTS CheckinSubmission");
         Log.d(TAG, "所有旧表已删除");
     }
 
@@ -875,21 +930,38 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     /**
      * 更新学生信息
      */
-    public boolean updateStudent(long studentId, long classId, String name, String sid, String gender,
-            String avatarUri) {
+    public boolean updateStudent(Student student) {
         SQLiteDatabase db = this.getWritableDatabase();
-        String uniqueSid = ensureUniqueSid(db, classId, sid);
         ContentValues values = new ContentValues();
-        values.put("classId", classId);
-        values.put("name", name);
-        values.put("sid", uniqueSid);
-        values.put("gender", gender);
-        values.put("avatarUri", avatarUri);
+        values.put("name", student.getName());
+        values.put("sid", student.getSid());
+        values.put("gender", student.getGender());
+        values.put("avatarUri", student.getAvatarUri());
         values.put("updatedAt", System.currentTimeMillis());
 
         int result = db.update("Student", values, "id = ?",
-                new String[] { String.valueOf(studentId) });
+                new String[] { String.valueOf(student.getId()) });
         return result > 0;
+    }
+
+    public void insertOrUpdateStudent(Student student) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("id", student.getId());
+        values.put("classId", student.getClassId());
+        values.put("name", student.getName());
+        values.put("sid", student.getSid());
+        values.put("gender", student.getGender());
+        values.put("avatarUri", student.getAvatarUri());
+        values.put("createdAt", student.getCreatedAt());
+
+        db.insertWithOnConflict("Student", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    public void deleteAllStudentsByClass(long classId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int deletedRows = db.delete("Student", "classId = ?", new String[]{String.valueOf(classId)});
+        Log.d(TAG, "Deleted " + deletedRows + " students from classId: " + classId);
     }
 
     /**
@@ -930,7 +1002,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
                 String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
                 String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("createdAt"));
 
                 Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
                 students.add(student);
@@ -939,6 +1011,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
 
         return students;
+    }
+
+    public List<Long> getClassroomIdsByTeacher(long teacherId) {
+        List<Long> classIds = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("Classroom", new String[]{"id"}, "teacherId = ?",
+                new String[]{String.valueOf(teacherId)}, null, null, null);
+
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                classIds.add(cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+        return classIds;
     }
 
     // ===== 唯一SID辅助与修复 =====
@@ -1049,7 +1136,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String sid = cursor.getString(cursor.getColumnIndexOrThrow("sid"));
                 String gender = cursor.getString(cursor.getColumnIndexOrThrow("gender"));
                 String avatarUri = cursor.getString(cursor.getColumnIndexOrThrow("avatarUri"));
-                long createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"));
+                String createdAt = cursor.getString(cursor.getColumnIndexOrThrow("createdAt"));
 
                 Student student = new Student(id, classId, name, sid, gender, avatarUri, createdAt);
                 students.add(student);

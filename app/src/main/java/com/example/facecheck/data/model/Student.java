@@ -9,10 +9,10 @@ public class Student {
     private String avatarUri;
     private String faceFeatures;  // 人脸特征向量
     private String faceImagePath;   // 人脸图片路径
-    private long createdAt;
+    private String createdAt;
 
     public Student() {
-        this.createdAt = System.currentTimeMillis();
+        this.createdAt = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
     }
 
     public Student(long classId, String name, String sid, String gender) {
@@ -23,7 +23,7 @@ public class Student {
         this.gender = gender;
     }
 
-    public Student(long id, long classId, String name, String sid, String gender, String avatarUri, long createdAt) {
+    public Student(long id, long classId, String name, String sid, String gender, String avatarUri, String createdAt) {
         this.id = id;
         this.classId = classId;
         this.name = name;
@@ -33,7 +33,7 @@ public class Student {
         this.createdAt = createdAt;
     }
 
-    public Student(long id, long classId, String name, String sid, String gender, String avatarUri, String faceFeatures, String faceImagePath, long createdAt) {
+    public Student(long id, long classId, String name, String sid, String gender, String avatarUri, String faceFeatures, String faceImagePath, String createdAt) {
         this.id = id;
         this.classId = classId;
         this.name = name;
@@ -93,14 +93,13 @@ public class Student {
         this.avatarUri = avatarUri;
     }
 
-    public long getCreatedAt() {
+    public String getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(long createdAt) {
+    public void setCreatedAt(String createdAt) {
         this.createdAt = createdAt;
     }
-
     public String getFaceFeatures() {
         return faceFeatures;
     }

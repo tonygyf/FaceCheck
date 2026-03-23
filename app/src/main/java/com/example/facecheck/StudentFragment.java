@@ -90,9 +90,9 @@ public class StudentFragment extends Fragment {
         studentList.clear();
         
         // 模拟数据
-        studentList.add(new Student(1, 1, "张三", "20210001", "男", "", System.currentTimeMillis()));
-        studentList.add(new Student(2, 1, "李四", "20210002", "女", "", System.currentTimeMillis()));
-        studentList.add(new Student(3, 2, "王五", "20210003", "男", "", System.currentTimeMillis()));
+        studentList.add(new Student(1, 1, "张三", "20210001", "男", "", String.valueOf(System.currentTimeMillis())));
+        studentList.add(new Student(2, 1, "李四", "20210002", "女", "", String.valueOf(System.currentTimeMillis())));
+        studentList.add(new Student(3, 2, "王五", "20210003", "男", "", String.valueOf(System.currentTimeMillis())));
         
         // 通知适配器数据已更新
         adapter.notifyDataSetChanged();

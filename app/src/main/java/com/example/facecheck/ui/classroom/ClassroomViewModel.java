@@ -43,11 +43,14 @@ public class ClassroomViewModel extends AndroidViewModel {
             // First, trigger the sync process in the background.
             AsyncExecutor executor = new AsyncExecutor();
             executor.run(() -> {
-                Log.e("SYNC_DEBUG", "即将调用performSync");
-                SyncManager syncManager = new SyncManager(getApplication(), new DatabaseHelper(getApplication()));
-                boolean result = syncManager.performSync();
-                Log.e("SYNC_DEBUG", "performSync完成, result=" + result);
-                return result; // Return the result of the sync
+                // NOTE: Disabling automatic push sync to prevent data corruption.
+                // The push logic (performSync) should only be called after explicit user action.
+                // Log.e("SYNC_DEBUG", "即将调用performSync");
+                // SyncManager syncManager = new SyncManager(getApplication(), new DatabaseHelper(getApplication()));
+                // boolean result = syncManager.performSync();
+                // Log.e("SYNC_DEBUG", "performSync完成, result=" + result);
+                // return result; // Return the result of the sync
+                return true; // Assume success to proceed to data loading
             }, (success) -> {
                 // After sync, load data from the local database to update the UI.
                 classroomRepository.getClassrooms(teacherId).observeForever(data -> {

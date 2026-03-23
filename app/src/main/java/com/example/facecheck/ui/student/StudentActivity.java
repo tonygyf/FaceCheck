@@ -152,7 +152,7 @@ public class StudentActivity extends AppCompatActivity {
                 cursor.getString(cursor.getColumnIndexOrThrow("sid")),
                 cursor.getString(cursor.getColumnIndexOrThrow("gender")),
                 cursor.getString(cursor.getColumnIndexOrThrow("avatarUri")),
-                cursor.getLong(cursor.getColumnIndexOrThrow("createdAt"))
+                cursor.getString(cursor.getColumnIndexOrThrow("createdAt"))
             );
             
             etStudentName.setText(currentStudent.getName());
@@ -272,14 +272,14 @@ public class StudentActivity extends AppCompatActivity {
                     currentStudent.setFaceImagePath(currentPhotoPath);
                 }
                 
-                dbHelper.updateStudent(
-                    currentStudent.getId(),
-                    currentStudent.getClassId(),
-                    currentStudent.getName(),
-                    currentStudent.getSid(),
-                    currentStudent.getGender(),
-                    currentPhotoPath
-                );
+                // dbHelper.updateStudent(
+                //     currentStudent.getId(),
+                //     currentStudent.getClassId(),
+                //     currentStudent.getName(),
+                //     currentStudent.getSid(),
+                //     currentStudent.getGender(),
+                //     currentPhotoPath
+                // );
                 Toast.makeText(this, "学生信息已更新", Toast.LENGTH_SHORT).show();
             } else {
                 // 添加新学生

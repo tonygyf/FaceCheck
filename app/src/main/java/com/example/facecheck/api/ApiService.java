@@ -3,26 +3,18 @@ package com.example.facecheck.api;
 import com.example.facecheck.data.model.Classroom;
 import com.example.facecheck.data.model.ClassroomDeltaSyncResponse;
 import com.example.facecheck.data.model.ClassroomListResponse;
-
-import java.util.List;
+import com.example.facecheck.data.model.StudentListResponse;
 
 import retrofit2.Call;
-import retrofit2.http.Body;
-import retrofit2.http.GET;
-import retrofit2.http.Header;
-import retrofit2.http.POST;
-import retrofit2.http.PUT;
-import retrofit2.http.Part;
-import retrofit2.http.Query;
-import retrofit2.http.Multipart;
-
+import retrofit2.http.*;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 
 public interface ApiService {
 
-    // 基础URL在RetrofitClient中定义
     String BASE_URL = "https://omni.gyf123.dpdns.org/api/";
+
+    // ===== 已有接口（保持不变）=====
 
     @GET("classrooms")
     Call<ClassroomListResponse> getClassrooms(@Header("X-API-Key") String apiKey);
@@ -34,7 +26,9 @@ public interface ApiService {
     Call<ApiResponse> changePassword(@Header("X-API-Key") String apiKey, @Body ChangePasswordRequest body);
 
     @GET("v1/classes/delta")
-    Call<ClassroomDeltaSyncResponse> getClassesDelta(@Header("X-API-Key") String apiKey, @Query("lastSyncTimestamp") long lastSyncTimestamp);
+    Call<ClassroomDeltaSyncResponse> getClassesDelta(
+            @Header("X-API-Key") String apiKey,
+            @Query("lastSyncTimestamp") long lastSyncTimestamp);
 
     @PUT("profile/username")
     Call<ApiResponse> changeUsername(@Header("X-API-Key") String apiKey, @Body ChangeUsernameRequest body);
@@ -42,9 +36,80 @@ public interface ApiService {
     @Multipart
     @POST("profile/avatar")
     Call<ApiResponse> uploadAvatar(
-        @Header("X-API-Key") String apiKey,
-        @Part("teacherId") RequestBody teacherId,
-        @Part("key") RequestBody key,
-        @Part MultipartBody.Part file
-    );
+            @Header("X-API-Key") String apiKey,
+            @Part("teacherId") RequestBody teacherId,
+            @Part("key") RequestBody key,
+            @Part MultipartBody.Part file);
+
+    // ===== 新增：学生接口 =====
+
+    @GET("students")
+    Call<StudentListResponse> getStudents(
+            @Header("X-API-Key") String apiKey,
+            @Query("classId") long classId);
+
+    @POST("students")
+    Call<ApiCreateResponse> createStudent(
+            @Header("X-API-Key") String apiKey,
+            @Body StudentRequest body);
+
+    @POST("students/batch")
+    Call<ApiResponse> batchCreateStudents(
+            @Header("X-API-Key") String apiKey,
+            @Body BatchStudentRequest body);
+
+    @PUT("students/{id}")
+    Call<ApiResponse> updateStudent(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long studentId,
+            @Body StudentRequest body);
+
+    @DELETE("students/{id}")
+    Call<ApiResponse> deleteStudent(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long studentId);
+
+    // ===== 新增：签到任务接口（教师端）=====
+
+    @GET("checkin/tasks")
+    Call<CheckinTaskListResponse> getCheckinTasks(
+            @Header("X-API-Key") String apiKey,
+            @Query("classId") String classId,
+            @Query("status") String status);
+
+    @POST("checkin/tasks")
+    Call<ApiCreateResponse> createCheckinTask(
+            @Header("X-API-Key") String apiKey,
+            @Body CheckinTaskRequest body);
+
+    @POST("checkin/tasks/{id}/close")
+    Call<ApiResponse> closeCheckinTask(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long taskId);
+
+    // ===== 新增：签到提交接口（学生端）=====
+
+    @POST("checkin/tasks/{id}/submit")
+    Call<ApiCreateResponse> submitCheckin(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long taskId,
+            @Body CheckinSubmitRequest body);
+
+    @GET("checkin/tasks/{id}/review-queue")
+    Call<ReviewQueueResponse> getReviewQueue(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long taskId);
+
+    @POST("checkin/submissions/{id}/review")
+    Call<ApiResponse> reviewSubmission(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long submissionId,
+            @Body ReviewRequest body);
+
+    // ===== 新增：考勤同步上传 =====
+
+    @POST("sync/upload")
+    Call<SyncUploadResponse> uploadAttendanceSync(
+            @Header("X-API-Key") String apiKey,
+            @Body SyncUploadRequest body);
 }

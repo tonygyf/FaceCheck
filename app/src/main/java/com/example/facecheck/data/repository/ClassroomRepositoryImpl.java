@@ -49,10 +49,9 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
         syncAllClassrooms(teacherId, new ApiCallback<List<Classroom>>() {
             @Override
             public void onSuccess(List<Classroom> remoteClassrooms) {
-                // 远程同步成功，数据已经更新到本地数据库，现在从本地数据库加载并返回
-                List<Classroom> localClassrooms = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
-                data.postValue(localClassrooms);
-                Log.d(TAG, "getClassrooms: 远程同步成功，加载本地数据。");
+                // 远程同步成功，直接使用这份包含正确学生数量的远程数据更新UI
+                data.postValue(remoteClassrooms);
+                Log.d(TAG, "getClassrooms: 远程同步成功，直接使用远程数据更新UI。");
             }
 
             @Override
@@ -68,35 +67,30 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
 
     @Override
     public void createClassroom(long teacherId, String name, int year, ApiCallback<Classroom> callback) {
-        // First, save to local DB with a temporary ID. The server will assign the real ID.
         Classroom newClassroom = new Classroom(0, teacherId, name, year, null, null, null, System.currentTimeMillis());
-        long localId = dbHelper.insertOrUpdateClassroom(newClassroom);
 
-        if (localId != -1) {
-            newClassroom.setId(localId); // Update local object with the local ID
-            apiService.createClassroom(getApiKey(), newClassroom).enqueue(new Callback<ApiCreateResponse>() {
-                @Override
-                public void onResponse(Call<ApiCreateResponse> call, Response<ApiCreateResponse> response) {
-                    if (response.isSuccessful() && response.body() != null && response.body().isOk()) {
-                        // Server creation successful. The actual server ID will be synced later via delta sync.
-                        // For now, we assume local creation is enough for immediate UI feedback.
-                        callback.onSuccess(newClassroom);
-                    } else {
-                        // Server creation failed. Revert local creation or mark for retry.
-                        dbHelper.deleteClassroom(localId); // Rollback local change
-                        callback.onError("Failed to create classroom on server: " + (response.body() != null ? response.body().getError() : "Unknown error"));
-                    }
-                }
+        apiService.createClassroom(getApiKey(), newClassroom).enqueue(new Callback<ApiCreateResponse>() {
+            @Override
+            public void onResponse(Call<ApiCreateResponse> call, Response<ApiCreateResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isOk()) {
+                    // Per user suggestion, we no longer need to write to the local DB here,
+                    // because the calling ViewModel will trigger a full refresh (loadClassrooms)
+                    // which will fetch the new classroom from the server anyway.
+                    // dbHelper.insertOrUpdateClassroom(newClassroom);
 
-                @Override
-                public void onFailure(Call<ApiCreateResponse> call, Throwable t) {
-                    dbHelper.deleteClassroom(localId); // Rollback local change
-                    callback.onError("Network error during classroom creation: " + t.getMessage());
+                    callback.onSuccess(newClassroom);
+                } else {
+                    String error = "Unknown error";
+                    if(response.body() != null) error = response.body().getError();
+                    callback.onError("Failed to create classroom on server: " + error);
                 }
-            });
-        } else {
-            callback.onError("Failed to create classroom in local database.");
-        }
+            }
+
+            @Override
+            public void onFailure(Call<ApiCreateResponse> call, Throwable t) {
+                callback.onError("Network error during classroom creation: " + t.getMessage());
+            }
+        });
     }
 
     @Override
@@ -106,8 +100,7 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
             @Override
             public void onResponse(Call<ClassroomListResponse> call, Response<ClassroomListResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().getData() != null) {
-                    // KEY-FIX: The server response is a JSON object `{"data": [...]}`.
-                    // We must parse this object and then extract the classroom list from the `data` field.
+                    Log.d(TAG, "Sync successful. Response code: " + response.code() + ", Body size: " + response.body().getData().size());
                     List<Classroom> remoteClassrooms = response.body().getData();
                     
                     // Clear existing classrooms and insert new ones. This is a full sync.
@@ -119,12 +112,18 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
                     }
                     callback.onSuccess(remoteClassrooms);
                 } else {
+                    String errorBody = "";
+                    try {
+                        if (response.errorBody() != null) errorBody = response.errorBody().string();
+                    } catch (Exception e) { /* ignore */ }
+                    Log.e(TAG, "Sync failed. Response code: " + response.code() + ", Error body: " + errorBody);
                     callback.onError("Failed to sync all classrooms: " + response.code());
                 }
             }
 
             @Override
             public void onFailure(Call<ClassroomListResponse> call, Throwable t) {
+                Log.e(TAG, "Sync network failure", t);
                 callback.onError("Network error during full classroom sync: " + t.getMessage());
             }
         });
