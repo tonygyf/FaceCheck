@@ -1,1 +1,13 @@
 /build
+# Gradle
+.gradle
+build/
+
+# Kotlin 缓存（官方推荐）
+.kotlin/
+
+# 其他常用忽略（根据项目补充）
+.idea/
+*.iml
+local.properties
+.DS_Store
