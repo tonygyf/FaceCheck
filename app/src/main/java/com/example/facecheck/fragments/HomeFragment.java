@@ -165,24 +165,52 @@ public class HomeFragment extends Fragment {
             return;
         }
 
-        // 首先触发远程同步
+        // 首先触发远程同步，这里修改顺序
         classroomRepository.syncAllClassrooms(teacherId, new ApiCallback<List<Classroom>>() {
             @Override
-            public void onSuccess(List<Classroom> data) {
+            public void onSuccess(List<Classroom> classroomData) {
                 if (!isAdded()) return; // Fragment not attached
-                Log.d("HomeFragment", "远程同步成功，刷新首页统计数据。");
-                // 直接使用远程数据更新UI
-                int classCount = data.size();
-                int studentCount = 0;
-                for (Classroom classroom : data) {
-                    studentCount += classroom.getStudentCount();
-                }
-                // 考勤记录仍然从本地获取，因为它没有在班级接口中返回
-                int attendanceCount = getCheckinTaskCountByTeacher(teacherId);
+                Log.d("HomeFragment", "班级同步成功，开始同步签到任务...");
 
-                tvClassCount.setText(String.valueOf(classCount));
-                tvStudentCount.setText(String.valueOf(studentCount));
-                tvAttendanceCount.setText(String.valueOf(attendanceCount));
+                // 班级同步成功后，接着同步签到任务
+                classroomRepository.syncCheckinTasks(teacherId, new ApiCallback<List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask>>() {
+                    @Override
+                    public void onSuccess(List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask> taskData) {
+                        if (!isAdded()) return;
+                        Log.d("HomeFragment", "签到任务同步成功，刷新UI。");
+
+                        // 1. 更新本地签到任务
+                        deleteAllCheckinTasks();
+                        for (com.example.facecheck.api.CheckinTaskListResponse.CheckinTask task : taskData) {
+                            insertOrUpdateCheckinTask(task);
+                        }
+
+                        // 2. 更新UI统计
+                        int classCount = classroomData.size();
+                        int studentCount = 0;
+                        for (Classroom classroom : classroomData) {
+                            studentCount += classroom.getStudentCount();
+                        }
+                        int activeCheckinTaskCount = getCheckinTaskCountByTeacher(teacherId);
+
+                        tvClassCount.setText(String.valueOf(classCount));
+                        tvStudentCount.setText(String.valueOf(studentCount));
+                        tvAttendanceCount.setText(String.valueOf(activeCheckinTaskCount));
+
+                        // 更新标签
+                        updateLabel(((ViewGroup) tvAttendanceCount.getParent().getParent()), "进行任务");
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        if (isAdded() && getContext() != null) {
+                            Log.e("HomeFragment", "签到任务同步失败: " + message);
+                            Toast.makeText(getContext(), "任务同步失败: " + message, Toast.LENGTH_SHORT).show();
+                            // 即使任务同步失败，也尝试用本地数据更新UI
+                            updateStatisticsFromLocalDb(teacherId);
+                        }
+                    }
+                });
             }
 
             @Override
@@ -194,25 +222,29 @@ public class HomeFragment extends Fragment {
                     Toast.makeText(getContext(), "同步失败，加载本地数据: " + message, Toast.LENGTH_SHORT).show();
                 }
             }
-        });
+        }
+        );
     }
 
     private void updateStatisticsFromLocalDb(long teacherId) {
         // 从数据库获取真实统计数据
         int classCount = dbHelper.getClassroomCountByTeacher(teacherId);
         int studentCount = dbHelper.getStudentCountByTeacher(teacherId);
-        int attendanceCount = getCheckinTaskCountByTeacher(teacherId);
+        int activeCheckinTaskCount = getCheckinTaskCountByTeacher(teacherId);
 
         // 更新UI
         tvClassCount.setText(String.valueOf(classCount));
         tvStudentCount.setText(String.valueOf(studentCount));
-        tvAttendanceCount.setText(String.valueOf(attendanceCount));
-    }
+        tvAttendanceCount.setText(String.valueOf(activeCheckinTaskCount));
 
+        // 更新标签
+        updateLabel(((ViewGroup) tvAttendanceCount.getParent().getParent()), "进行中任务");
+    }
+//下面不用teacherid筛了
     private int getCheckinTaskCountByTeacher(long teacherId) {
         android.database.sqlite.SQLiteDatabase db = dbHelper.getReadableDatabase();
-        String countQuery = "SELECT COUNT(*) FROM " + "CheckinTask" + " WHERE teacherId = ?";
-        android.database.Cursor cursor = db.rawQuery(countQuery, new String[]{String.valueOf(teacherId)});
+        String countQuery = "SELECT COUNT(*) FROM CheckinTask WHERE status = 'ACTIVE'";
+        android.database.Cursor cursor = db.rawQuery(countQuery, null);
         int count = 0;
         if (cursor != null) {
             if (cursor.moveToFirst()) {
@@ -341,9 +373,17 @@ public class HomeFragment extends Fragment {
         android.content.ContentValues values = new android.content.ContentValues();
         values.put("id", task.id);
         values.put("classId", task.classId);
-        values.put("teacherId", sessionManager.getTeacherId());
+        values.put("teacherId", task.teacherId);
         values.put("title", task.title);
+        values.put("startAt", task.startAt);
+        values.put("endAt", task.endAt);
         values.put("status", task.status);
+        values.put("locationLat", task.locationLat);
+        values.put("locationLng", task.locationLng);
+        values.put("locationRadiusM", task.locationRadiusM);
+        values.put("gestureSequence", task.gestureSequence);
+        values.put("passwordPlain", task.passwordPlain);
+        values.put("createdAt", task.createdAt);
         db.insertWithOnConflict("CheckinTask", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
     }
 
