@@ -118,7 +118,7 @@ public class StudentCoursesFragment extends Fragment {
         }
 
         // 显示班级名称
-        String className = dbHelper.getClassroomNameById(classId);
+        String className = dbHelper.getClassNameById(classId);
         if (tvClassName != null) {
             tvClassName.setText(className != null ? className : "未知班级");
         }

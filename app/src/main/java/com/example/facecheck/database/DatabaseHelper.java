@@ -678,7 +678,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return teacher;
     }
 
-    public String getClassroomNameById(long classId) {
+    public Cursor getCheckinTasksByDate(String date) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        // 使用 LIKE 进行前缀匹配，这种方式对日期时间格式更具鲁棒性
+        String query = "SELECT * FROM CheckinTask WHERE startAt LIKE ? ORDER BY startAt DESC";
+        return db.rawQuery(query, new String[]{date + "%"});
+    }
+
+    public String getClassNameById(long classId) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.query("Classroom", new String[] { "name" }, "id = ?",
                 new String[] { String.valueOf(classId) }, null, null, null);
