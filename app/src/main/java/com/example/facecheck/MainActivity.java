@@ -178,20 +178,16 @@ public class MainActivity extends AppCompatActivity {
         }
         showFirstLaunchWelcomeIfNeeded();
 
-        // 中间拍照打卡按钮
-        FloatingActionButton fabCameraPunch = findViewById(R.id.fabCameraPunch);
-        if (fabCameraPunch != null) {
-            fabCameraPunch.setOnClickListener(v -> {
+        FloatingActionButton fab = findViewById(R.id.fabCameraPunch);
+        if (fab != null) {
+            fab.setOnClickListener(v -> {
                 try {
-                    // 教师端：点击中间按钮进入"教师照片考勤"流程
-                    // 先进入班级选择，并传递标记表明是"照片考勤"
-                    Intent intent = new Intent(MainActivity.this,
-                            com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
-                    intent.putExtra("mode", "attendance");
-                    intent.putExtra("default_type", "FACE"); // 默认选中照片考勤
+                    // 修改为发布新任务流程
+                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
+                    intent.putExtra("mode", "create_checkin_task"); // 使用新模式
                     startActivity(intent);
                 } catch (Throwable t) {
-                    Toast.makeText(MainActivity.this, "打开考勤失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "打开任务发布页失败", Toast.LENGTH_SHORT).show();
                 }
             });
         }

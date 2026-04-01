@@ -143,14 +143,14 @@
     <!-- 居中拍照按钮，锚定到底部AppBar的凹槽 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabCameraPunch"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="发布任务"
+        android:src="@drawable/ic_task"
+        app:backgroundTint="@color/primary"
         app:layout_anchor="@id/bottom_app_bar"
         app:layout_anchorGravity="center|top"
-        android:contentDescription="拍照打卡"
-        android:src="@drawable/ic_camera"
-        app:backgroundTint="@color/primary"
-        app:tint="@android:color/white"
-        app:layout_behavior="@string/hide_bottom_view_on_scroll_behavior" />
+        app:layout_behavior="@string/hide_bottom_view_on_scroll_behavior"
+        app:tint="@android:color/white" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -490,32 +490,37 @@ public class ClassroomActivity extends AppCompatActivity {
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_student, null);
         
         EditText etName = view.findViewById(R.id.etStudentName);
-        EditText etSid = view.findViewById(R.id.etStudentId);
+        EditText etSid = view.findViewById(R.id.etStudentId); // 获取学号输入框
         EditText etGender = view.findViewById(R.id.etGender);
         ImageView ivAvatar = view.findViewById(R.id.ivAvatar);
-        dialogAvatarImageView = ivAvatar; // 赋值给成员变量
         dialogAvatarImageView = ivAvatar; // 赋值给成员变量
 
         // 设置头像点击事件
         ivAvatar.setOnClickListener(v -> showPhotoSourceDialog());
-        
+
         builder.setView(view)
-               .setTitle("添加学生")
-               .setPositiveButton("确定", (dialog, which) -> {
-                   String name = etName.getText().toString().trim();
-                   String sid = etSid.getText().toString().trim();
-                   String gender = etGender.getText().toString().trim();
-                   String email = ""; // email is not in the dialog, pass empty string
-                   
-                   if (TextUtils.isEmpty(name) || TextUtils.isEmpty(sid)) {
-                       Toast.makeText(ClassroomActivity.this, "请填写完整信息", Toast.LENGTH_SHORT).show();
-                       return;
-                   }
-                   
-                   studentViewModel.createStudent(classroomId, name, sid, gender, email);
-               })
-               .setNegativeButton("取消", null)
-               .show();
+                .setTitle("新增学生")
+                .setPositiveButton("确定", (dialogInterface, which) -> {
+                    String name = etName.getText().toString().trim();
+                    String sid = etSid.getText().toString().trim(); // 获取学号
+                    String gender = etGender.getText().toString().trim();
+
+                    // 使用 ViewModel 创建学生
+                    studentViewModel.createStudent(classroomId, name, sid, gender, "");
+
+                    // 清理临时头像
+                    currentPhotoUri = null;
+                    currentPhotoFile = null;
+                })
+                .setNegativeButton("取消", (dialogInterface, which) -> {
+                    // 清理临时头像
+                    currentPhotoUri = null;
+                    currentPhotoFile = null;
+                    dialogInterface.cancel();
+                });
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
 
     private void showPhotoSourceDialog() {

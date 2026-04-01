@@ -82,8 +82,19 @@ public class StudentRepository {
      */
     public void createStudent(long classId, String name, String sid,
                               String gender, String email, ActionCallback callback) {
+        // 前端校验，防止无效请求到达服务端
+        if (name == null || name.trim().isEmpty() || sid == null || sid.trim().isEmpty()) {
+            callback.onError("学生姓名和学号不能为空");
+            return;
+        }
+        if (classId <= 0) {
+            callback.onError("无效的班级ID");
+            return;
+        }
+
         StudentRequest req = new StudentRequest(classId, name, sid, gender);
         req.email = email;
+        req.password = "123456"; // 新增
         apiService.createStudent(sessionManager.getApiKey(), req).enqueue(new Callback<ApiCreateResponse>() {
             @Override
             public void onResponse(Call<ApiCreateResponse> call, Response<ApiCreateResponse> response) {
@@ -114,6 +125,8 @@ public class StudentRepository {
     public void updateStudent(long studentId, long classId, String name, String sid, String gender, String email, ActionCallback callback) {
         StudentRequest req = new StudentRequest(classId, name, sid, gender);
         req.email = email;
+        req.password = "123456"; // 新增
+        
         apiService.updateStudent(sessionManager.getApiKey(), studentId, req).enqueue(new Callback<ApiResponse>() {
             @Override
             public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
