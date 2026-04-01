@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CalendarView;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -27,6 +28,7 @@ public class AttendanceFragment extends Fragment {
     private CalendarView calendarView;
     private CalendarDecoratorView decoratorView;
     private TextView tvSelectedDate;
+    private ImageView ivPrevMonthIndicator, ivNextMonthIndicator;
     private RecyclerView recyclerView;
     private DatabaseHelper dbHelper;
     private String selectedDate;
@@ -42,9 +44,10 @@ public class AttendanceFragment extends Fragment {
         calendarView = view.findViewById(R.id.calendar_view);
         decoratorView = view.findViewById(R.id.calendar_decorator_view);
         tvSelectedDate = view.findViewById(R.id.tv_selected_date);
+        ivPrevMonthIndicator = view.findViewById(R.id.iv_prev_month_indicator);
+        ivNextMonthIndicator = view.findViewById(R.id.iv_next_month_indicator);
         recyclerView = view.findViewById(R.id.recycler_attendance);
 
-        // 初始化时设置并显示当前日期
         Calendar calendar = Calendar.getInstance();
         selectedDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
         tvSelectedDate.setText("当前选择: " + selectedDate);
@@ -53,10 +56,10 @@ public class AttendanceFragment extends Fragment {
             Calendar selected = Calendar.getInstance();
             selected.set(year, month, dayOfMonth);
             selectedDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(selected.getTime());
-            // 确保每次选择日期都更新文本
             tvSelectedDate.setText("当前选择: " + selectedDate);
             loadAttendanceData(selectedDate);
             updateCalendarDecorators();
+            updateMonthArrowDecorators();
         });
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -65,6 +68,7 @@ public class AttendanceFragment extends Fragment {
 
         loadAttendanceData(selectedDate);
         updateCalendarDecorators();
+        updateMonthArrowDecorators();
 
         return view;
     }
@@ -75,13 +79,14 @@ public class AttendanceFragment extends Fragment {
         if (selectedDate != null) {
             loadAttendanceData(selectedDate);
             updateCalendarDecorators();
+            updateMonthArrowDecorators();
         }
     }
 
     private void loadAttendanceData(String date) {
         if (getActivity() == null) return;
         try {
-//            先禁用teacherid，因为teacherid不再是之前存储方法了可能是sessionmanager存储的
+//            先不区分teacher
 //            long teacherId = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE).getLong("teacher_id", -1);
 //            if (teacherId == -1) {
 //                dayAdapter.updateItems(java.util.Collections.emptyList());
@@ -89,10 +94,6 @@ public class AttendanceFragment extends Fragment {
 //            }
 
             android.database.Cursor cursor = dbHelper.getCheckinTasksByDate(date);
-//            toast调试
-//            int count = cursor == null ? -1 : cursor.getCount();
-//            android.widget.Toast.makeText(getContext(), "查到记录数: " + count + " 日期:" + date, android.widget.Toast.LENGTH_LONG).show();
-
             java.util.Map<String, java.util.List<com.example.facecheck.data.model.CheckinTask>> groupedTasks = new java.util.LinkedHashMap<>();
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -130,9 +131,62 @@ public class AttendanceFragment extends Fragment {
     }
 
     private void updateCalendarDecorators() {
-        java.util.Map<Integer, Integer> dates = new java.util.HashMap<>();
-        dates.put(10, android.graphics.Color.RED);
-        dates.put(15, android.graphics.Color.BLUE);
-        decoratorView.setDates(dates);
+        if (getContext() == null) return;
+
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(calendarView.getDate());
+        String yearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.getTime());
+
+        android.database.Cursor cursor = dbHelper.getTaskStatusForMonth(yearMonth);
+        java.util.Map<Integer, Integer> dateStatusMap = new java.util.HashMap<>();
+
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                String startAt = cursor.getString(cursor.getColumnIndexOrThrow("startAt"));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+
+                try {
+                    Calendar taskCal = Calendar.getInstance();
+                    // 兼容 "2026-03-23T06:17:22.144Z" 和 "2026-03-23 06:17:22" 两种格式
+                    String normalized = startAt.replace("T", " ");
+                    if (normalized.contains(".")) {
+                        normalized = normalized.substring(0, normalized.indexOf("."));
+                    }
+                    if (normalized.endsWith("Z")) {
+                        normalized = normalized.substring(0, normalized.length() - 1);
+                    }
+                    taskCal.setTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).parse(normalized));
+                    int dayOfMonth = taskCal.get(Calendar.DAY_OF_MONTH);
+
+                    boolean isActive = "ACTIVE".equalsIgnoreCase(status);
+                    Integer currentColor = dateStatusMap.get(dayOfMonth);
+
+                    if (currentColor == null || currentColor != android.graphics.Color.RED) {
+                        dateStatusMap.put(dayOfMonth, isActive ? android.graphics.Color.RED : android.graphics.Color.BLUE);
+                    }
+
+                } catch (java.text.ParseException e) {
+                    android.util.Log.e("AttendanceFragment", "解析日期失败: " + startAt, e);
+                }
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+
+        decoratorView.setDates(dateStatusMap);
+    }
+
+    private void updateMonthArrowDecorators() {
+        if (getContext() == null) return;
+
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(calendarView.getDate());
+
+        cal.add(Calendar.MONTH, -1);
+        String prevYearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.getTime());
+        ivPrevMonthIndicator.setVisibility(dbHelper.hasActiveTasksInMonth(prevYearMonth) ? View.VISIBLE : View.GONE);
+
+        cal.add(Calendar.MONTH, 2);
+        String nextYearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.getTime());
+        ivNextMonthIndicator.setVisibility(dbHelper.hasActiveTasksInMonth(nextYearMonth) ? View.VISIBLE : View.GONE);
     }
 }

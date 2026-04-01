@@ -49,24 +49,30 @@ public class CalendarDecoratorView extends View {
             return;
         }
 
-        // This is a simplified calculation. A more robust solution would need to get
-        // the exact positions of date cells from the CalendarView, which is not possible
-        // with the public API.
+        // WARNING: These are magic numbers and might need adjustment on different devices/screen densities.
         int cellWidth = getWidth() / 7;
-        int cellHeight = getHeight() / 6; // Approximate
+        int cellHeight = getHeight() / 7; // Usually 6 rows, but let's use 7 for more padding
+        float dotRadius = 8f;
+        float dotOffsetX = cellWidth * 0.8f; // Offset to the top-right corner
+        float dotOffsetY = cellHeight * 0.2f;
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.DAY_OF_MONTH, 1);
+        int firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 1; // 0 for Sunday, 1 for Monday...
 
         for (Map.Entry<Integer, Integer> entry : dateDots.entrySet()) {
             int day = entry.getKey();
             int color = entry.getValue();
 
-            // This is a very rough estimation of the position.
-            // It assumes a standard 7-column grid and needs a reference date (e.g., the 1st of the month)
-            // to calculate the correct row and column.
-            // For a real implementation, this part needs significant refinement.
-            
-            // Let's just draw a dot somewhere for now to show the concept.
-            // A proper implementation would require knowing the start day of the week for the month.
-            // For simplicity, we'll skip the exact positioning in this step.
+            int position = day + firstDayOfWeek - 1;
+            int row = position / 7;
+            int col = position % 7;
+
+            float cx = col * cellWidth + dotOffsetX;
+            float cy = row * cellHeight + dotOffsetY;
+
+            Paint paint = (color == Color.RED) ? redPaint : bluePaint;
+            canvas.drawCircle(cx, cy, dotRadius, paint);
         }
     }
 }

@@ -685,6 +685,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.rawQuery(query, new String[]{date + "%"});
     }
 
+    public Cursor getTaskStatusForMonth(String yearMonth) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        // 查询指定月份的所有任务的 startAt 和 status
+        String query = "SELECT startAt, status FROM CheckinTask WHERE strftime('%Y-%m', startAt) = ?";
+        return db.rawQuery(query, new String[]{yearMonth});
+    }
+
+    public boolean hasActiveTasksInMonth(String yearMonth) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT 1 FROM CheckinTask WHERE strftime('%Y-%m', startAt) = ? AND status = 'ACTIVE' LIMIT 1";
+        try (Cursor cursor = db.rawQuery(query, new String[]{yearMonth})) {
+            return cursor != null && cursor.moveToFirst();
+        }
+    }
+
     public String getClassNameById(long classId) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.query("Classroom", new String[] { "name" }, "id = ?",
