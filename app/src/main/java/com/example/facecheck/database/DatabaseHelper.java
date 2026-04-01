@@ -687,15 +687,28 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public Cursor getTaskStatusForMonth(String yearMonth) {
         SQLiteDatabase db = this.getReadableDatabase();
-        // 查询指定月份的所有任务的 startAt 和 status
-        String query = "SELECT startAt, status FROM CheckinTask WHERE strftime('%Y-%m', startAt) = ?";
-        return db.rawQuery(query, new String[]{yearMonth});
+        // 用 LIKE 替代 strftime
+        String query = "SELECT startAt, status FROM CheckinTask WHERE startAt LIKE ?";
+        return db.rawQuery(query, new String[]{yearMonth + "%"});
+    }
+
+    public Cursor getCheckinTasksByMonth(String yearMonth) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT * FROM CheckinTask WHERE startAt LIKE ? ORDER BY startAt DESC";
+        return db.rawQuery(query, new String[]{yearMonth + "%"});
+    }
+
+    public Cursor getAllCheckinTasks() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT * FROM CheckinTask ORDER BY startAt DESC";
+        return db.rawQuery(query, null);
     }
 
     public boolean hasActiveTasksInMonth(String yearMonth) {
         SQLiteDatabase db = this.getReadableDatabase();
-        String query = "SELECT 1 FROM CheckinTask WHERE strftime('%Y-%m', startAt) = ? AND status = 'ACTIVE' LIMIT 1";
-        try (Cursor cursor = db.rawQuery(query, new String[]{yearMonth})) {
+        // 用 LIKE 替代 strftime，兼容 ISO 8601 格式
+        String query = "SELECT 1 FROM CheckinTask WHERE startAt LIKE ? AND status = 'ACTIVE' LIMIT 1";
+        try (Cursor cursor = db.rawQuery(query, new String[]{yearMonth + "%"})) {
             return cursor != null && cursor.moveToFirst();
         }
     }
