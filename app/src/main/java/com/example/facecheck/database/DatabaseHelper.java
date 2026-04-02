@@ -795,6 +795,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 new String[] { String.valueOf(teacherId) }, null, null, "year DESC, name");
     }
 
+    public List<Classroom> getAllClassrooms(long teacherId) {
+        List<Classroom> classroomList = new ArrayList<>();
+        Cursor cursor = getClassroomsByTeacher(teacherId);
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                int year = cursor.getInt(cursor.getColumnIndexOrThrow("year"));
+                String meta = cursor.getString(cursor.getColumnIndexOrThrow("meta"));
+                Classroom classroom = new Classroom(id, teacherId, name, year, meta);
+                classroomList.add(classroom);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+        return classroomList;
+    }
+
     public Cursor getAllClassroomsWithStudentCount(long teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT c.*, COUNT(s.id) AS studentCount " +

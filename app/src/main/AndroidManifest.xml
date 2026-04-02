@@ -12,6 +12,10 @@
     <!-- 声明相机硬件特性 -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!-- 在 <manifest> 里加权限 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
 
     <application
         android:name=".FaceCheckApp"
@@ -24,6 +28,11 @@
         android:requestLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="31">
+        <!-- 高德地图 API Key -->
+        <meta-data
+            android:name="com.amap.api.v2.apikey"
+            android:value="8bf213098c4f89e4ef213a480538fe9e" />
+
         <activity
             android:name=".ui.auth.LoginActivity"
             android:exported="true"
@@ -137,6 +146,12 @@
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"
             android:label="发布任务" />
+
+        <activity
+            android:name=".ui.task.MapPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="选择位置" />
 
         <!-- 文件提供者配置 -->
         <provider

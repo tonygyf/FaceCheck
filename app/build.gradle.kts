@@ -17,6 +17,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
     }
 
     // 【关键】分架构打包，将600MB的包拆分成小的APK
@@ -78,6 +79,9 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.generativeai)
+    // 定位
+    implementation(libs.play.services.location)
+    
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
@@ -99,6 +103,11 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     // 如果模型能跑，建议尝试注释掉下面这一行来进一步减小体积
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0")
+// 高德地图
+    implementation("com.amap.api:map2d:6.0.0")
+    implementation("com.amap.api:search:9.7.0")
+
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
