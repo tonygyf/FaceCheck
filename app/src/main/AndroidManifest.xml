@@ -132,6 +132,12 @@
             android:theme="@style/Theme.FaceCheck"
             android:label="自拍签到" />
 
+        <activity
+            android:name=".ui.task.PublishTaskActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="发布任务" />
+
         <!-- 文件提供者配置 -->
         <provider
             android:name="androidx.core.content.FileProvider"

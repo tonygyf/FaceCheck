@@ -183,8 +183,7 @@ public class MainActivity extends AppCompatActivity {
             fab.setOnClickListener(v -> {
                 try {
                     // 修改为发布新任务流程
-                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.classroom.ClassroomSelectionActivity.class);
-                    intent.putExtra("mode", "create_checkin_task"); // 使用新模式
+                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.task.PublishTaskActivity.class);
                     startActivity(intent);
                 } catch (Throwable t) {
                     Toast.makeText(MainActivity.this, "打开任务发布页失败", Toast.LENGTH_SHORT).show();

@@ -115,7 +115,13 @@ public class ClassroomSelectionActivity extends AppCompatActivity {
     }
 
     private void onClassroomSelected(Classroom classroom) {
-        if ("attendance".equals(mode)) {
+        if ("create_checkin_task".equals(mode)) {
+            Intent intent = new Intent(this, com.example.facecheck.ui.checkin.CreateCheckinTaskActivity.class);
+            intent.putExtra("CLASS_ID", classroom.getId());
+            intent.putExtra("CLASS_NAME", classroom.getName());
+            startActivity(intent);
+            finish(); // 关闭选择页面
+        } else if ("attendance".equals(mode)) {
             // 如果指定了默认类型，直接使用
             if (defaultType != null && !defaultType.isEmpty()) {
                 Intent intent = new Intent(this, AttendanceActivity.class);
