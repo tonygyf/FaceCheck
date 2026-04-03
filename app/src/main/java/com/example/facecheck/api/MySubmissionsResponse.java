@@ -25,5 +25,9 @@ public class MySubmissionsResponse {
         public String finalResult;
         @SerializedName("reason")
         public String reason;
+        @SerializedName("gestureInput")
+        public String gestureInput;
+        @SerializedName("passwordInput")
+        public String passwordInput;
     }
 }

@@ -36,6 +36,7 @@ public class AttendanceFragment extends Fragment {
     private boolean groupedByStatus = false;
     private int statusFilterMode = 0;
     private String role = "teacher";
+    private long teacherId = -1;
     private long studentId = -1;
     private long studentClassId = -1;
 
@@ -57,6 +58,7 @@ public class AttendanceFragment extends Fragment {
         if (getActivity() != null) {
             android.content.SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE);
             role = prefs.getString("user_role", "teacher");
+            teacherId = prefs.getLong("teacher_id", -1);
             studentId = prefs.getLong("student_id", -1);
             if ("student".equals(role) && studentId > 0) {
                 studentClassId = dbHelper.getClassIdByStudentId(studentId);
@@ -72,6 +74,7 @@ public class AttendanceFragment extends Fragment {
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         dayAdapter = new AttendanceDayAdapter();
+        dayAdapter.setOnTaskDetailClickListener((title, detailText) -> showTaskDetailDialog(title, detailText));
         recyclerView.setAdapter(dayAdapter);
 
         refreshAttendanceList();
@@ -314,6 +317,12 @@ public class AttendanceFragment extends Fragment {
                     task.setStatus(cursor.getString(cursor.getColumnIndexOrThrow("status")));
                     task.setStartAt(cursor.getString(cursor.getColumnIndexOrThrow("startAt")));
                     task.setEndAt(cursor.getString(cursor.getColumnIndexOrThrow("endAt")));
+                    task.setTeacherId(cursor.getLong(cursor.getColumnIndexOrThrow("teacherId")));
+                    task.setLocationLat(cursor.isNull(cursor.getColumnIndexOrThrow("locationLat")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLat")));
+                    task.setLocationLng(cursor.isNull(cursor.getColumnIndexOrThrow("locationLng")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLng")));
+                    task.setLocationRadiusM(cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM")));
+                    task.setGestureSequence(cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence")));
+                    task.setPasswordPlain(cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain")));
 
                     if (!groupedTasks.containsKey(className)) {
                         groupedTasks.put(className, new java.util.ArrayList<>());
@@ -327,7 +336,11 @@ public class AttendanceFragment extends Fragment {
             for (java.util.Map.Entry<String, java.util.List<com.example.facecheck.data.model.CheckinTask>> entry : groupedTasks.entrySet()) {
                 items.add(AttendanceDayAdapter.Item.header(entry.getKey()));
                 for (com.example.facecheck.data.model.CheckinTask task : entry.getValue()) {
-                    items.add(AttendanceDayAdapter.Item.task(task.getTitle(), task.getStatus()));
+                    boolean canViewDetail = "teacher".equals(role) && teacherId > 0 && task.getTeacherId() == teacherId;
+                    String detailText = buildTaskDetailText(task.getStartAt(), task.getEndAt(), task.getStatus(),
+                            task.getLocationLat(), task.getLocationLng(), task.getLocationRadiusM(),
+                            task.getGestureSequence(), task.getPasswordPlain());
+                    items.add(AttendanceDayAdapter.Item.task(task.getTitle(), task.getStatus(), task.getStartAt(), canViewDetail, detailText));
                 }
             }
             dayAdapter.updateItems(items);
@@ -358,8 +371,17 @@ public class AttendanceFragment extends Fragment {
                     String title = cursor.getString(cursor.getColumnIndexOrThrow("title"));
                     String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
                     String startAt = cursor.getString(cursor.getColumnIndexOrThrow("startAt"));
+                    String endAt = cursor.getString(cursor.getColumnIndexOrThrow("endAt"));
+                    long taskTeacherId = cursor.getLong(cursor.getColumnIndexOrThrow("teacherId"));
+                    Double locationLat = cursor.isNull(cursor.getColumnIndexOrThrow("locationLat")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLat"));
+                    Double locationLng = cursor.isNull(cursor.getColumnIndexOrThrow("locationLng")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLng"));
+                    Integer locationRadiusM = cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM"));
+                    String gestureSequence = cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence"));
+                    String passwordPlain = cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain"));
                     String day = extractDay(startAt);
-                    TaskRow row = new TaskRow(day + " " + title, status, startAt);
+                    boolean canViewDetail = "teacher".equals(role) && teacherId > 0 && taskTeacherId == teacherId;
+                    String detailText = buildTaskDetailText(startAt, endAt, status, locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain);
+                    TaskRow row = new TaskRow(day + " " + title, status, startAt, canViewDetail, detailText);
 
                     if ("ACTIVE".equalsIgnoreCase(status)) {
                         if (!activeTasksByClass.containsKey(className)) {
@@ -412,9 +434,46 @@ public class AttendanceFragment extends Fragment {
             java.util.Collections.sort(rows, desc);
 
             for (TaskRow row : rows) {
-                items.add(AttendanceDayAdapter.Item.task(row.title, row.status));
+                items.add(AttendanceDayAdapter.Item.task(row.title, row.status, row.sortKey, row.canViewDetail, row.detailText));
             }
         }
+    }
+
+    private void showTaskDetailDialog(String title, String detailText) {
+        if (getContext() == null) return;
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(title)
+                .setMessage(detailText)
+                .setPositiveButton("关闭", null)
+                .show();
+    }
+
+    private String buildTaskDetailText(String startAt, String endAt, String status,
+                                       Double locationLat, Double locationLng, Integer locationRadiusM,
+                                       String gestureSequence, String passwordPlain) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("状态：").append(status == null ? "-" : status).append("\n");
+        sb.append("开始时间：").append(startAt == null ? "-" : startAt).append("\n");
+        sb.append("结束时间：").append(endAt == null ? "-" : endAt).append("\n\n");
+        sb.append("签到方式：\n");
+        if (locationLat != null && locationLng != null && locationRadiusM != null) {
+            sb.append("- 地理位置：开启\n");
+            sb.append("  坐标：").append(locationLat).append(", ").append(locationLng).append("\n");
+            sb.append("  半径：").append(locationRadiusM).append("米\n");
+        } else {
+            sb.append("- 地理位置：关闭\n");
+        }
+        if (gestureSequence != null && !gestureSequence.isEmpty()) {
+            sb.append("- 手势签到：").append(gestureSequence).append("\n");
+        } else {
+            sb.append("- 手势签到：关闭\n");
+        }
+        if (passwordPlain != null && !passwordPlain.isEmpty()) {
+            sb.append("- 密码签到：").append(passwordPlain).append("\n");
+        } else {
+            sb.append("- 密码签到：关闭\n");
+        }
+        return sb.toString();
     }
 
     private String extractDay(String startAt) {
@@ -432,11 +491,15 @@ public class AttendanceFragment extends Fragment {
         final String title;
         final String status;
         final String sortKey;
+        final boolean canViewDetail;
+        final String detailText;
 
-        TaskRow(String title, String status, String sortKey) {
+        TaskRow(String title, String status, String sortKey, boolean canViewDetail, String detailText) {
             this.title = title;
             this.status = status;
             this.sortKey = sortKey;
+            this.canViewDetail = canViewDetail;
+            this.detailText = detailText;
         }
     }
 }

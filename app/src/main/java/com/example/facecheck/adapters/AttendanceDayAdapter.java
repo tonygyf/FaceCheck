@@ -6,11 +6,13 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.compose.ui.platform.ComposeView;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
 import com.example.facecheck.R;
+import com.example.facecheck.ui.checkin.AttendanceTaskComposeBinder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +30,9 @@ public class AttendanceDayAdapter extends RecyclerView.Adapter<RecyclerView.View
         public String className;
         public String taskTitle;
         public String taskStatus;
+        public String taskStartAt;
+        public boolean canViewDetail;
+        public String detailText;
 
         public static Item header(String className) {
             Item i = new Item();
@@ -36,16 +41,28 @@ public class AttendanceDayAdapter extends RecyclerView.Adapter<RecyclerView.View
             return i;
         }
 
-        public static Item task(String title, String status) {
+        public static Item task(String title, String status, String startAt, boolean canViewDetail, String detailText) {
             Item i = new Item();
             i.type = TYPE_TASK;
             i.taskTitle = title;
             i.taskStatus = status;
+            i.taskStartAt = startAt;
+            i.canViewDetail = canViewDetail;
+            i.detailText = detailText;
             return i;
         }
     }
 
+    public interface OnTaskDetailClickListener {
+        void onTaskDetailClick(String title, String detailText);
+    }
+
     private final List<Item> items = new ArrayList<>();
+    private OnTaskDetailClickListener onTaskDetailClickListener;
+
+    public void setOnTaskDetailClickListener(OnTaskDetailClickListener listener) {
+        this.onTaskDetailClickListener = listener;
+    }
 
     public void updateItems(List<Item> newItems) {
         items.clear();
@@ -98,21 +115,29 @@ public class AttendanceDayAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
     }
 
-    static class TaskVH extends RecyclerView.ViewHolder {
-        TextView tvTaskTitle, tvTaskStatus;
+    class TaskVH extends RecyclerView.ViewHolder {
+        TextView tvTaskTitle;
+        TextView btnTaskDetail;
+        ComposeView composeStatus;
         TaskVH(@NonNull View itemView) {
             super(itemView);
             tvTaskTitle = itemView.findViewById(R.id.tvTaskTitle);
-            tvTaskStatus = itemView.findViewById(R.id.tvTaskStatus);
+            btnTaskDetail = itemView.findViewById(R.id.btnTaskDetail);
+            composeStatus = itemView.findViewById(R.id.composeTaskStatus);
         }
         void bind(Item item) {
             tvTaskTitle.setText(item.taskTitle);
-            tvTaskStatus.setText(item.taskStatus);
-            // 根据状态设置不同颜色
-            if ("ACTIVE".equalsIgnoreCase(item.taskStatus)) {
-                tvTaskStatus.setTextColor(0xFF4CAF50); // Green
+            AttendanceTaskComposeBinder.bind(composeStatus, item.taskStatus, item.taskStartAt);
+            if (item.canViewDetail) {
+                btnTaskDetail.setVisibility(View.VISIBLE);
+                btnTaskDetail.setOnClickListener(v -> {
+                    if (onTaskDetailClickListener != null) {
+                        onTaskDetailClickListener.onTaskDetailClick(item.taskTitle, item.detailText);
+                    }
+                });
             } else {
-                tvTaskStatus.setTextColor(0xFF757575); // Grey
+                btnTaskDetail.setVisibility(View.GONE);
+                btnTaskDetail.setOnClickListener(null);
             }
         }
     }

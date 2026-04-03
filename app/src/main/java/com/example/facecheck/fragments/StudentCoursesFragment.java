@@ -1,7 +1,9 @@
 package com.example.facecheck.fragments;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -16,6 +18,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -29,6 +32,7 @@ import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.card.MaterialCardView;
@@ -158,7 +162,7 @@ public class StudentCoursesFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null && response.body().success && response.body().data != null) {
                     for (MySubmissionsResponse.Item item : response.body().data) {
                         if (!submissionMap.containsKey(item.taskId)) {
-                            submissionMap.put(item.taskId, new SubmissionItem(item.id, item.finalResult, item.reason));
+                            submissionMap.put(item.taskId, new SubmissionItem(item.id, item.finalResult, item.reason, item.gestureInput, item.passwordInput));
                         }
                     }
                 }
@@ -252,11 +256,15 @@ public class StudentCoursesFragment extends Fragment {
         long submissionId;
         String finalResult;
         String reason;
+        String gestureInput;
+        String passwordInput;
 
-        SubmissionItem(long submissionId, String finalResult, String reason) {
+        SubmissionItem(long submissionId, String finalResult, String reason, String gestureInput, String passwordInput) {
             this.submissionId = submissionId;
             this.finalResult = finalResult;
             this.reason = reason;
+            this.gestureInput = gestureInput;
+            this.passwordInput = passwordInput;
         }
     }
 
@@ -379,6 +387,10 @@ public class StudentCoursesFragment extends Fragment {
         tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
 
         if (readonly) {
+            etGesture.setText(item.submission == null || item.submission.gestureInput == null ? "" : item.submission.gestureInput);
+            etPassword.setText(item.submission == null || item.submission.passwordInput == null ? "" : item.submission.passwordInput);
+            etReason.setText(item.submission == null || item.submission.reason == null ? "" : item.submission.reason);
+            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
             etGesture.setEnabled(false);
             etPassword.setEnabled(false);
             etReason.setEnabled(false);
@@ -397,17 +409,41 @@ public class StudentCoursesFragment extends Fragment {
         request.gestureInput = gestureInput.isEmpty() ? null : gestureInput;
         request.passwordInput = passwordInput.isEmpty() ? null : passwordInput;
         request.reason = reason.isEmpty() ? null : reason;
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.getFusedLocationProviderClient(requireContext())
+                    .getLastLocation()
+                    .addOnSuccessListener(location -> {
+                        if (location != null) {
+                            request.lat = location.getLatitude();
+                            request.lng = location.getLongitude();
+                        }
+                        submitCheckinRequest(item, request, dialog);
+                    })
+                    .addOnFailureListener(e -> submitCheckinRequest(item, request, dialog));
+            return;
+        }
+        submitCheckinRequest(item, request, dialog);
+    }
+
+    private void submitCheckinRequest(SessionItem item, CheckinSubmitRequest request, BottomSheetDialog dialog) {
         apiService.submitCheckin(sessionManager.getApiKey(), item.taskId, request)
                 .enqueue(new retrofit2.Callback<com.example.facecheck.api.ApiCreateResponse>() {
                     @Override
                     public void onResponse(retrofit2.Call<com.example.facecheck.api.ApiCreateResponse> call,
                                            retrofit2.Response<com.example.facecheck.api.ApiCreateResponse> response) {
-                        if (response.isSuccessful()) {
+                        com.example.facecheck.api.ApiCreateResponse body = response.body();
+                        if (response.isSuccessful() && (body == null || body.isOk())) {
                             Toast.makeText(requireContext(), "提交成功", Toast.LENGTH_SHORT).show();
                             dialog.dismiss();
                             refreshAllData(true);
                         } else {
-                            Toast.makeText(requireContext(), "提交失败", Toast.LENGTH_SHORT).show();
+                            String bodyError = body != null ? body.getError() : null;
+                            String rawError = null;
+                            try {
+                                if (response.errorBody() != null) rawError = response.errorBody().string();
+                            } catch (Exception ignored) {
+                            }
+                            Toast.makeText(requireContext(), "提交失败: " + (bodyError != null && !bodyError.isEmpty() ? bodyError : (rawError != null && !rawError.isEmpty() ? rawError : "服务器返回异常")), Toast.LENGTH_LONG).show();
                         }
                     }
 
