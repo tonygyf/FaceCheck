@@ -33,6 +33,9 @@ public class AttendanceFragment extends Fragment {
     private int selectedDayOfMonth = 1;
     private boolean groupedByStatus = false;
     private int statusFilterMode = 0;
+    private String role = "teacher";
+    private long studentId = -1;
+    private long studentClassId = -1;
 
     @Nullable
     @Override
@@ -41,6 +44,14 @@ public class AttendanceFragment extends Fragment {
         dbHelper = new DatabaseHelper(getContext());
         calendarComposeView = view.findViewById(R.id.calendar_compose_view);
         recyclerView = view.findViewById(R.id.recycler_attendance);
+        if (getActivity() != null) {
+            android.content.SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE);
+            role = prefs.getString("user_role", "teacher");
+            studentId = prefs.getLong("student_id", -1);
+            if ("student".equals(role) && studentId > 0) {
+                studentClassId = dbHelper.getClassIdByStudentId(studentId);
+            }
+        }
 
         Calendar now = Calendar.getInstance();
         displayCalendar.set(Calendar.YEAR, now.get(Calendar.YEAR));
@@ -166,7 +177,15 @@ public class AttendanceFragment extends Fragment {
 
     private java.util.Map<Integer, Integer> loadDateStatusMapForCurrentMonth() {
         String yearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(displayCalendar.getTime());
-        android.database.Cursor cursor = dbHelper.getTaskStatusForMonth(yearMonth);
+        if ("student".equals(role) && studentClassId <= 0) {
+            return new java.util.HashMap<>();
+        }
+        android.database.Cursor cursor;
+        if ("student".equals(role) && studentClassId > 0) {
+            cursor = dbHelper.getTaskStatusForMonthAndClass(yearMonth, studentClassId);
+        } else {
+            cursor = dbHelper.getTaskStatusForMonth(yearMonth);
+        }
         java.util.Map<Integer, Integer> dateStatusMap = new java.util.HashMap<>();
 
         if (cursor != null && cursor.moveToFirst()) {
@@ -196,7 +215,15 @@ public class AttendanceFragment extends Fragment {
 
     private int resolvePreferredDayForCurrentMonth() {
         String yearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(displayCalendar.getTime());
-        android.database.Cursor cursor = dbHelper.getTaskStatusForMonth(yearMonth);
+        if ("student".equals(role) && studentClassId <= 0) {
+            return 1;
+        }
+        android.database.Cursor cursor;
+        if ("student".equals(role) && studentClassId > 0) {
+            cursor = dbHelper.getTaskStatusForMonthAndClass(yearMonth, studentClassId);
+        } else {
+            cursor = dbHelper.getTaskStatusForMonth(yearMonth);
+        }
         Integer minActiveDay = null;
         Integer minClosedDay = null;
         int maxDay = displayCalendar.getActualMaximum(Calendar.DAY_OF_MONTH);
@@ -239,6 +266,12 @@ public class AttendanceFragment extends Fragment {
         Calendar cal = (Calendar) displayCalendar.clone();
         cal.add(Calendar.MONTH, offset);
         String yearMonth = new SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.getTime());
+        if ("student".equals(role) && studentClassId <= 0) {
+            return false;
+        }
+        if ("student".equals(role) && studentClassId > 0) {
+            return dbHelper.hasActiveTasksInMonthByClass(yearMonth, studentClassId);
+        }
         return dbHelper.hasActiveTasksInMonth(yearMonth);
     }
 
@@ -252,7 +285,12 @@ public class AttendanceFragment extends Fragment {
     private void loadAttendanceDataByDate(String date) {
         if (getActivity() == null) return;
         try {
-            android.database.Cursor cursor = dbHelper.getCheckinTasksByDate(date);
+            android.database.Cursor cursor;
+            if ("student".equals(role) && studentClassId > 0) {
+                cursor = dbHelper.getCheckinTasksByDateAndClass(date, studentClassId);
+            } else {
+                cursor = dbHelper.getCheckinTasksByDate(date);
+            }
             java.util.Map<String, java.util.List<com.example.facecheck.data.model.CheckinTask>> groupedTasks = new java.util.LinkedHashMap<>();
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -292,7 +330,12 @@ public class AttendanceFragment extends Fragment {
     private void loadAttendanceDataByStatus() {
         if (getActivity() == null) return;
         try {
-            android.database.Cursor cursor = dbHelper.getAllCheckinTasks();
+            android.database.Cursor cursor;
+            if ("student".equals(role) && studentClassId > 0) {
+                cursor = dbHelper.getAllCheckinTasksByClass(studentClassId);
+            } else {
+                cursor = dbHelper.getAllCheckinTasks();
+            }
             java.util.Map<String, java.util.List<TaskRow>> activeTasksByClass = new java.util.LinkedHashMap<>();
             java.util.Map<String, java.util.List<TaskRow>> closedTasksByClass = new java.util.LinkedHashMap<>();
 

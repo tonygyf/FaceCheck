@@ -182,11 +182,16 @@ public class MainActivity extends AppCompatActivity {
         if (fab != null) {
             fab.setOnClickListener(v -> {
                 try {
-                    // 修改为发布新任务流程
-                    Intent intent = new Intent(MainActivity.this, com.example.facecheck.ui.task.PublishTaskActivity.class);
+                    String currentRole = getSharedPreferences("user_prefs", MODE_PRIVATE).getString("user_role", "teacher");
+                    Intent intent;
+                    if ("student".equals(currentRole)) {
+                        intent = new Intent(MainActivity.this, com.example.facecheck.ui.student.StudentAppealActivity.class);
+                    } else {
+                        intent = new Intent(MainActivity.this, com.example.facecheck.ui.task.PublishTaskActivity.class);
+                    }
                     startActivity(intent);
                 } catch (Throwable t) {
-                    Toast.makeText(MainActivity.this, "打开任务发布页失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "页面打开失败", Toast.LENGTH_SHORT).show();
                 }
             });
         }

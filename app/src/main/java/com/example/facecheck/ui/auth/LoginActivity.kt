@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -20,10 +21,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModelProvider
+import com.airbnb.lottie.LottieAnimationView
+import com.airbnb.lottie.LottieDrawable
 import com.example.facecheck.MainActivity
 import com.example.facecheck.R
 import com.example.facecheck.ui.theme.FaceCheckTheme
+import kotlinx.coroutines.delay
 
 class LoginActivity : ComponentActivity() {
 
@@ -57,11 +62,15 @@ fun LoginScreen(viewModel: LoginViewModel) {
     var password by remember { mutableStateOf("") }
     var isStudentLogin by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
+    var loginSuccessHandled by remember { mutableStateOf(false) }
+    var showSuccessAnimation by remember { mutableStateOf(false) }
     val uiState by viewModel.uiState.observeAsState()
 
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is LoginUiState.Success -> {
+                if (loginSuccessHandled) return@LaunchedEffect
+                loginSuccessHandled = true
                 Toast.makeText(context, "登录成功！", Toast.LENGTH_SHORT).show()
                 val prefsEditor = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE).edit()
                 prefsEditor.putString("user_role", state.role)
@@ -82,15 +91,22 @@ fun LoginScreen(viewModel: LoginViewModel) {
                     prefsEditor.remove("remember_me")
                 }
                 prefsEditor.apply()
-
-                context.startActivity(Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                })
+                showSuccessAnimation = true
             }
             is LoginUiState.Error -> {
                 Toast.makeText(context, state.message, Toast.LENGTH_SHORT).show()
+                loginSuccessHandled = false
             }
             else -> {}
+        }
+    }
+
+    LaunchedEffect(showSuccessAnimation) {
+        if (showSuccessAnimation) {
+            delay(1400)
+            context.startActivity(Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
         }
     }
 
@@ -104,13 +120,14 @@ fun LoginScreen(viewModel: LoginViewModel) {
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 Image(
                     painter = painterResource(id = R.drawable.logo_whitebackground),
@@ -186,6 +203,32 @@ fun LoginScreen(viewModel: LoginViewModel) {
 
             TextButton(onClick = { context.startActivity(Intent(context, RegisterActivity::class.java)) }) {
                 Text("还没有账号？立即注册")
+            }
+            }
+            if (showSuccessAnimation) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = Color.Black.copy(alpha = 0.45f)
+                    ) {}
+                    AndroidView(
+                        factory = { ctx ->
+                            LottieAnimationView(ctx).apply {
+                                setAnimation("lottie/telegram.json")
+                                repeatCount = 0
+                                repeatMode = LottieDrawable.RESTART
+                                playAnimation()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                    )
+                }
             }
         }
     }

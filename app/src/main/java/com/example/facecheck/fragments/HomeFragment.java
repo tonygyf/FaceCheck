@@ -147,13 +147,8 @@ public class HomeFragment extends Fragment {
         long studentId = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getLong("student_id", -1);
 
         if ("student".equals(role)) {
-            // 学生视角：优化统计标签并更新UI
             updateStudentHomeUI();
-
-            // 加载学生统计 (Mock数据)
-            tvClassCount.setText("6"); // Mock课程数
-            tvStudentCount.setText("85%"); // Mock打卡率
-            tvAttendanceCount.setText("12"); // Mock本月打卡数
+            loadStudentStatistics(studentId);
             return;
         }
 
@@ -256,18 +251,63 @@ public class HomeFragment extends Fragment {
     }
 
     private void updateStudentHomeUI() {
-        // 更新统计卡片的描述文字
         ViewGroup statsLayout = (ViewGroup) tvClassCount.getParent().getParent().getParent();
         if (statsLayout != null && statsLayout.getChildCount() >= 3) {
-            // 班级数量 -> 我的课程
-            updateLabel(statsLayout.getChildAt(0), "我的课程");
-            // 学生数量 -> 打卡率
-            updateLabel(statsLayout.getChildAt(1), "打卡率");
-            // 考勤记录 -> 本月打卡
-            updateLabel(statsLayout.getChildAt(2), "本月打卡");
+            updateLabel(statsLayout.getChildAt(0), "我的班级");
+            updateLabel(statsLayout.getChildAt(1), "签到完成率");
+            updateLabel(statsLayout.getChildAt(2), "本月签到");
         }
+    }
 
-        // 快捷入口已移除
+    private void loadStudentStatistics(long studentId) {
+        if (studentId <= 0) {
+            tvClassCount.setText("0");
+            tvStudentCount.setText("0%");
+            tvAttendanceCount.setText("0");
+            return;
+        }
+        long classId = dbHelper.getClassIdByStudentId(studentId);
+        int classCount = classId > 0 ? 1 : 0;
+
+        int totalTasks = 0;
+        int signedTasks = 0;
+        int monthSigned = 0;
+        String monthPrefix = new java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
+                .format(new java.util.Date());
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getReadableDatabase();
+        if (classId > 0) {
+            android.database.Cursor taskCursor = db.rawQuery(
+                    "SELECT COUNT(*) FROM CheckinTask WHERE classId = ?",
+                    new String[] { String.valueOf(classId) });
+            if (taskCursor != null && taskCursor.moveToFirst()) {
+                totalTasks = taskCursor.getInt(0);
+                taskCursor.close();
+            } else if (taskCursor != null) {
+                taskCursor.close();
+            }
+        }
+        android.database.Cursor signedCursor = db.rawQuery(
+                "SELECT COUNT(DISTINCT taskId) FROM CheckinSubmission WHERE studentId = ?",
+                new String[] { String.valueOf(studentId) });
+        if (signedCursor != null && signedCursor.moveToFirst()) {
+            signedTasks = signedCursor.getInt(0);
+            signedCursor.close();
+        } else if (signedCursor != null) {
+            signedCursor.close();
+        }
+        android.database.Cursor monthCursor = db.rawQuery(
+                "SELECT COUNT(*) FROM CheckinSubmission WHERE studentId = ? AND submittedAt LIKE ?",
+                new String[] { String.valueOf(studentId), monthPrefix + "%" });
+        if (monthCursor != null && monthCursor.moveToFirst()) {
+            monthSigned = monthCursor.getInt(0);
+            monthCursor.close();
+        } else if (monthCursor != null) {
+            monthCursor.close();
+        }
+        int rate = totalTasks <= 0 ? 0 : Math.min(100, Math.max(0, (signedTasks * 100) / totalTasks));
+        tvClassCount.setText(String.valueOf(classCount));
+        tvStudentCount.setText(rate + "%");
+        tvAttendanceCount.setText(String.valueOf(monthSigned));
     }
 
     private void updateLabel(View card, String text) {

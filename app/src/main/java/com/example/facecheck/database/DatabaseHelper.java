@@ -685,11 +685,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.rawQuery(query, new String[]{date + "%"});
     }
 
+    public Cursor getCheckinTasksByDateAndClass(String date, long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT * FROM CheckinTask WHERE startAt LIKE ? AND classId = ? ORDER BY startAt DESC";
+        return db.rawQuery(query, new String[] { date + "%", String.valueOf(classId) });
+    }
+
     public Cursor getTaskStatusForMonth(String yearMonth) {
         SQLiteDatabase db = this.getReadableDatabase();
         // 用 LIKE 替代 strftime
         String query = "SELECT startAt, status FROM CheckinTask WHERE startAt LIKE ?";
         return db.rawQuery(query, new String[]{yearMonth + "%"});
+    }
+
+    public Cursor getTaskStatusForMonthAndClass(String yearMonth, long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT startAt, status FROM CheckinTask WHERE startAt LIKE ? AND classId = ?";
+        return db.rawQuery(query, new String[] { yearMonth + "%", String.valueOf(classId) });
     }
 
     public Cursor getCheckinTasksByMonth(String yearMonth) {
@@ -704,6 +716,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.rawQuery(query, null);
     }
 
+    public Cursor getAllCheckinTasksByClass(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT * FROM CheckinTask WHERE classId = ? ORDER BY startAt DESC";
+        return db.rawQuery(query, new String[] { String.valueOf(classId) });
+    }
+
     public boolean hasActiveTasksInMonth(String yearMonth) {
         SQLiteDatabase db = this.getReadableDatabase();
         // 用 LIKE 替代 strftime，兼容 ISO 8601 格式
@@ -711,6 +729,54 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         try (Cursor cursor = db.rawQuery(query, new String[]{yearMonth + "%"})) {
             return cursor != null && cursor.moveToFirst();
         }
+    }
+
+    public boolean hasActiveTasksInMonthByClass(String yearMonth, long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT 1 FROM CheckinTask WHERE startAt LIKE ? AND status = 'ACTIVE' AND classId = ? LIMIT 1";
+        try (Cursor cursor = db.rawQuery(query, new String[] { yearMonth + "%", String.valueOf(classId) })) {
+            return cursor != null && cursor.moveToFirst();
+        }
+    }
+
+    public long getClassIdByStudentId(long studentId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query("Student", new String[] { "classId" }, "id = ?",
+                new String[] { String.valueOf(studentId) }, null, null, null, "1");
+        long classId = -1L;
+        if (cursor != null && cursor.moveToFirst()) {
+            classId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
+            cursor.close();
+        } else if (cursor != null) {
+            cursor.close();
+        }
+        return classId;
+    }
+
+    public long insertCheckinSubmission(long taskId, long studentId, String autoResult, String finalResult, String reason,
+            Double lat, Double lng, String gestureInput, String passwordInput) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("taskId", taskId);
+        values.put("studentId", studentId);
+        if (lat != null)
+            values.put("lat", lat);
+        if (lng != null)
+            values.put("lng", lng);
+        values.put("gestureInput", gestureInput);
+        values.put("passwordInput", passwordInput);
+        values.put("autoResult", autoResult);
+        values.put("finalResult", finalResult);
+        values.put("reason", reason);
+        return db.insert("CheckinSubmission", null, values);
+    }
+
+    public Cursor getCheckinSubmissionsByStudent(long studentId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT s.id, s.taskId, s.submittedAt, s.finalResult, s.reason, t.title, t.classId, t.startAt " +
+                "FROM CheckinSubmission s INNER JOIN CheckinTask t ON s.taskId = t.id " +
+                "WHERE s.studentId = ? ORDER BY s.submittedAt DESC";
+        return db.rawQuery(sql, new String[] { String.valueOf(studentId) });
     }
 
     public String getClassNameById(long classId) {

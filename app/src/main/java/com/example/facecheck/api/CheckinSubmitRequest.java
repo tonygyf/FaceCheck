@@ -9,6 +9,7 @@ public class CheckinSubmitRequest {
     @SerializedName("lng")           public Double lng;
     @SerializedName("gestureInput")  public String gestureInput;
     @SerializedName("passwordInput") public String passwordInput;
+    @SerializedName("reason")        public String reason;
 
     // imageUri 通常通过 Multipart 方式单独上传，而不是放在这个JSON请求体中
 

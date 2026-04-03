@@ -142,6 +142,12 @@
             android:label="自拍签到" />
 
         <activity
+            android:name=".ui.student.StudentAppealActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck"
+            android:label="签到申诉" />
+
+        <activity
             android:name=".ui.task.PublishTaskActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"

@@ -7,30 +7,38 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.facecheck.R;
+import com.example.facecheck.api.ApiService;
+import com.example.facecheck.api.CheckinSubmitRequest;
+import com.example.facecheck.api.CheckinTaskListResponse;
+import com.example.facecheck.api.MySubmissionsResponse;
+import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.database.DatabaseHelper;
-import com.example.facecheck.ui.student.StudentSignInActivity;
+import com.example.facecheck.utils.SessionManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.card.MaterialCardView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * 学生签到页面
- * 显示学生班级的活跃考勤会话，允许学生进行自拍签到
- */
 public class StudentCoursesFragment extends Fragment {
 
     private RecyclerView recyclerView;
@@ -39,12 +47,15 @@ public class StudentCoursesFragment extends Fragment {
     private FloatingActionButton fabRefresh;
 
     private DatabaseHelper dbHelper;
+    private ApiService apiService;
+    private SessionManager sessionManager;
     private long studentId = -1;
     private long classId = -1;
     private String studentSid;
     private SignInSessionAdapter adapter;
     private List<SessionItem> sessionItems = new ArrayList<>();
     private List<ClassItem> classItems = new ArrayList<>();
+    private final HashMap<Long, SubmissionItem> submissionMap = new HashMap<>();
 
     @Nullable
     @Override
@@ -53,20 +64,17 @@ public class StudentCoursesFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_student_sign_in, container, false);
 
         dbHelper = new DatabaseHelper(requireContext());
+        apiService = RetrofitClient.getApiService();
+        sessionManager = new SessionManager(requireContext());
 
-        // 从 SharedPreferences 获取学生信息
         SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs",
                 android.content.Context.MODE_PRIVATE);
-        // user_id 在 LoginActivity 写入的是 "student_id" 或 "teacher_id", 这里 keys 可能是
-        // "user_id" 如果之前有逻辑?
-        // 检查 LoginActivity: ed.putLong("student_id", success.userId)
-        // Check student_id key.
-        studentId = prefs.getLong("student_id", -1); // changed from user_id to student_id based on LoginActivity
+        studentId = prefs.getLong("student_id", -1);
         classId = prefs.getLong("class_id", -1);
 
         initViews(view);
         loadStudentInfo();
-        loadAttendanceSessions();
+        refreshAllData();
 
         return view;
     }
@@ -83,7 +91,7 @@ public class StudentCoursesFragment extends Fragment {
 
         fabRefresh.setOnClickListener(v -> {
             Toast.makeText(requireContext(), "刷新中...", Toast.LENGTH_SHORT).show();
-            loadAttendanceSessions();
+            refreshAllData();
         });
         
         tvClassName.setOnClickListener(v -> {
@@ -94,16 +102,61 @@ public class StudentCoursesFragment extends Fragment {
                 names[i] = classItems.get(i).className;
                 if (classItems.get(i).classId == classId) checked = i;
             }
-            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            new AlertDialog.Builder(requireContext())
                     .setTitle("切换班级")
                     .setSingleChoiceItems(names, checked, (d, which) -> {
                         classId = classItems.get(which).classId;
                         requireContext().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE)
                                 .edit().putLong("class_id", classId).apply();
-                        loadAttendanceSessions();
+                        refreshAllData();
                         d.dismiss();
                     })
                     .show();
+        });
+    }
+
+    private void refreshAllData() {
+        syncTasksFromApi(() -> syncMySubmissionsFromApi(this::loadAttendanceSessions));
+    }
+
+    private void syncTasksFromApi(Runnable next) {
+        apiService.getCheckinTasks(sessionManager.getApiKey(), 0L).enqueue(new retrofit2.Callback<CheckinTaskListResponse>() {
+            @Override
+            public void onResponse(retrofit2.Call<CheckinTaskListResponse> call, retrofit2.Response<CheckinTaskListResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().success && response.body().data != null) {
+                    for (CheckinTaskListResponse.CheckinTask task : response.body().data) {
+                        insertOrUpdateCheckinTask(task);
+                    }
+                }
+                if (next != null) next.run();
+            }
+
+            @Override
+            public void onFailure(retrofit2.Call<CheckinTaskListResponse> call, Throwable t) {
+                if (next != null) next.run();
+            }
+        });
+    }
+
+    private void syncMySubmissionsFromApi(Runnable next) {
+        submissionMap.clear();
+        apiService.getMySubmissions(sessionManager.getApiKey(), studentId).enqueue(new retrofit2.Callback<MySubmissionsResponse>() {
+            @Override
+            public void onResponse(retrofit2.Call<MySubmissionsResponse> call, retrofit2.Response<MySubmissionsResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().success && response.body().data != null) {
+                    for (MySubmissionsResponse.Item item : response.body().data) {
+                        if (!submissionMap.containsKey(item.taskId)) {
+                            submissionMap.put(item.taskId, new SubmissionItem(item.id, item.finalResult, item.reason));
+                        }
+                    }
+                }
+                if (next != null) next.run();
+            }
+
+            @Override
+            public void onFailure(retrofit2.Call<MySubmissionsResponse> call, Throwable t) {
+                if (next != null) next.run();
+            }
         });
     }
 
@@ -117,27 +170,22 @@ public class StudentCoursesFragment extends Fragment {
             return;
         }
 
-        // 显示班级名称
         String className = dbHelper.getClassNameById(classId);
         if (tvClassName != null) {
             tvClassName.setText(className != null ? className : "未知班级");
         }
 
-        // 获取该班级的所有活跃 MANUAL 类型考勤会话
-        Cursor cursor = dbHelper.getActiveManualAttendanceSessionsByClass(classId);
+        Cursor cursor = dbHelper.getAllCheckinTasksByClass(classId);
         if (cursor != null && cursor.moveToFirst()) {
             do {
-                long sessionId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-                long sessionClassId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
-                long startedAt = cursor.getLong(cursor.getColumnIndexOrThrow("startedAt"));
-                String attendanceType = cursor.getString(cursor.getColumnIndexOrThrow("attendanceType"));
-                String note = cursor.getString(cursor.getColumnIndexOrThrow("note"));
-
-                // 检查学生是否已签到
-                boolean signedIn = dbHelper.isStudentSignedIn(sessionId, studentId);
-
-                SessionItem item = new SessionItem(sessionId, sessionClassId, startedAt, attendanceType, note,
-                        signedIn);
+                long taskId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                long taskClassId = cursor.getLong(cursor.getColumnIndexOrThrow("classId"));
+                String title = cursor.getString(cursor.getColumnIndexOrThrow("title"));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+                String startAt = cursor.getString(cursor.getColumnIndexOrThrow("startAt"));
+                String endAt = cursor.getString(cursor.getColumnIndexOrThrow("endAt"));
+                SubmissionItem submission = submissionMap.get(taskId);
+                SessionItem item = new SessionItem(taskId, taskClassId, title, status, startAt, endAt, submission);
                 sessionItems.add(item);
             } while (cursor.moveToNext());
             cursor.close();
@@ -162,35 +210,43 @@ public class StudentCoursesFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // 隐藏系统 ActionBar，仅保留本地蓝色标题栏
         if (getActivity() != null && getActivity().getActionBar() != null) {
             getActivity().getActionBar().hide();
         }
-        loadAttendanceSessions();
+        refreshAllData();
     }
 
-    // ========== 内部数据类 ==========
-
     private static class SessionItem {
-        long sessionId;
+        long taskId;
         long classId;
-        long startedAt;
-        String attendanceType;
-        String note;
-        boolean signedIn;
+        String title;
+        String status;
+        String startAt;
+        String endAt;
+        SubmissionItem submission;
 
-        SessionItem(long sessionId, long classId, long startedAt, String attendanceType, String note,
-                boolean signedIn) {
-            this.sessionId = sessionId;
+        SessionItem(long taskId, long classId, String title, String status, String startAt, String endAt, SubmissionItem submission) {
+            this.taskId = taskId;
             this.classId = classId;
-            this.startedAt = startedAt;
-            this.attendanceType = attendanceType;
-            this.note = note;
-            this.signedIn = signedIn;
+            this.title = title;
+            this.status = status;
+            this.startAt = startAt;
+            this.endAt = endAt;
+            this.submission = submission;
         }
     }
 
-    // ========== Adapter ==========
+    private static class SubmissionItem {
+        long submissionId;
+        String finalResult;
+        String reason;
+
+        SubmissionItem(long submissionId, String finalResult, String reason) {
+            this.submissionId = submissionId;
+            this.finalResult = finalResult;
+            this.reason = reason;
+        }
+    }
 
     private class SignInSessionAdapter extends RecyclerView.Adapter<SignInSessionAdapter.ViewHolder> {
         private static final int TYPE_EMPTY = 100;
@@ -216,21 +272,39 @@ public class StudentCoursesFragment extends Fragment {
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             if (getItemViewType(position) == TYPE_EMPTY) return;
             SessionItem item = sessionItems.get(position);
+            String displayTime = item.startAt != null && item.startAt.length() >= 16
+                    ? item.startAt.substring(5, 16).replace("T", " ")
+                    : sdf.format(new Date());
+            holder.tvTime.setText(displayTime);
+            holder.tvType.setText("班级签到");
+            holder.tvNote.setText(item.title == null || item.title.isEmpty() ? "老师发布了签到任务" : item.title);
 
-            holder.tvTime.setText(sdf.format(new Date(item.startedAt)));
-            holder.tvType.setText("MANUAL".equals(item.attendanceType) ? "自拍签到" : "照片考勤");
-            holder.tvNote.setText(item.note != null && !item.note.isEmpty() ? item.note : "教师发起的考勤任务");
-
-            if (item.signedIn) {
-                holder.tvStatus.setText("✓ 已签到");
-                holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_green_dark));
-                holder.btnSignIn.setVisibility(View.GONE);
-            } else {
-                holder.tvStatus.setText("待签到");
-                holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_orange_dark));
+            MaterialCardView card = (MaterialCardView) holder.itemView;
+            RecyclerView.LayoutParams lp = (RecyclerView.LayoutParams) card.getLayoutParams();
+            if (item.submission != null) {
+                lp.setMargins(80, lp.topMargin, 8, lp.bottomMargin);
+                card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), R.color.surface));
+                holder.tvStatus.setText(resolveSubmissionText(item.submission));
+                holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_blue_dark));
+                holder.btnSignIn.setText("查看");
                 holder.btnSignIn.setVisibility(View.VISIBLE);
-                holder.btnSignIn.setOnClickListener(v -> startSignIn(item));
+                holder.btnSignIn.setOnClickListener(v -> showSubmitBottomSheet(item, true));
+            } else {
+                lp.setMargins(8, lp.topMargin, 80, lp.bottomMargin);
+                card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), android.R.color.white));
+                if ("ACTIVE".equalsIgnoreCase(item.status)) {
+                    holder.tvStatus.setText("老师邀请你完成签到");
+                    holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_orange_dark));
+                    holder.btnSignIn.setText("去签到");
+                    holder.btnSignIn.setVisibility(View.VISIBLE);
+                    holder.btnSignIn.setOnClickListener(v -> showSubmitBottomSheet(item, false));
+                } else {
+                    holder.tvStatus.setText("任务已结束");
+                    holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.darker_gray));
+                    holder.btnSignIn.setVisibility(View.GONE);
+                }
             }
+            card.setLayoutParams(lp);
         }
 
         @Override
@@ -245,7 +319,7 @@ public class StudentCoursesFragment extends Fragment {
 
         class ViewHolder extends RecyclerView.ViewHolder {
             TextView tvTime, tvType, tvNote, tvStatus;
-            View btnSignIn;
+            Button btnSignIn;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
@@ -258,12 +332,97 @@ public class StudentCoursesFragment extends Fragment {
         }
     }
 
-    private void startSignIn(SessionItem item) {
-        Intent intent = new Intent(requireContext(), StudentSignInActivity.class);
-        intent.putExtra("session_id", item.sessionId);
-        intent.putExtra("class_id", item.classId);
-        intent.putExtra("student_id", studentId);
-        startActivity(intent);
+    private String resolveSubmissionText(SubmissionItem submission) {
+        if ("APPROVED".equalsIgnoreCase(submission.finalResult)) {
+            return "已通过";
+        }
+        if ("PENDING_REVIEW".equalsIgnoreCase(submission.finalResult)) {
+            return submission.reason == null || submission.reason.isEmpty() ? "待审核" : "待审核：" + submission.reason;
+        }
+        if ("REJECTED".equalsIgnoreCase(submission.finalResult)) {
+            return submission.reason == null || submission.reason.isEmpty() ? "未通过，可申诉" : "未通过：" + submission.reason;
+        }
+        return "已提交";
+    }
+
+    private void showSubmitBottomSheet(SessionItem item, boolean readonly) {
+        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
+        View content = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_student_checkin_submit, null, false);
+        dialog.setContentView(content);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setDimAmount(0.45f);
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
+        recyclerView.setAlpha(0.82f);
+        dialog.setOnDismissListener(d -> recyclerView.setAlpha(1f));
+
+        TextView tvTitle = content.findViewById(R.id.tv_task_title);
+        TextView tvTaskStatus = content.findViewById(R.id.tv_task_status);
+        EditText etGesture = content.findViewById(R.id.et_gesture);
+        EditText etPassword = content.findViewById(R.id.et_password);
+        EditText etReason = content.findViewById(R.id.et_reason);
+        Button btnSubmit = content.findViewById(R.id.btn_submit_checkin);
+
+        tvTitle.setText(item.title == null || item.title.isEmpty() ? "签到任务" : item.title);
+        tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
+
+        if (readonly) {
+            etGesture.setEnabled(false);
+            etPassword.setEnabled(false);
+            etReason.setEnabled(false);
+            btnSubmit.setText("关闭");
+            btnSubmit.setOnClickListener(v -> dialog.dismiss());
+        } else {
+            btnSubmit.setOnClickListener(v -> submitCheckinTask(item, etGesture.getText().toString().trim(),
+                    etPassword.getText().toString().trim(),
+                    etReason.getText().toString().trim(), dialog));
+        }
+        dialog.show();
+    }
+
+    private void submitCheckinTask(SessionItem item, String gestureInput, String passwordInput, String reason, BottomSheetDialog dialog) {
+        CheckinSubmitRequest request = new CheckinSubmitRequest(studentId);
+        request.gestureInput = gestureInput.isEmpty() ? null : gestureInput;
+        request.passwordInput = passwordInput.isEmpty() ? null : passwordInput;
+        request.reason = reason.isEmpty() ? null : reason;
+        apiService.submitCheckin(sessionManager.getApiKey(), item.taskId, request)
+                .enqueue(new retrofit2.Callback<com.example.facecheck.api.ApiCreateResponse>() {
+                    @Override
+                    public void onResponse(retrofit2.Call<com.example.facecheck.api.ApiCreateResponse> call,
+                                           retrofit2.Response<com.example.facecheck.api.ApiCreateResponse> response) {
+                        if (response.isSuccessful()) {
+                            Toast.makeText(requireContext(), "提交成功", Toast.LENGTH_SHORT).show();
+                            dialog.dismiss();
+                            refreshAllData();
+                        } else {
+                            Toast.makeText(requireContext(), "提交失败", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(retrofit2.Call<com.example.facecheck.api.ApiCreateResponse> call, Throwable t) {
+                        Toast.makeText(requireContext(), "网络异常: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void insertOrUpdateCheckinTask(CheckinTaskListResponse.CheckinTask task) {
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put("id", task.id);
+        values.put("classId", task.classId);
+        values.put("teacherId", task.teacherId);
+        values.put("title", task.title);
+        values.put("startAt", task.startAt);
+        values.put("endAt", task.endAt);
+        values.put("status", task.status);
+        values.put("locationLat", task.locationLat);
+        values.put("locationLng", task.locationLng);
+        values.put("locationRadiusM", task.locationRadiusM);
+        values.put("gestureSequence", task.gestureSequence);
+        values.put("passwordPlain", task.passwordPlain);
+        values.put("createdAt", task.createdAt);
+        db.insertWithOnConflict("CheckinTask", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     private void loadStudentInfo() {

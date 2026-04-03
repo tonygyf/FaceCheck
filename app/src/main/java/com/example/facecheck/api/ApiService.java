@@ -112,6 +112,17 @@ public interface ApiService {
             @Path("id") long submissionId,
             @Body ReviewRequest body);
 
+    @GET("checkin/submissions/my")
+    Call<MySubmissionsResponse> getMySubmissions(
+            @Header("X-API-Key") String apiKey,
+            @Query("studentId") long studentId);
+
+    @POST("checkin/submissions/{id}/appeal")
+    Call<ApiResponse> appealSubmission(
+            @Header("X-API-Key") String apiKey,
+            @Path("id") long submissionId,
+            @Body AppealRequest body);
+
     // ===== 新增：考勤同步上传 =====
 
     @POST("sync/upload")
