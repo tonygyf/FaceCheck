@@ -14,6 +14,15 @@ public interface ApiService {
 
     String BASE_URL = "https://omni.gyf123.dpdns.org/api/";
 
+        @POST("auth/login")
+    Call<TeacherLoginResponse> loginTeacher(@Header("X-API-Key") String apiKey, @Body TeacherLoginRequest body);
+
+    @POST("auth/register")
+    Call<ApiCreateResponse> registerTeacher(@Body TeacherRegisterRequest body);
+
+    @POST("login/student")
+    Call<StudentLoginResponse> loginStudent(@Header("X-API-Key") String apiKey, @Body StudentLoginRequest body);
+
     // ===== 已有接口（保持不变）=====
 
     @GET("classrooms")

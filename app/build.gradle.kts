@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.runtime.livedata)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -99,10 +100,14 @@ dependencies {
 
     implementation("com.airbnb.android:lottie:6.4.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
+//    人脸依赖库即将剔除，全部迁移到网页端
     implementation("com.google.mlkit:face-detection:16.1.6")
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     // 如果模型能跑，建议尝试注释掉下面这一行来进一步减小体积
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0")
+
+
+
 // 高德地图
     implementation("com.amap.api:map2d:6.0.0")
     implementation("com.amap.api:search:9.7.0")

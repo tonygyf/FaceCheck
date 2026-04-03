@@ -22,15 +22,15 @@ public class LoginViewModel extends AndroidViewModel {
         _uiState.setValue(new LoginUiState.Initial());
     }
     
-    public void login(String username, String password) {
+    public void login(String username, String password, boolean isStudent) {
         if (TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
             _uiState.setValue(new LoginUiState.Error("用户名和密码不能为空"));
             return;
         }
-        
+
         _uiState.setValue(new LoginUiState.Loading());
-        
-        userRepository.loginAny(username, password, new UserRepository.LoginCallback() {
+
+        UserRepository.LoginCallback callback = new UserRepository.LoginCallback() {
             @Override
             public void onSuccess(UserRepository.UserLoginResult result) {
                 _uiState.postValue(new LoginUiState.Success(result.userId, result.role, result.username, result.name, result.avatarUri, result.accessToken, result.refreshToken));
@@ -40,7 +40,13 @@ public class LoginViewModel extends AndroidViewModel {
             public void onError(String message) {
                 _uiState.postValue(new LoginUiState.Error(message));
             }
-        });
+        };
+
+        if (isStudent) {
+            userRepository.loginStudent(username, password, callback);
+        } else {
+            userRepository.loginAny(username, password, callback);
+        }
     }
     
     @Override
