@@ -18,6 +18,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.facecheck.R;
 import com.example.facecheck.adapters.ClassroomAdapter;
@@ -39,6 +40,7 @@ public class ClassroomFragment extends Fragment {
     private ClassroomAdapter adapter;
     private ClassroomViewModel viewModel;
     private SessionManager sessionManager;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     @Nullable
     @Override
@@ -50,6 +52,10 @@ public class ClassroomFragment extends Fragment {
         setupRecyclerView(view);
         setupViewModel();
         setupFab(view);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_classroom);
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> viewModel.loadClassrooms(true));
+        }
 
         return view;
     }
@@ -59,7 +65,7 @@ public class ClassroomFragment extends Fragment {
         super.onResume();
         // KEY-POINT: This is the entry point for triggering classroom data synchronization each time the fragment becomes visible.
         // It ensures the classroom list is always up-to-date with the server.
-        viewModel.loadClassrooms();
+        viewModel.loadClassrooms(false);
     }
 
     private void setupRecyclerView(View view) {
@@ -80,6 +86,9 @@ public class ClassroomFragment extends Fragment {
 
         viewModel.classrooms.observe(getViewLifecycleOwner(), classrooms -> {
             adapter.updateClassrooms(classrooms);
+            if (swipeRefreshLayout != null) {
+                swipeRefreshLayout.setRefreshing(false);
+            }
         });
 
         viewModel.errorMessage.observe(getViewLifecycleOwner(), message -> {
@@ -97,7 +106,7 @@ public class ClassroomFragment extends Fragment {
         });
 
         // Initial load
-        viewModel.loadClassrooms();
+        viewModel.loadClassrooms(false);
     }
 
     private void setupFab(View view) {

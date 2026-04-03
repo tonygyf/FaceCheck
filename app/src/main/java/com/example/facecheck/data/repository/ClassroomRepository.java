@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface ClassroomRepository {
     LiveData<List<Classroom>> getClassrooms(long teacherId);
+    LiveData<List<Classroom>> getClassrooms(long teacherId, boolean forceRefresh);
     void createClassroom(long teacherId, String name, int year, final ApiCallback<Classroom> callback);
     void syncAllClassrooms(long teacherId, final ApiCallback<List<Classroom>> callback);
     void syncCheckinTasks(long teacherId, ApiCallback<List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask>> callback);

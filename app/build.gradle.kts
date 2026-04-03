@@ -85,6 +85,7 @@ dependencies {
     
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.sqlite)
     implementation(libs.glide)

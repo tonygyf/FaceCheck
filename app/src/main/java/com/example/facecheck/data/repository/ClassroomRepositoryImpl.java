@@ -14,6 +14,7 @@ import com.example.facecheck.data.model.ClassroomDeltaSyncResponse;
 import com.example.facecheck.data.model.ClassroomListResponse;
 import com.example.facecheck.data.model.SyncDownloadResponse;
 import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
 import java.util.List;
 import retrofit2.Call;
@@ -30,8 +31,10 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
     private final ApiService apiService;
     private final SharedPreferences preferences;
     private final SessionManager sessionManager;
+    private final Context appContext;
 
     public ClassroomRepositoryImpl(Context context) {
+        this.appContext = context.getApplicationContext();
         this.dbHelper = new DatabaseHelper(context);
         this.apiService = RetrofitClient.getApiService();
         this.preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -44,23 +47,29 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
 
     @Override
     public LiveData<List<Classroom>> getClassrooms(long teacherId) {
-        final MutableLiveData<List<Classroom>> data = new MutableLiveData<>();
+        return getClassrooms(teacherId, false);
+    }
 
-        // 首先尝试从远程同步数据
+    @Override
+    public LiveData<List<Classroom>> getClassrooms(long teacherId, boolean forceRefresh) {
+        final MutableLiveData<List<Classroom>> data = new MutableLiveData<>();
+        List<Classroom> localClassrooms = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
+        data.postValue(localClassrooms);
+        String refreshKey = "classrooms_" + teacherId;
+        if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(appContext, refreshKey, RefreshPolicyManager.TTL_CLASSROOM_MS)) {
+            return data;
+        }
+
         syncAllClassrooms(teacherId, new ApiCallback<List<Classroom>>() {
             @Override
             public void onSuccess(List<Classroom> remoteClassrooms) {
-                // 远程同步成功，直接使用这份包含正确学生数量的远程数据更新UI
+                RefreshPolicyManager.markRefreshed(appContext, refreshKey);
                 data.postValue(remoteClassrooms);
-                Log.d(TAG, "getClassrooms: 远程同步成功，直接使用远程数据更新UI。");
             }
 
             @Override
             public void onError(String message) {
-                // 远程同步失败，可能是网络问题或其他API错误，回退到从本地数据库加载
-                Log.e(TAG, "getClassrooms: 远程同步失败，尝试加载本地数据: " + message);
-                List<Classroom> localClassrooms = dbHelper.getAllClassroomsWithStudentCountAsList(teacherId);
-                data.postValue(localClassrooms);
+                Log.e(TAG, "getClassrooms: 远程同步失败，使用本地数据: " + message);
             }
         });
         return data;
@@ -202,4 +211,3 @@ public class ClassroomRepositoryImpl implements ClassroomRepository {
         preferences.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, timestamp).apply();
     }
 }
-

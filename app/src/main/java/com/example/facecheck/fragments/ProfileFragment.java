@@ -26,6 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.core.content.FileProvider;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -70,6 +71,7 @@ public class ProfileFragment extends Fragment {
     private Button changePasswordButton;
     private Button logoutButton;
     private ProgressBar progressBar;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private FrameLayout lottieOverlayLogout;
     private LottieAnimationView lottieLogoutView;
     
@@ -115,6 +117,7 @@ public class ProfileFragment extends Fragment {
         changePasswordButton = view.findViewById(R.id.btn_change_password);
         logoutButton = view.findViewById(R.id.btn_logout);
         progressBar = view.findViewById(R.id.progress_bar);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_profile);
         lottieOverlayLogout = view.findViewById(R.id.lottieOverlayLogout);
         lottieLogoutView = view.findViewById(R.id.lottieLogoutView);
         
@@ -130,6 +133,12 @@ public class ProfileFragment extends Fragment {
 
         if (themeSystemButton != null && themeDarkButton != null && themeLightButton != null) {
             initThemeFromPrefs();
+        }
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                loadUserData();
+                swipeRefreshLayout.setRefreshing(false);
+            });
         }
     }
     

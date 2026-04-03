@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.ComposeView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.facecheck.R;
 import com.example.facecheck.adapters.AttendanceDayAdapter;
@@ -27,6 +28,7 @@ public class AttendanceFragment extends Fragment {
     private ComposeView calendarComposeView;
     private RecyclerView recyclerView;
     private DatabaseHelper dbHelper;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private String selectedDate;
     private AttendanceDayAdapter dayAdapter;
     private final Calendar displayCalendar = Calendar.getInstance();
@@ -44,6 +46,14 @@ public class AttendanceFragment extends Fragment {
         dbHelper = new DatabaseHelper(getContext());
         calendarComposeView = view.findViewById(R.id.calendar_compose_view);
         recyclerView = view.findViewById(R.id.recycler_attendance);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_attendance);
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                refreshAttendanceList();
+                renderCalendar();
+                swipeRefreshLayout.setRefreshing(false);
+            });
+        }
         if (getActivity() != null) {
             android.content.SharedPreferences prefs = getActivity().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE);
             role = prefs.getString("user_role", "teacher");

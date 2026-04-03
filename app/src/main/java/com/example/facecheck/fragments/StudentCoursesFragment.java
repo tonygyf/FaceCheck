@@ -27,6 +27,7 @@ import com.example.facecheck.api.CheckinTaskListResponse;
 import com.example.facecheck.api.MySubmissionsResponse;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
@@ -74,7 +75,7 @@ public class StudentCoursesFragment extends Fragment {
 
         initViews(view);
         loadStudentInfo();
-        refreshAllData();
+        refreshAllData(false);
 
         return view;
     }
@@ -91,7 +92,7 @@ public class StudentCoursesFragment extends Fragment {
 
         fabRefresh.setOnClickListener(v -> {
             Toast.makeText(requireContext(), "刷新中...", Toast.LENGTH_SHORT).show();
-            refreshAllData();
+            refreshAllData(true);
         });
         
         tvClassName.setOnClickListener(v -> {
@@ -108,15 +109,26 @@ public class StudentCoursesFragment extends Fragment {
                         classId = classItems.get(which).classId;
                         requireContext().getSharedPreferences("user_prefs", android.content.Context.MODE_PRIVATE)
                                 .edit().putLong("class_id", classId).apply();
-                        refreshAllData();
+                        refreshAllData(true);
                         d.dismiss();
                     })
                     .show();
         });
     }
 
-    private void refreshAllData() {
-        syncTasksFromApi(() -> syncMySubmissionsFromApi(this::loadAttendanceSessions));
+    private void refreshAllData(boolean forceRefresh) {
+        if (!isAdded()) return;
+        String refreshKey = "student_courses_" + studentId;
+        if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
+            loadAttendanceSessions();
+            return;
+        }
+        syncTasksFromApi(() -> syncMySubmissionsFromApi(() -> {
+            if (isAdded()) {
+                RefreshPolicyManager.markRefreshed(requireContext(), refreshKey);
+            }
+            loadAttendanceSessions();
+        }));
     }
 
     private void syncTasksFromApi(Runnable next) {
@@ -213,7 +225,7 @@ public class StudentCoursesFragment extends Fragment {
         if (getActivity() != null && getActivity().getActionBar() != null) {
             getActivity().getActionBar().hide();
         }
-        refreshAllData();
+        refreshAllData(false);
     }
 
     private static class SessionItem {
@@ -393,7 +405,7 @@ public class StudentCoursesFragment extends Fragment {
                         if (response.isSuccessful()) {
                             Toast.makeText(requireContext(), "提交成功", Toast.LENGTH_SHORT).show();
                             dialog.dismiss();
-                            refreshAllData();
+                            refreshAllData(true);
                         } else {
                             Toast.makeText(requireContext(), "提交失败", Toast.LENGTH_SHORT).show();
                         }

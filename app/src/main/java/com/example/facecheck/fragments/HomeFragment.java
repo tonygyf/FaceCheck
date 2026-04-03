@@ -19,6 +19,7 @@ import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 import androidx.appcompat.widget.TooltipCompat;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.facecheck.R;
 import com.example.facecheck.MainActivity;
@@ -33,6 +34,7 @@ import com.example.facecheck.data.repository.ClassroomRepository; // Add this im
 import com.example.facecheck.data.repository.ClassroomRepositoryImpl; // Add this import
 import com.example.facecheck.data.repository.ApiCallback; // Add this import
 import com.example.facecheck.data.model.Classroom; // Add this import for syncAllClassrooms callback
+import com.example.facecheck.utils.RefreshPolicyManager;
 
 import java.util.List; // Add this import
 import androidx.appcompat.widget.TooltipCompat;
@@ -44,6 +46,7 @@ public class HomeFragment extends Fragment {
     private ClassroomRepository classroomRepository;
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
     private Button btnSync;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private static final int PICK_IMAGE_REQUEST = 1001;
     private android.widget.ImageView bannerImage;
     private final int[] bannerRes = new int[] {
@@ -87,6 +90,10 @@ public class HomeFragment extends Fragment {
         tvAttendanceCount = view.findViewById(R.id.tv_attendance_count);
 
         btnSync = view.findViewById(R.id.btn_sync);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_home);
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> loadStatistics(true));
+        }
 
         // 人脸修复增强入口
         CardView cardFaceEnhancement = view.findViewById(R.id.card_face_enhancement);
@@ -112,7 +119,7 @@ public class HomeFragment extends Fragment {
         TooltipCompat.setTooltipText(btnSync, "与云端同步数据");
 
         // 加载统计数据
-        loadStatistics();
+        loadStatistics(false);
         if (bannerImage != null) {
             try {
                 bannerImage.setImageResource(bannerRes[bannerIndex % bannerRes.length]);
@@ -133,14 +140,14 @@ public class HomeFragment extends Fragment {
     public void onResume() {
         super.onResume();
         // 每次恢复时刷新统计数据
-        loadStatistics();
+        loadStatistics(false);
         if (bannerImage != null) {
             bannerHandler.removeCallbacks(bannerRunnable);
             bannerHandler.post(bannerRunnable);
         }
     }
 
-    private void loadStatistics() {
+    private void loadStatistics(boolean forceRefresh) {
         // 获取当前登录的用户信息
         String role = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getString("user_role", "teacher");
         long teacherId = sessionManager.getTeacherId();
@@ -148,7 +155,37 @@ public class HomeFragment extends Fragment {
 
         if ("student".equals(role)) {
             updateStudentHomeUI();
-            loadStudentStatistics(studentId);
+            if (studentId <= 0) {
+                loadStudentStatistics(studentId);
+                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                return;
+            }
+            String studentRefreshKey = "home_stats_student_" + studentId;
+            if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), studentRefreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
+                loadStudentStatistics(studentId);
+                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                return;
+            }
+            classroomRepository.syncCheckinTasks(0L, new ApiCallback<List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask>>() {
+                @Override
+                public void onSuccess(List<com.example.facecheck.api.CheckinTaskListResponse.CheckinTask> taskData) {
+                    if (!isAdded()) return;
+                    deleteAllCheckinTasks();
+                    for (com.example.facecheck.api.CheckinTaskListResponse.CheckinTask task : taskData) {
+                        insertOrUpdateCheckinTask(task);
+                    }
+                    loadStudentStatistics(studentId);
+                    RefreshPolicyManager.markRefreshed(requireContext(), studentRefreshKey);
+                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                }
+
+                @Override
+                public void onError(String message) {
+                    if (!isAdded()) return;
+                    loadStudentStatistics(studentId);
+                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                }
+            });
             return;
         }
 
@@ -157,6 +194,14 @@ public class HomeFragment extends Fragment {
             tvClassCount.setText("0");
             tvStudentCount.setText("0");
             tvAttendanceCount.setText("0");
+            if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+            return;
+        }
+
+        String refreshKey = "home_stats_" + teacherId;
+        if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
+            updateStatisticsFromLocalDb(teacherId);
+            if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
             return;
         }
 
@@ -194,6 +239,8 @@ public class HomeFragment extends Fragment {
 
                         // 更新标签
                         updateLabel(((ViewGroup) tvAttendanceCount.getParent().getParent()), "进行任务");
+                        RefreshPolicyManager.markRefreshed(requireContext(), refreshKey);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     }
 
                     @Override
@@ -203,6 +250,7 @@ public class HomeFragment extends Fragment {
                             Toast.makeText(getContext(), "任务同步失败: " + message, Toast.LENGTH_SHORT).show();
                             // 即使任务同步失败，也尝试用本地数据更新UI
                             updateStatisticsFromLocalDb(teacherId);
+                            if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         }
                     }
                 });
@@ -215,6 +263,7 @@ public class HomeFragment extends Fragment {
                     // 远程同步失败，从本地数据库获取统计数据并更新UI
                     updateStatisticsFromLocalDb(teacherId);
                     Toast.makeText(getContext(), "同步失败，加载本地数据: " + message, Toast.LENGTH_SHORT).show();
+                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 }
             }
         }
@@ -394,7 +443,7 @@ public class HomeFragment extends Fragment {
                     insertOrUpdateCheckinTask(task);
                 }
                 // Refresh UI
-                loadStatistics();
+                loadStatistics(true);
                 Toast.makeText(getContext(), "同步成功", Toast.LENGTH_SHORT).show();
                 dismissUploadingOverlay(overlay);
             }

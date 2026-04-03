@@ -38,6 +38,10 @@ public class ClassroomViewModel extends AndroidViewModel {
     }
 
     public void loadClassrooms() {
+        loadClassrooms(false);
+    }
+
+    public void loadClassrooms(boolean forceRefresh) {
         long teacherId = sessionManager.getTeacherId();
         if (teacherId != -1) {
             // First, trigger the sync process in the background.
@@ -52,14 +56,12 @@ public class ClassroomViewModel extends AndroidViewModel {
                 // return result; // Return the result of the sync
                 return true; // Assume success to proceed to data loading
             }, (success) -> {
-                // After sync, load data from the local database to update the UI.
-                classroomRepository.getClassrooms(teacherId).observeForever(data -> {
+                classroomRepository.getClassrooms(teacherId, forceRefresh).observeForever(data -> {
                     _classrooms.postValue(data);
                 });
             }, (error) -> {
                 Log.e("SYNC_DEBUG", "Sync failed", error);
-                // Even if sync fails, still try to load from local DB.
-                classroomRepository.getClassrooms(teacherId).observeForever(data -> {
+                classroomRepository.getClassrooms(teacherId, forceRefresh).observeForever(data -> {
                     _classrooms.postValue(data);
                 });
             });

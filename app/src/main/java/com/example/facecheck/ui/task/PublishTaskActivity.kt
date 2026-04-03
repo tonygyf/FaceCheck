@@ -30,10 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.facecheck.api.CheckinTaskRequest
+import com.example.facecheck.api.RetrofitClient
 import com.example.facecheck.data.model.Classroom
-import com.example.facecheck.data.model.CreateCheckinTaskRequest
 import com.example.facecheck.database.DatabaseHelper
 import com.example.facecheck.ui.theme.FaceCheckTheme
+import com.example.facecheck.utils.SessionManager
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.sqrt
@@ -96,6 +98,10 @@ fun PublishTaskScreen(
     var classrooms by remember { mutableStateOf<List<Classroom>>(emptyList()) }
     var selectedClassroom by remember { mutableStateOf<Classroom?>(null) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var isPublishing by remember { mutableStateOf(false) }
+
+    val apiService = remember { RetrofitClient.getApiService() }
+    val sessionManager = remember { SessionManager(context) }
 
     val mapPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -344,6 +350,11 @@ fun PublishTaskScreen(
 
             Button(
                 onClick = {
+                    if (isPublishing) return@Button
+                    if (teacherId <= 0) {
+                        Toast.makeText(context, "教师身份无效，请重新登录", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                     if (selectedClassroom == null) {
                         Toast.makeText(context, "请选择班级", Toast.LENGTH_SHORT).show()
                         return@Button
@@ -367,7 +378,7 @@ fun PublishTaskScreen(
                         }
                     } else endTime
 
-                    val request = CreateCheckinTaskRequest().apply {
+                    val request = CheckinTaskRequest().apply {
                         this.classId = selectedClassroom!!.id
                         this.teacherId = teacherId
                         this.title = title
@@ -381,14 +392,47 @@ fun PublishTaskScreen(
                         this.passwordPlain = if (passwordEnabled && passwordText.isNotBlank()) passwordText else null
                     }
 
-                    Toast.makeText(context, "待接入API，请求已构建: ${request.title}", Toast.LENGTH_LONG).show()
-                    onPublished()
+                    isPublishing = true
+                    apiService.createCheckinTask(sessionManager.apiKey, request)
+                        .enqueue(object : retrofit2.Callback<com.example.facecheck.api.ApiCreateResponse> {
+                            override fun onResponse(
+                                call: retrofit2.Call<com.example.facecheck.api.ApiCreateResponse>,
+                                response: retrofit2.Response<com.example.facecheck.api.ApiCreateResponse>
+                            ) {
+                                isPublishing = false
+                                val body = response.body()
+                                if (response.isSuccessful && (body == null || body.isOk())) {
+                                    onPublished()
+                                    return
+                                }
+                                val bodyError = body?.error?.takeIf { it.isNotBlank() }
+                                val rawError = try {
+                                    response.errorBody()?.string()
+                                } catch (_: Exception) {
+                                    null
+                                }
+                                Toast.makeText(
+                                    context,
+                                    "发布失败: ${bodyError ?: rawError ?: "服务器返回异常"}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+
+                            override fun onFailure(
+                                call: retrofit2.Call<com.example.facecheck.api.ApiCreateResponse>,
+                                t: Throwable
+                            ) {
+                                isPublishing = false
+                                Toast.makeText(context, "发布失败: ${t.message}", Toast.LENGTH_LONG).show()
+                            }
+                        })
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(52.dp),
+                enabled = !isPublishing
             ) {
-                Text("确认发布", style = MaterialTheme.typography.titleMedium)
+                Text(if (isPublishing) "发布中..." else "确认发布", style = MaterialTheme.typography.titleMedium)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
