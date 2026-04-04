@@ -45,7 +45,7 @@
                 android:textColor="@android:color/holo_blue_dark"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:background="@drawable/bg_tag_primary"
+                android:background="@android:color/transparent"
                 android:visibility="gone" />
         </LinearLayout>
 

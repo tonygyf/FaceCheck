@@ -42,6 +42,7 @@ import com.amap.api.maps2d.CameraUpdateFactory
 import com.amap.api.maps2d.MapView
 import com.amap.api.maps2d.model.LatLng
 import com.amap.api.maps2d.model.MarkerOptions
+import com.amap.api.maps2d.model.CircleOptions
 import com.amap.api.services.core.LatLonPoint
 import com.amap.api.services.geocoder.GeocodeResult
 import com.amap.api.services.geocoder.GeocodeSearch
@@ -54,6 +55,10 @@ import com.google.android.gms.location.LocationServices
 class MapPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val readonly = intent.getBooleanExtra("readonly", false)
+        val presetLat = intent.getDoubleExtra("preset_lat", Double.NaN)
+        val presetLng = intent.getDoubleExtra("preset_lng", Double.NaN)
+        val presetRadius = intent.getIntExtra("preset_radius_m", -1)
         setContent {
             FaceCheckTheme {
                 MapPickerScreen(onLocationSelected = { lat, lng, address ->
@@ -64,7 +69,7 @@ class MapPickerActivity : ComponentActivity() {
                     }
                     setResult(Activity.RESULT_OK, result)
                     finish()
-                }, onBack = { finish() })
+                }, onBack = { finish() }, readonly = readonly, presetLat = presetLat, presetLng = presetLng, presetRadiusM = presetRadius)
             }
         }
     }
@@ -74,7 +79,11 @@ class MapPickerActivity : ComponentActivity() {
 @Composable
 fun MapPickerScreen(
     onLocationSelected: (Double, Double, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    readonly: Boolean = false,
+    presetLat: Double = Double.NaN,
+    presetLng: Double = Double.NaN,
+    presetRadiusM: Int = -1
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -148,15 +157,42 @@ fun MapPickerScreen(
 
         when (PackageManager.PERMISSION_GRANTED) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
-                aMap?.isMyLocationEnabled = true
-                moveToCurrentLocation()
+                if (!readonly) {
+                    aMap?.isMyLocationEnabled = true
+                }
+                if (!readonly) {
+                    moveToCurrentLocation()
+                }
             }
             else -> {
-                requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                if (!readonly) {
+                    requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
             }
         }
 
+        if (readonly && !presetLat.isNaN() && !presetLng.isNaN()) {
+            val target = LatLng(presetLat, presetLng)
+            selectedLatLng = target
+            selectedAddress = "签到范围中心点"
+            aMap?.clear()
+            aMap?.addMarker(MarkerOptions().position(target))
+            if (presetRadiusM > 0) {
+                aMap?.addCircle(
+                    CircleOptions()
+                        .center(target)
+                        .radius(presetRadiusM.toDouble())
+                        .strokeWidth(3f)
+                        .strokeColor(0x552196F3)
+                        .fillColor(0x222196F3)
+                )
+            }
+            aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(target, if (presetRadiusM > 0) 16f else 15f))
+            return@LaunchedEffect
+        }
+
         aMap?.setOnMapClickListener { latLng ->
+            if (readonly) return@setOnMapClickListener
             isLoading = true
             selectedLatLng = latLng
             aMap?.clear()
@@ -202,6 +238,7 @@ fun MapPickerScreen(
                 horizontalAlignment = Alignment.Start
             ) {
                 SmallFloatingActionButton(onClick = {
+                    if (readonly) return@SmallFloatingActionButton
                     when (PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
                             moveToCurrentLocation()
@@ -211,7 +248,7 @@ fun MapPickerScreen(
                 }) {
                     Icon(Icons.Default.LocationOn, contentDescription = "定位到当前位置")
                 }
-                if (selectedLatLng != null && !isLoading) {
+                if (!readonly && selectedLatLng != null && !isLoading) {
                     FloatingActionButton(onClick = {
                         onLocationSelected(
                             selectedLatLng!!.latitude,

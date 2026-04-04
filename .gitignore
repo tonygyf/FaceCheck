@@ -15,3 +15,6 @@
 .cxx
 local.properties
 /.trae/rules
+
+# 忽略 .trae 的 tools 文件夹
+/.trae/tools

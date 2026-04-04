@@ -6,22 +6,26 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.compose.ui.platform.ComposeView;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.facecheck.R;
 import com.example.facecheck.api.ApiService;
@@ -30,6 +34,10 @@ import com.example.facecheck.api.CheckinTaskListResponse;
 import com.example.facecheck.api.MySubmissionsResponse;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.ui.checkin.AttendanceTaskComposeBinder;
+import com.example.facecheck.ui.checkin.StudentCheckinComposeBinder;
+import com.example.facecheck.ui.checkin.StudentCheckinTagComposeBinder;
+import com.example.facecheck.ui.task.MapPickerActivity;
 import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
 import com.google.android.gms.location.LocationServices;
@@ -43,6 +51,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StudentCoursesFragment extends Fragment {
 
@@ -50,6 +59,7 @@ public class StudentCoursesFragment extends Fragment {
     private TextView tvEmptyHint;
     private TextView tvClassName;
     private FloatingActionButton fabRefresh;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     private DatabaseHelper dbHelper;
     private ApiService apiService;
@@ -89,10 +99,16 @@ public class StudentCoursesFragment extends Fragment {
         tvEmptyHint = view.findViewById(R.id.tv_empty_hint);
         tvClassName = view.findViewById(R.id.tv_class_name);
         fabRefresh = view.findViewById(R.id.fab_refresh);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new SignInSessionAdapter();
         recyclerView.setAdapter(adapter);
+
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setColorSchemeResources(R.color.primary);
+            swipeRefreshLayout.setOnRefreshListener(() -> refreshAllData(true));
+        }
 
         fabRefresh.setOnClickListener(v -> {
             Toast.makeText(requireContext(), "刷新中...", Toast.LENGTH_SHORT).show();
@@ -125,6 +141,7 @@ public class StudentCoursesFragment extends Fragment {
         String refreshKey = "student_courses_" + studentId;
         if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
             loadAttendanceSessions();
+            stopRefreshing();
             return;
         }
         syncTasksFromApi(() -> syncMySubmissionsFromApi(() -> {
@@ -132,7 +149,14 @@ public class StudentCoursesFragment extends Fragment {
                 RefreshPolicyManager.markRefreshed(requireContext(), refreshKey);
             }
             loadAttendanceSessions();
+            stopRefreshing();
         }));
+    }
+
+    private void stopRefreshing() {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
     }
 
     private void syncTasksFromApi(Runnable next) {
@@ -200,8 +224,14 @@ public class StudentCoursesFragment extends Fragment {
                 String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
                 String startAt = cursor.getString(cursor.getColumnIndexOrThrow("startAt"));
                 String endAt = cursor.getString(cursor.getColumnIndexOrThrow("endAt"));
+                Double locationLat = cursor.isNull(cursor.getColumnIndexOrThrow("locationLat")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLat"));
+                Double locationLng = cursor.isNull(cursor.getColumnIndexOrThrow("locationLng")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("locationLng"));
+                Integer locationRadiusM = cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM"));
+                String gestureSequence = cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence"));
+                String passwordPlain = cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain"));
                 SubmissionItem submission = submissionMap.get(taskId);
-                SessionItem item = new SessionItem(taskId, taskClassId, title, status, startAt, endAt, submission);
+                SessionItem item = new SessionItem(taskId, taskClassId, title, status, startAt, endAt, submission,
+                        locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain);
                 sessionItems.add(item);
             } while (cursor.moveToNext());
             cursor.close();
@@ -240,8 +270,14 @@ public class StudentCoursesFragment extends Fragment {
         String startAt;
         String endAt;
         SubmissionItem submission;
+        Double locationLat;
+        Double locationLng;
+        Integer locationRadiusM;
+        String gestureSequence;
+        String passwordPlain;
 
-        SessionItem(long taskId, long classId, String title, String status, String startAt, String endAt, SubmissionItem submission) {
+        SessionItem(long taskId, long classId, String title, String status, String startAt, String endAt, SubmissionItem submission,
+                    Double locationLat, Double locationLng, Integer locationRadiusM, String gestureSequence, String passwordPlain) {
             this.taskId = taskId;
             this.classId = classId;
             this.title = title;
@@ -249,6 +285,23 @@ public class StudentCoursesFragment extends Fragment {
             this.startAt = startAt;
             this.endAt = endAt;
             this.submission = submission;
+            this.locationLat = locationLat;
+            this.locationLng = locationLng;
+            this.locationRadiusM = locationRadiusM;
+            this.gestureSequence = gestureSequence;
+            this.passwordPlain = passwordPlain;
+        }
+
+        boolean requiresLocation() {
+            return locationLat != null && locationLng != null;
+        }
+
+        boolean requiresGesture() {
+            return gestureSequence != null && !gestureSequence.trim().isEmpty();
+        }
+
+        boolean requiresPassword() {
+            return passwordPlain != null && !passwordPlain.trim().isEmpty();
         }
     }
 
@@ -296,13 +349,14 @@ public class StudentCoursesFragment extends Fragment {
                     ? item.startAt.substring(5, 16).replace("T", " ")
                     : sdf.format(new Date());
             holder.tvTime.setText(displayTime);
-            holder.tvType.setText("班级签到");
             holder.tvNote.setText(item.title == null || item.title.isEmpty() ? "老师发布了签到任务" : item.title);
+            AttendanceTaskComposeBinder.bind(holder.composeTaskMeta, item.status, item.startAt);
+            StudentCheckinTagComposeBinder.bind(holder.composeMethodTags, buildTagItems(item));
 
             MaterialCardView card = (MaterialCardView) holder.itemView;
             RecyclerView.LayoutParams lp = (RecyclerView.LayoutParams) card.getLayoutParams();
             if (item.submission != null) {
-                lp.setMargins(80, lp.topMargin, 8, lp.bottomMargin);
+                lp.setMargins(0, lp.topMargin, 0, lp.bottomMargin);
                 card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), R.color.surface));
                 holder.tvStatus.setText(resolveSubmissionText(item.submission));
                 holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_blue_dark));
@@ -310,7 +364,7 @@ public class StudentCoursesFragment extends Fragment {
                 holder.btnSignIn.setVisibility(View.VISIBLE);
                 holder.btnSignIn.setOnClickListener(v -> showSubmitBottomSheet(item, true));
             } else {
-                lp.setMargins(8, lp.topMargin, 80, lp.bottomMargin);
+                lp.setMargins(0, lp.topMargin, 0, lp.bottomMargin);
                 card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), android.R.color.white));
                 if ("ACTIVE".equalsIgnoreCase(item.status)) {
                     holder.tvStatus.setText("老师邀请你完成签到");
@@ -338,18 +392,30 @@ public class StudentCoursesFragment extends Fragment {
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
-            TextView tvTime, tvType, tvNote, tvStatus;
+            TextView tvTime, tvNote, tvStatus;
             Button btnSignIn;
+            ComposeView composeTaskMeta;
+            ComposeView composeMethodTags;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
                 tvTime = itemView.findViewById(R.id.tv_session_time);
-                tvType = itemView.findViewById(R.id.tv_session_type);
                 tvNote = itemView.findViewById(R.id.tv_session_note);
                 tvStatus = itemView.findViewById(R.id.tv_session_status);
+                composeTaskMeta = itemView.findViewById(R.id.compose_task_meta);
                 btnSignIn = itemView.findViewById(R.id.btn_sign_in);
+                composeMethodTags = itemView.findViewById(R.id.compose_method_tags);
             }
         }
+    }
+
+    private List<StudentCheckinTagComposeBinder.TagItem> buildTagItems(SessionItem item) {
+        List<StudentCheckinTagComposeBinder.TagItem> tags = new ArrayList<>();
+        tags.add(new StudentCheckinTagComposeBinder.TagItem("基础签到", false));
+        if (item.requiresLocation()) tags.add(new StudentCheckinTagComposeBinder.TagItem("定位签到", true));
+        if (item.requiresGesture()) tags.add(new StudentCheckinTagComposeBinder.TagItem("手势签到", true));
+        if (item.requiresPassword()) tags.add(new StudentCheckinTagComposeBinder.TagItem("密码签到", true));
+        return tags;
     }
 
     private String resolveSubmissionText(SubmissionItem submission) {
@@ -378,25 +444,85 @@ public class StudentCoursesFragment extends Fragment {
 
         TextView tvTitle = content.findViewById(R.id.tv_task_title);
         TextView tvTaskStatus = content.findViewById(R.id.tv_task_status);
+        TextView tvMethodHint = content.findViewById(R.id.tv_method_hint);
+        TextView tvLocationRequired = content.findViewById(R.id.tv_location_required);
+        TextView tvLocationCoords = content.findViewById(R.id.tv_location_coords);
+        ComposeView composeRequiredTags = content.findViewById(R.id.compose_required_tags);
+        View cardLocationRequired = content.findViewById(R.id.card_location_required);
+        Button btnOpenMapPreview = content.findViewById(R.id.btn_open_map_preview);
+        ComposeView composeGesturePad = content.findViewById(R.id.compose_gesture_pad);
         EditText etGesture = content.findViewById(R.id.et_gesture);
+        LinearLayout layoutPasswordRow = content.findViewById(R.id.layout_password_row);
         EditText etPassword = content.findViewById(R.id.et_password);
+        Button btnTogglePasswordVisibility = content.findViewById(R.id.btn_toggle_password_visibility);
         EditText etReason = content.findViewById(R.id.et_reason);
         Button btnSubmit = content.findViewById(R.id.btn_submit_checkin);
 
         tvTitle.setText(item.title == null || item.title.isEmpty() ? "签到任务" : item.title);
         tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
+        StudentCheckinTagComposeBinder.bind(composeRequiredTags, buildTagItems(item));
+        tvMethodHint.setText(resolveMethodHint(item));
+        cardLocationRequired.setVisibility(item.requiresLocation() ? View.VISIBLE : View.GONE);
+        if (item.requiresLocation() && item.locationRadiusM != null) {
+            tvLocationRequired.setText("本任务要求地理位置签到（半径 " + item.locationRadiusM + " 米），提交时将自动尝试定位。");
+        }
+        if (item.requiresLocation()) {
+            String lat = item.locationLat == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLat);
+            String lng = item.locationLng == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLng);
+            tvLocationCoords.setText("中心点: " + lat + ", " + lng);
+            btnOpenMapPreview.setOnClickListener(v -> openMapPreview(item));
+        }
+
+        etGesture.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+        layoutPasswordRow.setVisibility(item.requiresPassword() ? View.VISIBLE : View.GONE);
+        composeGesturePad.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
 
         if (readonly) {
             etGesture.setText(item.submission == null || item.submission.gestureInput == null ? "" : item.submission.gestureInput);
             etPassword.setText(item.submission == null || item.submission.passwordInput == null ? "" : item.submission.passwordInput);
             etReason.setText(item.submission == null || item.submission.reason == null ? "" : item.submission.reason);
-            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
             etGesture.setEnabled(false);
             etPassword.setEnabled(false);
             etReason.setEnabled(false);
+            boolean[] passwordVisible = new boolean[] { false };
+            if (item.requiresPassword()) {
+                btnTogglePasswordVisibility.setVisibility(View.VISIBLE);
+                btnTogglePasswordVisibility.setText("显示");
+                btnTogglePasswordVisibility.setOnClickListener(v -> {
+                    passwordVisible[0] = !passwordVisible[0];
+                    if (passwordVisible[0]) {
+                        etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                        btnTogglePasswordVisibility.setText("隐藏");
+                    } else {
+                        etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                        btnTogglePasswordVisibility.setText("显示");
+                    }
+                    etPassword.setSelection(etPassword.getText() == null ? 0 : etPassword.getText().length());
+                });
+            } else {
+                btnTogglePasswordVisibility.setVisibility(View.GONE);
+            }
+            if (item.requiresGesture()) {
+                StudentCheckinComposeBinder.bindGesturePad(
+                        composeGesturePad,
+                        true,
+                        item.submission == null ? "" : item.submission.gestureInput,
+                        null
+                );
+            }
             btnSubmit.setText("关闭");
             btnSubmit.setOnClickListener(v -> dialog.dismiss());
         } else {
+            btnTogglePasswordVisibility.setVisibility(View.GONE);
+            if (item.requiresGesture()) {
+                StudentCheckinComposeBinder.bindGesturePad(
+                        composeGesturePad,
+                        false,
+                        null,
+                        sequence -> etGesture.setText(sequence)
+                );
+            }
             btnSubmit.setOnClickListener(v -> submitCheckinTask(item, etGesture.getText().toString().trim(),
                     etPassword.getText().toString().trim(),
                     etReason.getText().toString().trim(), dialog));
@@ -404,22 +530,58 @@ public class StudentCoursesFragment extends Fragment {
         dialog.show();
     }
 
+    private void openMapPreview(SessionItem item) {
+        if (!isAdded() || item.locationLat == null || item.locationLng == null) return;
+        Intent intent = new Intent(requireContext(), MapPickerActivity.class);
+        intent.putExtra("readonly", true);
+        intent.putExtra("preset_lat", item.locationLat);
+        intent.putExtra("preset_lng", item.locationLng);
+        intent.putExtra("preset_radius_m", item.locationRadiusM == null ? -1 : item.locationRadiusM);
+        startActivity(intent);
+    }
+
+    private String resolveMethodHint(SessionItem item) {
+        List<String> methods = new ArrayList<>();
+        methods.add("基础签到");
+        if (item.requiresLocation()) methods.add("定位");
+        if (item.requiresGesture()) methods.add("手势");
+        if (item.requiresPassword()) methods.add("密码");
+        return "本任务要求: " + android.text.TextUtils.join(" + ", methods);
+    }
+
     private void submitCheckinTask(SessionItem item, String gestureInput, String passwordInput, String reason, BottomSheetDialog dialog) {
+        if (item.requiresGesture() && TextUtils.isEmpty(gestureInput)) {
+            Toast.makeText(requireContext(), "该任务要求手势签到，请先绘制手势", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (item.requiresPassword() && TextUtils.isEmpty(passwordInput)) {
+            Toast.makeText(requireContext(), "该任务要求签到密码，请先填写密码", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         CheckinSubmitRequest request = new CheckinSubmitRequest(studentId);
         request.gestureInput = gestureInput.isEmpty() ? null : gestureInput;
         request.passwordInput = passwordInput.isEmpty() ? null : passwordInput;
         request.reason = reason.isEmpty() ? null : reason;
+
+        AtomicBoolean hasSubmitted = new AtomicBoolean(false);
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationServices.getFusedLocationProviderClient(requireContext())
                     .getLastLocation()
                     .addOnSuccessListener(location -> {
+                        if (hasSubmitted.get()) return;
                         if (location != null) {
                             request.lat = location.getLatitude();
                             request.lng = location.getLongitude();
                         }
+                        hasSubmitted.set(true);
                         submitCheckinRequest(item, request, dialog);
                     })
-                    .addOnFailureListener(e -> submitCheckinRequest(item, request, dialog));
+                    .addOnFailureListener(e -> {
+                        if (hasSubmitted.get()) return;
+                        hasSubmitted.set(true);
+                        submitCheckinRequest(item, request, dialog);
+                    });
             return;
         }
         submitCheckinRequest(item, request, dialog);
