@@ -5,6 +5,8 @@ import android.content.Context;
 import com.example.facecheck.api.ApiService;
 import com.example.facecheck.api.ApiResponse;
 import com.example.facecheck.api.ChangePasswordRequest;
+import com.example.facecheck.api.ChangeStudentPasswordRequest;
+import com.example.facecheck.api.ChangeStudentUsernameRequest;
 import com.example.facecheck.api.ChangeUsernameRequest;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.utils.SessionManager;
@@ -117,6 +119,62 @@ public class ProfileRepositoryImpl implements ProfileRepository {
             @Override
             public void onFailure(Call<ApiResponse> call, Throwable t) {
                 callback.onError("Network error during username change: " + t.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void changeStudentPassword(long studentId, String oldPassword, String newPassword, ApiCallback<ApiResponse> callback) {
+        ChangeStudentPasswordRequest request = new ChangeStudentPasswordRequest(studentId, oldPassword, newPassword);
+        apiService.changeStudentPassword(getApiKey(), request).enqueue(new Callback<ApiResponse>() {
+            @Override
+            public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    callback.onSuccess(response.body());
+                } else {
+                    String error = "Unknown error";
+                    if (response.body() != null) {
+                        error = response.body().getError();
+                    } else if (response.errorBody() != null) {
+                        try {
+                            error = response.errorBody().string();
+                        } catch (Exception ignored) { }
+                    }
+                    callback.onError("Student password change failed: " + error);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse> call, Throwable t) {
+                callback.onError("Network error during student password change: " + t.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void changeStudentUsername(long studentId, String newName, ApiCallback<ApiResponse> callback) {
+        ChangeStudentUsernameRequest request = new ChangeStudentUsernameRequest(studentId, newName);
+        apiService.changeStudentUsername(getApiKey(), request).enqueue(new Callback<ApiResponse>() {
+            @Override
+            public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    callback.onSuccess(response.body());
+                } else {
+                    String error = "Unknown error";
+                    if (response.body() != null) {
+                        error = response.body().getError();
+                    } else if (response.errorBody() != null) {
+                        try {
+                            error = response.errorBody().string();
+                        } catch (Exception ignored) { }
+                    }
+                    callback.onError("Student username change failed: " + error);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse> call, Throwable t) {
+                callback.onError("Network error during student username change: " + t.getMessage());
             }
         });
     }

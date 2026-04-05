@@ -42,6 +42,12 @@ public interface ApiService {
     @PUT("profile/username")
     Call<ApiResponse> changeUsername(@Header("X-API-Key") String apiKey, @Body ChangeUsernameRequest body);
 
+    @PUT("student/profile/username")
+    Call<ApiResponse> changeStudentUsername(@Header("X-API-Key") String apiKey, @Body ChangeStudentUsernameRequest body);
+
+    @PUT("student/profile/password")
+    Call<ApiResponse> changeStudentPassword(@Header("X-API-Key") String apiKey, @Body ChangeStudentPasswordRequest body);
+
     @Multipart
     @POST("profile/avatar")
     Call<ApiResponse> uploadAvatar(

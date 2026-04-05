@@ -5,11 +5,13 @@ import android.os.StrictMode;
 import android.util.Log;
 import android.content.SharedPreferences;
 import androidx.appcompat.app.AppCompatDelegate;
+import java.lang.reflect.Method;
 
 public class FaceCheckApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        initAmapPrivacy();
         try {
             SharedPreferences prefs = getSharedPreferences("settings_prefs", MODE_PRIVATE);
             String mode = prefs.getString("theme_mode", "system");
@@ -56,6 +58,38 @@ public class FaceCheckApp extends Application {
                 Object inst = crashCls.getMethod("getInstance").invoke(null);
                 crashCls.getMethod("setCrashlyticsCollectionEnabled", boolean.class).invoke(inst, false);
             } catch (Throwable ignore) {}
+        }
+    }
+
+    private void initAmapPrivacy() {
+        // 高德地图/检索/定位 SDK 都要求在调用任何接口前先完成隐私合规设置，否则会直接抛异常。
+        setAmapPrivacyByReflection("com.amap.api.maps2d.MapsInitializer");
+        setAmapPrivacyByReflection("com.amap.api.services.core.ServiceSettings");
+        setAmapPrivacyByReflection("com.amap.api.location.AMapLocationClient");
+    }
+
+    private void setAmapPrivacyByReflection(String className) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            invokeStaticIfExists(clazz, "updatePrivacyShow",
+                    new Class<?>[]{android.content.Context.class, boolean.class, boolean.class},
+                    new Object[]{this, true, true});
+            invokeStaticIfExists(clazz, "updatePrivacyAgree",
+                    new Class<?>[]{android.content.Context.class, boolean.class},
+                    new Object[]{this, true});
+        } catch (Throwable t) {
+            Log.w("FaceCheckApp", "AMap privacy init skipped for " + className + ": " + t.getMessage());
+        }
+    }
+
+    private void invokeStaticIfExists(Class<?> clazz, String methodName, Class<?>[] argTypes, Object[] args) {
+        try {
+            Method m = clazz.getMethod(methodName, argTypes);
+            m.invoke(null, args);
+        } catch (NoSuchMethodException ignore) {
+            // 不同 SDK 版本方法签名可能变化，忽略即可
+        } catch (Throwable t) {
+            Log.w("FaceCheckApp", "AMap privacy method failed: " + clazz.getSimpleName() + "." + methodName);
         }
     }
 }

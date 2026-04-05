@@ -10,6 +10,7 @@ import com.example.facecheck.data.repository.ApiCallback;
 import com.example.facecheck.data.repository.ProfileRepository;
 import com.example.facecheck.data.repository.ProfileRepositoryImpl;
 import com.example.facecheck.utils.SessionManager;
+import android.content.Context;
 
 public class ProfileViewModel extends AndroidViewModel {
 
@@ -102,5 +103,47 @@ public class ProfileViewModel extends AndroidViewModel {
 
     public void clearPasswordChangeStatus() {
         _passwordChangeSuccess.setValue(null);
+    }
+
+    public void changeStudentUsername(String newName) {
+        long studentId = getApplication().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                .getLong("student_id", -1L);
+        if (studentId <= 0) {
+            _errorMessage.postValue("Student not logged in.");
+            return;
+        }
+        profileRepository.changeStudentUsername(studentId, newName, new ApiCallback<ApiResponse>() {
+            @Override
+            public void onSuccess(ApiResponse data) {
+                _usernameChangeSuccess.postValue(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                _errorMessage.postValue(message);
+                _usernameChangeSuccess.postValue(false);
+            }
+        });
+    }
+
+    public void changeStudentPassword(String oldPassword, String newPassword) {
+        long studentId = getApplication().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                .getLong("student_id", -1L);
+        if (studentId <= 0) {
+            _errorMessage.postValue("Student not logged in.");
+            return;
+        }
+        profileRepository.changeStudentPassword(studentId, oldPassword, newPassword, new ApiCallback<ApiResponse>() {
+            @Override
+            public void onSuccess(ApiResponse data) {
+                _passwordChangeSuccess.postValue(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                _errorMessage.postValue(message);
+                _passwordChangeSuccess.postValue(false);
+            }
+        });
     }
 }

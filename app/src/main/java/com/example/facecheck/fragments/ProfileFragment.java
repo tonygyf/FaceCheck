@@ -89,6 +89,8 @@ public class ProfileFragment extends Fragment {
     private Teacher currentTeacher;
     private String currentPhotoPath;
     private ProfileViewModel profileViewModel;
+    private String pendingStudentName;
+    private String pendingStudentPassword;
     
     @Nullable
     @Override
@@ -164,10 +166,10 @@ public class ProfileFragment extends Fragment {
                         ImageLoader.loadAvatar(getContext(), avatarUri, profileImageView, String.valueOf(updatedAt));
                     }
                     if (changePhotoButton != null) { changePhotoButton.setEnabled(false); }
-                    if (changeUsernameButton != null) { changeUsernameButton.setVisibility(View.GONE); }
-                    if (changePasswordButton != null) { changePasswordButton.setVisibility(View.GONE); }
-                    if (itemChangeUsername != null) { itemChangeUsername.setVisibility(View.GONE); }
-                    if (itemChangePassword != null) { itemChangePassword.setVisibility(View.GONE); }
+                    if (changeUsernameButton != null) { changeUsernameButton.setVisibility(View.VISIBLE); }
+                    if (changePasswordButton != null) { changePasswordButton.setVisibility(View.VISIBLE); }
+                    if (itemChangeUsername != null) { itemChangeUsername.setVisibility(View.VISIBLE); }
+                    if (itemChangePassword != null) { itemChangePassword.setVisibility(View.VISIBLE); }
                 }
             } else if (c != null) {
                 c.close();
@@ -312,7 +314,12 @@ public class ProfileFragment extends Fragment {
                 Toast.makeText(getContext(), "用户名不能为空", Toast.LENGTH_SHORT).show();
                 return;
             }
-            profileViewModel.changeUsername(newName);
+            if (isStudentRole()) {
+                pendingStudentName = newName;
+                profileViewModel.changeStudentUsername(newName);
+            } else {
+                profileViewModel.changeUsername(newName);
+            }
         });
         builder.setNegativeButton("取消", (dialog, which) -> dialog.cancel());
 
@@ -326,6 +333,13 @@ public class ProfileFragment extends Fragment {
         profileViewModel.passwordChangeSuccess.observe(getViewLifecycleOwner(), success -> {
             if (success != null) {
                 if (success) {
+                    if (isStudentRole() && !TextUtils.isEmpty(pendingStudentPassword)) {
+                        long sid = getCurrentStudentId();
+                        if (sid > 0) {
+                            dbHelper.updateStudentPassword(sid, pendingStudentPassword);
+                        }
+                        pendingStudentPassword = null;
+                    }
                     Toast.makeText(getContext(), "密码修改成功！", Toast.LENGTH_SHORT).show();
                 } 
                 profileViewModel.clearPasswordChangeStatus(); // Reset status
@@ -334,6 +348,8 @@ public class ProfileFragment extends Fragment {
 
         profileViewModel.errorMessage.observe(getViewLifecycleOwner(), error -> {
             if (error != null && !error.isEmpty()) {
+                pendingStudentName = null;
+                pendingStudentPassword = null;
                 Toast.makeText(getContext(), "操作失败: " + error, Toast.LENGTH_LONG).show();
                 profileViewModel.clearErrorMessage();
             }
@@ -342,6 +358,13 @@ public class ProfileFragment extends Fragment {
         profileViewModel.usernameChangeSuccess.observe(getViewLifecycleOwner(), success -> {
             if (success != null) {
                 if (success) {
+                    if (isStudentRole() && !TextUtils.isEmpty(pendingStudentName)) {
+                        long sid = getCurrentStudentId();
+                        if (sid > 0) {
+                            dbHelper.updateStudentName(sid, pendingStudentName);
+                        }
+                        pendingStudentName = null;
+                    }
                     Toast.makeText(getContext(), "用户名修改成功！", Toast.LENGTH_SHORT).show();
                     loadUserData(); // 重新加载以显示新名称
                 } else {
@@ -391,11 +414,28 @@ public class ProfileFragment extends Fragment {
                 Toast.makeText(getContext(), "密码不能为空", Toast.LENGTH_SHORT).show();
                 return;
             }
-            profileViewModel.changePassword(oldPassword, newPassword);
+            if (isStudentRole()) {
+                pendingStudentPassword = newPassword;
+                profileViewModel.changeStudentPassword(oldPassword, newPassword);
+            } else {
+                profileViewModel.changePassword(oldPassword, newPassword);
+            }
         });
         builder.setNegativeButton("取消", (dialog, which) -> dialog.cancel());
 
         builder.show();
+    }
+
+    private boolean isStudentRole() {
+        if (!isAdded()) return false;
+        SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        return "student".equals(prefs.getString("user_role", "teacher"));
+    }
+
+    private long getCurrentStudentId() {
+        if (!isAdded()) return -1L;
+        SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        return prefs.getLong("student_id", -1L);
     }
     private void navigateToLogin() {
         if (getActivity() != null) {

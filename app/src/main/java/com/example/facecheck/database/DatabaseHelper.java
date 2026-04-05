@@ -1101,6 +1101,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return result > 0;
     }
 
+    public boolean updateStudentName(long studentId, String newName) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("name", newName);
+        values.put("updatedAt", System.currentTimeMillis());
+        int result = db.update("Student", values, "id = ?",
+                new String[] { String.valueOf(studentId) });
+        return result > 0;
+    }
+
+    public boolean updateStudentPassword(long studentId, String newPassword) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("password", newPassword);
+        values.put("updatedAt", System.currentTimeMillis());
+        int result = db.update("Student", values, "id = ?",
+                new String[] { String.valueOf(studentId) });
+        return result > 0;
+    }
+
     public void insertOrUpdateStudent(Student student) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();

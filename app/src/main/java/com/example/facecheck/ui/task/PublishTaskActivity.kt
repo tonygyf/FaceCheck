@@ -108,9 +108,21 @@ fun PublishTaskScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val data = result.data
-            locationLat = data?.getDoubleExtra("latitude", 0.0)
-            locationLng = data?.getDoubleExtra("longitude", 0.0)
-            locationAddress = data?.getStringExtra("address") ?: "未知地址"
+            val lat = if (data?.hasExtra("latitude") == true) data.getDoubleExtra("latitude", 0.0) else null
+            val lng = if (data?.hasExtra("longitude") == true) data.getDoubleExtra("longitude", 0.0) else null
+            locationLat = lat
+            locationLng = lng
+            val rawAddress = data?.getStringExtra("address")?.trim().orEmpty()
+            locationAddress = if (lat != null && lng != null) {
+                val coordText = String.format(Locale.getDefault(), "已选坐标：%.6f, %.6f", lat, lng)
+                if (rawAddress.isBlank() || rawAddress.contains("无法获取") || rawAddress.contains("解析")) {
+                    coordText
+                } else {
+                    "$rawAddress（$coordText）"
+                }
+            } else {
+                if (rawAddress.isBlank()) "未选择" else rawAddress
+            }
         }
     }
 
@@ -365,6 +377,10 @@ fun PublishTaskScreen(
                     }
                     if (startTime.isBlank()) {
                         Toast.makeText(context, "请选择开始时间", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    if (locationEnabled && (locationLat == null || locationLng == null)) {
+                        Toast.makeText(context, "已开启地理位置签到，请先在地图中确认有效位置", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     val finalEndTime = if (endTime.isBlank()) {

@@ -10,8 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -24,7 +22,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
@@ -44,6 +41,7 @@ import com.amap.api.maps2d.model.LatLng
 import com.amap.api.maps2d.model.MarkerOptions
 import com.amap.api.maps2d.model.CircleOptions
 import com.amap.api.services.core.LatLonPoint
+import com.amap.api.services.core.AMapException
 import com.amap.api.services.geocoder.GeocodeResult
 import com.amap.api.services.geocoder.GeocodeSearch
 import com.amap.api.services.geocoder.RegeocodeQuery
@@ -51,6 +49,7 @@ import com.amap.api.services.geocoder.RegeocodeResult
 import com.example.facecheck.ui.theme.FaceCheckTheme
 import android.widget.Toast
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 
 class MapPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,55 +95,87 @@ fun MapPickerScreen(
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val defaultLatLng = remember { LatLng(39.90923, 116.397428) }
 
+    fun formatLatLngText(lat: Double, lng: Double): String {
+        return String.format(java.util.Locale.getDefault(), "已选坐标：%.6f, %.6f", lat, lng)
+    }
+
     fun selectLocation(latLng: LatLng, moveCamera: Boolean) {
         isLoading = true
         selectedLatLng = latLng
+        selectedAddress = formatLatLngText(latLng.latitude, latLng.longitude)
         aMap?.clear()
         aMap?.addMarker(MarkerOptions().position(latLng))
         if (moveCamera) {
             aMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
         }
-        val geocoderSearch = GeocodeSearch(context)
-        geocoderSearch.setOnGeocodeSearchListener(object : GeocodeSearch.OnGeocodeSearchListener {
-            override fun onRegeocodeSearched(result: RegeocodeResult?, rCode: Int) {
-                isLoading = false
-                selectedAddress = if (rCode == 1000) {
-                    result?.regeocodeAddress?.formatAddress
-                } else {
-                    "无法获取地址"
+        try {
+            val geocoderSearch = GeocodeSearch(context)
+            geocoderSearch.setOnGeocodeSearchListener(object : GeocodeSearch.OnGeocodeSearchListener {
+                override fun onRegeocodeSearched(result: RegeocodeResult?, rCode: Int) {
+                    isLoading = false
+                    selectedAddress = if (rCode == 1000) {
+                        result?.regeocodeAddress?.formatAddress ?: formatLatLngText(latLng.latitude, latLng.longitude)
+                    } else {
+                        formatLatLngText(latLng.latitude, latLng.longitude)
+                    }
                 }
-            }
 
-            override fun onGeocodeSearched(result: GeocodeResult?, rCode: Int) {}
-        })
-        val query = RegeocodeQuery(LatLonPoint(latLng.latitude, latLng.longitude), 200f, GeocodeSearch.AMAP)
-        geocoderSearch.getFromLocationAsyn(query)
+                override fun onGeocodeSearched(result: GeocodeResult?, rCode: Int) {}
+            })
+            val query = RegeocodeQuery(LatLonPoint(latLng.latitude, latLng.longitude), 200f, GeocodeSearch.AMAP)
+            geocoderSearch.getFromLocationAsyn(query)
+        } catch (_: AMapException) {
+            isLoading = false
+            selectedAddress = formatLatLngText(latLng.latitude, latLng.longitude)
+        } catch (_: Throwable) {
+            isLoading = false
+            selectedAddress = formatLatLngText(latLng.latitude, latLng.longitude)
+        }
+    }
+
+    fun isValidLatLng(lat: Double, lng: Double): Boolean {
+        if (!lat.isFinite() || !lng.isFinite()) return false
+        if (lat !in -90.0..90.0 || lng !in -180.0..180.0) return false
+        if (kotlin.math.abs(lat) < 0.0001 && kotlin.math.abs(lng) < 0.0001) return false
+        return true
+    }
+
+    fun applyLocation(lat: Double, lng: Double, markAsSelected: Boolean): Boolean {
+        if (!isValidLatLng(lat, lng)) return false
+        val currentLatLng = LatLng(lat, lng)
+        if (markAsSelected) {
+            selectLocation(currentLatLng, moveCamera = true)
+        } else {
+            aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
+        }
+        return true
     }
 
     fun locateCurrent(markAsSelected: Boolean) {
         try {
-            val mapLocation = aMap?.myLocation
-            if (mapLocation != null) {
-                val currentLatLng = LatLng(mapLocation.latitude, mapLocation.longitude)
-                if (markAsSelected) {
-                    selectLocation(currentLatLng, moveCamera = true)
-                } else {
-                    aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
-                }
-            } else {
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                    if (location != null) {
-                        val currentLatLng = LatLng(location.latitude, location.longitude)
-                        if (markAsSelected) {
-                            selectLocation(currentLatLng, moveCamera = true)
-                        } else {
-                            aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
-                        }
-                    } else {
-                        Toast.makeText(context, "暂未获取到当前位置", Toast.LENGTH_SHORT).show()
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { location ->
+                    if (location != null && applyLocation(location.latitude, location.longitude, markAsSelected)) {
+                        return@addOnSuccessListener
                     }
+                    fusedLocationClient.lastLocation
+                        .addOnSuccessListener { lastLocation ->
+                            if (lastLocation != null && applyLocation(lastLocation.latitude, lastLocation.longitude, markAsSelected)) {
+                                return@addOnSuccessListener
+                            }
+                            val mapLocation = aMap?.myLocation
+                            if (mapLocation != null && applyLocation(mapLocation.latitude, mapLocation.longitude, markAsSelected)) {
+                                return@addOnSuccessListener
+                            }
+                            Toast.makeText(context, "暂未获取到有效定位，请稍后重试", Toast.LENGTH_SHORT).show()
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(context, "定位失败，请稍后重试", Toast.LENGTH_SHORT).show()
+                        }
                 }
-            }
+                .addOnFailureListener {
+                    Toast.makeText(context, "定位失败，请稍后重试", Toast.LENGTH_SHORT).show()
+                }
         } catch (_: SecurityException) {
             Toast.makeText(context, "缺少定位权限", Toast.LENGTH_SHORT).show()
         }
@@ -182,7 +213,7 @@ fun MapPickerScreen(
         val map = mapView.map
         aMap = map
         map.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f))
-        // maps2d 的 AMap 无 setOnMyLocationButtonClickListener（该 API 在 3D SDK 中）；定位统一走左下角 FAB。
+        // 关闭高德内置定位按钮，使用我们自己的定位按钮，避免系统按钮回调不可控导致漂移体验。
         map.uiSettings?.apply {
             isZoomControlsEnabled = true
             isMyLocationButtonEnabled = false
@@ -194,7 +225,7 @@ fun MapPickerScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
                 if (!readonly) {
                     map.isMyLocationEnabled = true
-                    locateCurrent(markAsSelected = false)
+                    locateCurrent(markAsSelected = true)
                 }
             }
             else -> {
@@ -244,39 +275,48 @@ fun MapPickerScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             AndroidView({ mapView })
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                SmallFloatingActionButton(onClick = {
-                    if (readonly) return@SmallFloatingActionButton
-                    when (PackageManager.PERMISSION_GRANTED) {
-                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
-                            locateCurrent(markAsSelected = true)
+            if (!readonly) {
+                FloatingActionButton(
+                    onClick = {
+                        when (PackageManager.PERMISSION_GRANTED) {
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
+                                locateCurrent(markAsSelected = true)
+                            }
+                            else -> requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         }
-                        else -> requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                    }
-                }) {
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 12.dp, end = 12.dp)
+                ) {
                     Icon(Icons.Default.LocationOn, contentDescription = "定位到当前位置")
                 }
-                if (!readonly) {
-                    FloatingActionButton(onClick = {
-                        val target = selectedLatLng
-                        if (target == null || isLoading) {
+            }
+            if (!readonly) {
+                FloatingActionButton(
+                    onClick = {
+                        val target = selectedLatLng ?: aMap?.cameraPosition?.target?.takeIf {
+                            isValidLatLng(it.latitude, it.longitude)
+                        }
+                        if (target == null) {
                             Toast.makeText(context, "请先选择有效位置", Toast.LENGTH_SHORT).show()
                             return@FloatingActionButton
+                        }
+                        if (selectedLatLng == null) {
+                            // 首次进入时定位可能还在异步返回，允许使用当前地图中心点作为兜底选点。
+                            selectedLatLng = target
                         }
                         onLocationSelected(
                             target.latitude,
                             target.longitude,
-                            selectedAddress ?: "未知位置"
+                            selectedAddress ?: formatLatLngText(target.latitude, target.longitude)
                         )
-                    }) {
-                        Icon(Icons.Default.Check, contentDescription = "确定")
-                    }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = 12.dp)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "确定")
                 }
             }
             if (isLoading) {

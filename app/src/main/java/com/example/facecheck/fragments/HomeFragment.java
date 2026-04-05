@@ -160,14 +160,14 @@ public class HomeFragment extends Fragment {
 
         if ("student".equals(role)) {
             updateStudentHomeUI();
+            // P0: 先本地秒开，再后台增量刷新，避免首页首屏等待远端返回。
+            loadStudentStatistics(studentId);
             if (studentId <= 0) {
-                loadStudentStatistics(studentId);
                 if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 return;
             }
             String studentRefreshKey = "home_stats_student_" + studentId;
             if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), studentRefreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
-                loadStudentStatistics(studentId);
                 if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 return;
             }
@@ -206,9 +206,10 @@ public class HomeFragment extends Fragment {
             return;
         }
 
+        // P0: 教师端同样先读取本地统计，远端结果异步覆盖。
+        updateStatisticsFromLocalDb(teacherId);
         String refreshKey = "home_stats_" + teacherId;
         if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
-            updateStatisticsFromLocalDb(teacherId);
             if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
             return;
         }
