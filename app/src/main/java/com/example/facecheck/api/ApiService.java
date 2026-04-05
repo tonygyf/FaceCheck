@@ -107,6 +107,15 @@ public interface ApiService {
             @Path("id") long taskId,
             @Body CheckinSubmitRequest body);
 
+    @Multipart
+    @POST("checkin/photos/upload")
+    Call<CheckinPhotoUploadResponse> uploadCheckinPhoto(
+            @Header("X-API-Key") String apiKey,
+            @Part("taskId") RequestBody taskId,
+            @Part("studentId") RequestBody studentId,
+            @Part("key") RequestBody key,
+            @Part MultipartBody.Part file);
+
     @GET("checkin/tasks/{id}/review-queue")
     Call<ReviewQueueResponse> getReviewQueue(
             @Header("X-API-Key") String apiKey,

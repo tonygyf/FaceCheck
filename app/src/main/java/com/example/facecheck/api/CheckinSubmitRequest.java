@@ -10,6 +10,10 @@ public class CheckinSubmitRequest {
     @SerializedName("gestureInput")  public String gestureInput;
     @SerializedName("passwordInput") public String passwordInput;
     @SerializedName("reason")        public String reason;
+    @SerializedName("photoKey")      public String photoKey;
+    @SerializedName("photoUri")      public String photoUri;
+    @SerializedName("faceVerifyScore") public Double faceVerifyScore;
+    @SerializedName("faceVerifyPassed") public Boolean faceVerifyPassed;
 
     // imageUri 通常通过 Multipart 方式单独上传，而不是放在这个JSON请求体中
 
