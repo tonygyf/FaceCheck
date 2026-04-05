@@ -24,6 +24,12 @@ object AttendanceTaskComposeBinder {
     }
 }
 
+/** 供其它界面（如班级签到情况表）复用考勤任务状态胶囊样式 */
+@Composable
+fun AttendanceTaskStatusChips(status: String, startAt: String) {
+    TaskMeta(status = status, startAt = startAt)
+}
+
 @Composable
 private fun TaskMeta(status: String, startAt: String) {
     val isActive = status.equals("ACTIVE", true)

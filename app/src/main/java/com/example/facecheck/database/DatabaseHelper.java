@@ -722,6 +722,45 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.rawQuery(query, new String[] { String.valueOf(classId) });
     }
 
+    public int countCheckinTasksForClass(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT COUNT(*) FROM CheckinTask WHERE classId = ?",
+                new String[] { String.valueOf(classId) })) {
+            if (c != null && c.moveToFirst()) {
+                return c.getInt(0);
+            }
+        }
+        return 0;
+    }
+
+    public int countActiveCheckinTasksForClass(long classId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT COUNT(*) FROM CheckinTask WHERE classId = ? AND UPPER(status) = 'ACTIVE'",
+                new String[] { String.valueOf(classId) })) {
+            if (c != null && c.moveToFirst()) {
+                return c.getInt(0);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 某任务下、按学生去重后的最新提交人数（isLatest = 1）。
+     */
+    public int countDistinctStudentsSubmittedForTask(long taskId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT COUNT(DISTINCT studentId) FROM CheckinSubmission WHERE taskId = ? AND isLatest = 1",
+                new String[] { String.valueOf(taskId) })) {
+            if (c != null && c.moveToFirst()) {
+                return c.getInt(0);
+            }
+        }
+        return 0;
+    }
+
     public boolean hasActiveTasksInMonth(String yearMonth) {
         SQLiteDatabase db = this.getReadableDatabase();
         // 用 LIKE 替代 strftime，兼容 ISO 8601 格式

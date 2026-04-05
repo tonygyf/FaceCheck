@@ -24,6 +24,9 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.example.facecheck.R;
 import com.example.facecheck.MainActivity;
 import com.example.facecheck.database.DatabaseHelper;
+import com.example.facecheck.api.ApiService;
+import com.example.facecheck.api.MySubmissionsResponse;
+import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.ui.classroom.ClassroomSelectionActivity;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.activity.FaceCorrectionActivity;
@@ -44,6 +47,7 @@ public class HomeFragment extends Fragment {
     private DatabaseHelper dbHelper;
     private SessionManager sessionManager;
     private ClassroomRepository classroomRepository;
+    private ApiService apiService;
     private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
     private Button btnSync;
     private SwipeRefreshLayout swipeRefreshLayout;
@@ -82,6 +86,7 @@ public class HomeFragment extends Fragment {
         dbHelper = new DatabaseHelper(getContext());
         sessionManager = new SessionManager(getContext());
         classroomRepository = new ClassroomRepositoryImpl(getContext()); // Initialize ClassroomRepository
+        apiService = RetrofitClient.getApiService();
 
         // 初始化视图
         bannerImage = view.findViewById(R.id.bannerImage);
@@ -174,9 +179,12 @@ public class HomeFragment extends Fragment {
                     for (com.example.facecheck.api.CheckinTaskListResponse.CheckinTask task : taskData) {
                         insertOrUpdateCheckinTask(task);
                     }
-                    loadStudentStatistics(studentId);
-                    RefreshPolicyManager.markRefreshed(requireContext(), studentRefreshKey);
-                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                    syncStudentSubmissionsFromApi(studentId, () -> {
+                        if (!isAdded()) return;
+                        loadStudentStatistics(studentId);
+                        RefreshPolicyManager.markRefreshed(requireContext(), studentRefreshKey);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                    });
                 }
 
                 @Override
@@ -336,8 +344,11 @@ public class HomeFragment extends Fragment {
             }
         }
         android.database.Cursor signedCursor = db.rawQuery(
-                "SELECT COUNT(DISTINCT taskId) FROM CheckinSubmission WHERE studentId = ?",
-                new String[] { String.valueOf(studentId) });
+                    "SELECT COUNT(DISTINCT s.taskId) " +
+                            "FROM CheckinSubmission s INNER JOIN CheckinTask t ON t.id = s.taskId " +
+                            "WHERE s.studentId = ? AND t.classId = ? " +
+                            "AND (s.finalResult = 'APPROVED' OR s.finalResult = 'PENDING_REVIEW')",
+                new String[] { String.valueOf(studentId), String.valueOf(classId) });
         if (signedCursor != null && signedCursor.moveToFirst()) {
             signedTasks = signedCursor.getInt(0);
             signedCursor.close();
@@ -345,8 +356,11 @@ public class HomeFragment extends Fragment {
             signedCursor.close();
         }
         android.database.Cursor monthCursor = db.rawQuery(
-                "SELECT COUNT(*) FROM CheckinSubmission WHERE studentId = ? AND submittedAt LIKE ?",
-                new String[] { String.valueOf(studentId), monthPrefix + "%" });
+                "SELECT COUNT(DISTINCT s.taskId) " +
+                        "FROM CheckinSubmission s INNER JOIN CheckinTask t ON t.id = s.taskId " +
+                        "WHERE s.studentId = ? AND t.classId = ? AND s.submittedAt LIKE ? " +
+                        "AND (s.finalResult = 'APPROVED' OR s.finalResult = 'PENDING_REVIEW')",
+                new String[] { String.valueOf(studentId), String.valueOf(classId), monthPrefix + "%" });
         if (monthCursor != null && monthCursor.moveToFirst()) {
             monthSigned = monthCursor.getInt(0);
             monthCursor.close();
@@ -357,6 +371,55 @@ public class HomeFragment extends Fragment {
         tvClassCount.setText(String.valueOf(classCount));
         tvStudentCount.setText(rate + "%");
         tvAttendanceCount.setText(String.valueOf(monthSigned));
+    }
+
+    private void syncStudentSubmissionsFromApi(long studentId, Runnable next) {
+        if (studentId <= 0) {
+            if (next != null) next.run();
+            return;
+        }
+        apiService.getMySubmissions(sessionManager.getApiKey(), studentId)
+                .enqueue(new retrofit2.Callback<MySubmissionsResponse>() {
+                    @Override
+                    public void onResponse(retrofit2.Call<MySubmissionsResponse> call,
+                                           retrofit2.Response<MySubmissionsResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().success) {
+                            mergeStudentSubmissionsToLocal(studentId, response.body().data);
+                        }
+                        if (next != null) next.run();
+                    }
+
+                    @Override
+                    public void onFailure(retrofit2.Call<MySubmissionsResponse> call, Throwable t) {
+                        if (next != null) next.run();
+                    }
+                });
+    }
+
+    private void mergeStudentSubmissionsToLocal(long studentId, List<MySubmissionsResponse.Item> submissions) {
+        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            db.delete("CheckinSubmission", "studentId = ?", new String[] { String.valueOf(studentId) });
+            if (submissions != null) {
+                for (MySubmissionsResponse.Item item : submissions) {
+                    android.content.ContentValues values = new android.content.ContentValues();
+                    values.put("id", item.id);
+                    values.put("taskId", item.taskId);
+                    values.put("studentId", studentId);
+                    values.put("submittedAt", item.submittedAt);
+                    values.put("gestureInput", item.gestureInput);
+                    values.put("passwordInput", item.passwordInput);
+                    values.put("finalResult", item.finalResult == null ? "PENDING_REVIEW" : item.finalResult);
+                    values.put("reason", item.reason);
+                    values.put("isLatest", 1);
+                    db.insertWithOnConflict("CheckinSubmission", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+                }
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private void updateLabel(View card, String text) {

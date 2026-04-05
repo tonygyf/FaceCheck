@@ -96,23 +96,56 @@ fun MapPickerScreen(
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val defaultLatLng = remember { LatLng(39.90923, 116.397428) }
 
-    val moveToCurrentLocation: () -> Unit = {
+    fun selectLocation(latLng: LatLng, moveCamera: Boolean) {
+        isLoading = true
+        selectedLatLng = latLng
+        aMap?.clear()
+        aMap?.addMarker(MarkerOptions().position(latLng))
+        if (moveCamera) {
+            aMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
+        }
+        val geocoderSearch = GeocodeSearch(context)
+        geocoderSearch.setOnGeocodeSearchListener(object : GeocodeSearch.OnGeocodeSearchListener {
+            override fun onRegeocodeSearched(result: RegeocodeResult?, rCode: Int) {
+                isLoading = false
+                selectedAddress = if (rCode == 1000) {
+                    result?.regeocodeAddress?.formatAddress
+                } else {
+                    "无法获取地址"
+                }
+            }
+
+            override fun onGeocodeSearched(result: GeocodeResult?, rCode: Int) {}
+        })
+        val query = RegeocodeQuery(LatLonPoint(latLng.latitude, latLng.longitude), 200f, GeocodeSearch.AMAP)
+        geocoderSearch.getFromLocationAsyn(query)
+    }
+
+    fun locateCurrent(markAsSelected: Boolean) {
         try {
             val mapLocation = aMap?.myLocation
             if (mapLocation != null) {
                 val currentLatLng = LatLng(mapLocation.latitude, mapLocation.longitude)
-                aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
+                if (markAsSelected) {
+                    selectLocation(currentLatLng, moveCamera = true)
+                } else {
+                    aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
+                }
             } else {
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         val currentLatLng = LatLng(location.latitude, location.longitude)
-                        aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
+                        if (markAsSelected) {
+                            selectLocation(currentLatLng, moveCamera = true)
+                        } else {
+                            aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
+                        }
                     } else {
                         Toast.makeText(context, "暂未获取到当前位置", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
-        } catch (e: SecurityException) {
+        } catch (_: SecurityException) {
             Toast.makeText(context, "缺少定位权限", Toast.LENGTH_SHORT).show()
         }
     }
@@ -122,7 +155,7 @@ fun MapPickerScreen(
     ) { isGranted: Boolean ->
         if (isGranted) {
             aMap?.isMyLocationEnabled = true
-            moveToCurrentLocation()
+            locateCurrent(markAsSelected = true)
         } else {
             Toast.makeText(context, "未授予定位权限，无法定位到当前位置", Toast.LENGTH_SHORT).show()
         }
@@ -145,12 +178,14 @@ fun MapPickerScreen(
         }
     }
 
-    LaunchedEffect(aMap) {
-        aMap = mapView.map
-        aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f))
-        aMap?.uiSettings?.apply {
+    LaunchedEffect(Unit) {
+        val map = mapView.map
+        aMap = map
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f))
+        // maps2d 的 AMap 无 setOnMyLocationButtonClickListener（该 API 在 3D SDK 中）；定位统一走左下角 FAB。
+        map.uiSettings?.apply {
             isZoomControlsEnabled = true
-            isMyLocationButtonEnabled = true
+            isMyLocationButtonEnabled = false
             isCompassEnabled = true
             isScaleControlsEnabled = true
         }
@@ -158,10 +193,8 @@ fun MapPickerScreen(
         when (PackageManager.PERMISSION_GRANTED) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
                 if (!readonly) {
-                    aMap?.isMyLocationEnabled = true
-                }
-                if (!readonly) {
-                    moveToCurrentLocation()
+                    map.isMyLocationEnabled = true
+                    locateCurrent(markAsSelected = false)
                 }
             }
             else -> {
@@ -175,10 +208,10 @@ fun MapPickerScreen(
             val target = LatLng(presetLat, presetLng)
             selectedLatLng = target
             selectedAddress = "签到范围中心点"
-            aMap?.clear()
-            aMap?.addMarker(MarkerOptions().position(target))
+            map.clear()
+            map.addMarker(MarkerOptions().position(target))
             if (presetRadiusM > 0) {
-                aMap?.addCircle(
+                map.addCircle(
                     CircleOptions()
                         .center(target)
                         .radius(presetRadiusM.toDouble())
@@ -187,32 +220,13 @@ fun MapPickerScreen(
                         .fillColor(0x222196F3)
                 )
             }
-            aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(target, if (presetRadiusM > 0) 16f else 15f))
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, if (presetRadiusM > 0) 16f else 15f))
             return@LaunchedEffect
         }
 
-        aMap?.setOnMapClickListener { latLng ->
+        map.setOnMapClickListener { latLng ->
             if (readonly) return@setOnMapClickListener
-            isLoading = true
-            selectedLatLng = latLng
-            aMap?.clear()
-            aMap?.addMarker(MarkerOptions().position(latLng))
-
-            val geocoderSearch = GeocodeSearch(context)
-            geocoderSearch.setOnGeocodeSearchListener(object : GeocodeSearch.OnGeocodeSearchListener {
-                override fun onRegeocodeSearched(result: RegeocodeResult?, rCode: Int) {
-                    isLoading = false
-                    selectedAddress = if (rCode == 1000) {
-                        result?.regeocodeAddress?.formatAddress
-                    } else {
-                        "无法获取地址"
-                    }
-                }
-
-                override fun onGeocodeSearched(result: GeocodeResult?, rCode: Int) {}
-            })
-            val query = RegeocodeQuery(LatLonPoint(latLng.latitude, latLng.longitude), 200f, GeocodeSearch.AMAP)
-            geocoderSearch.getFromLocationAsyn(query)
+            selectLocation(latLng, moveCamera = false)
         }
     }
 
@@ -241,18 +255,23 @@ fun MapPickerScreen(
                     if (readonly) return@SmallFloatingActionButton
                     when (PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
-                            moveToCurrentLocation()
+                            locateCurrent(markAsSelected = true)
                         }
                         else -> requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
                 }) {
                     Icon(Icons.Default.LocationOn, contentDescription = "定位到当前位置")
                 }
-                if (!readonly && selectedLatLng != null && !isLoading) {
+                if (!readonly) {
                     FloatingActionButton(onClick = {
+                        val target = selectedLatLng
+                        if (target == null || isLoading) {
+                            Toast.makeText(context, "请先选择有效位置", Toast.LENGTH_SHORT).show()
+                            return@FloatingActionButton
+                        }
                         onLocationSelected(
-                            selectedLatLng!!.latitude,
-                            selectedLatLng!!.longitude,
+                            target.latitude,
+                            target.longitude,
                             selectedAddress ?: "未知位置"
                         )
                     }) {

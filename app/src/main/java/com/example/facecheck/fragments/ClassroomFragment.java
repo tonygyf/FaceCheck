@@ -23,7 +23,9 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.example.facecheck.R;
 import com.example.facecheck.adapters.ClassroomAdapter;
 import com.example.facecheck.data.model.Classroom;
+import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.ui.classroom.ClassroomActivity;
+import com.example.facecheck.ui.classroom.ClassroomCheckinStatusSheet;
 import com.example.facecheck.ui.classroom.ClassroomViewModel;
 import com.example.facecheck.ui.classroom.ClassroomViewModelFactory;
 import com.example.facecheck.utils.SessionManager;
@@ -41,6 +43,7 @@ public class ClassroomFragment extends Fragment {
     private ClassroomViewModel viewModel;
     private SessionManager sessionManager;
     private SwipeRefreshLayout swipeRefreshLayout;
+    private DatabaseHelper databaseHelper;
 
     @Nullable
     @Override
@@ -48,6 +51,7 @@ public class ClassroomFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_classroom, container, false);
 
         sessionManager = new SessionManager(requireContext());
+        databaseHelper = new DatabaseHelper(requireContext().getApplicationContext());
 
         setupRecyclerView(view);
         setupViewModel();
@@ -71,12 +75,14 @@ public class ClassroomFragment extends Fragment {
     private void setupRecyclerView(View view) {
         recyclerView = view.findViewById(R.id.recycler_classrooms);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        adapter = new ClassroomAdapter(new ArrayList<>());
+        adapter = new ClassroomAdapter(new ArrayList<>(), databaseHelper);
         adapter.setOnItemClickListener(classroom -> {
             Intent intent = new Intent(getActivity(), ClassroomActivity.class);
             intent.putExtra("classroom_id", classroom.getId());
             startActivity(intent);
         });
+        adapter.setOnCheckinStatusClickListener(
+                classroom -> ClassroomCheckinStatusSheet.show(ClassroomFragment.this, classroom, databaseHelper));
         recyclerView.setAdapter(adapter);
     }
 

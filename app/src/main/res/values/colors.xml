@@ -62,6 +62,11 @@
     
     <!-- 谷歌风格UI新增颜色 -->
     <color name="background_gray">#F5F5F5</color>
+    <!-- 班级管理列表：与考勤任务列表（白底+灰描边）区分的轻靛蓝基调 -->
+    <color name="classroom_list_bg">#EEF2FF</color>
+    <color name="classroom_card_bg">#F8FAFF</color>
+    <color name="classroom_card_stroke">#C7D2FE</color>
+
     <color name="divider">#E0E0E0</color>
     <color name="icon_tint">#757575</color>
     <color name="error_red">#D32F2F</color>

@@ -23,9 +23,13 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewTreeLifecycleOwner;
+import androidx.lifecycle.ViewTreeViewModelStoreOwner;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.savedstate.SavedStateRegistryOwner;
+import androidx.savedstate.ViewTreeSavedStateRegistryOwner;
 
 import com.example.facecheck.R;
 import com.example.facecheck.api.ApiService;
@@ -432,102 +436,173 @@ public class StudentCoursesFragment extends Fragment {
     }
 
     private void showSubmitBottomSheet(SessionItem item, boolean readonly) {
-        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
-        View content = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_student_checkin_submit, null, false);
-        dialog.setContentView(content);
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setDimAmount(0.45f);
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        }
-        recyclerView.setAlpha(0.82f);
-        dialog.setOnDismissListener(d -> recyclerView.setAlpha(1f));
+        if (!isAdded()) return;
+        try {
+            if (getActivity() == null || getActivity().isFinishing() || getActivity().isDestroyed()) return;
+            BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
+            dialog.setOnShowListener(d -> {
+                BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) d;
+                View bottomSheet = bottomSheetDialog.findViewById(
+                        com.google.android.material.R.id.design_bottom_sheet);
 
-        TextView tvTitle = content.findViewById(R.id.tv_task_title);
-        TextView tvTaskStatus = content.findViewById(R.id.tv_task_status);
-        TextView tvMethodHint = content.findViewById(R.id.tv_method_hint);
-        TextView tvLocationRequired = content.findViewById(R.id.tv_location_required);
-        TextView tvLocationCoords = content.findViewById(R.id.tv_location_coords);
-        ComposeView composeRequiredTags = content.findViewById(R.id.compose_required_tags);
-        View cardLocationRequired = content.findViewById(R.id.card_location_required);
-        Button btnOpenMapPreview = content.findViewById(R.id.btn_open_map_preview);
-        ComposeView composeGesturePad = content.findViewById(R.id.compose_gesture_pad);
-        EditText etGesture = content.findViewById(R.id.et_gesture);
-        LinearLayout layoutPasswordRow = content.findViewById(R.id.layout_password_row);
-        EditText etPassword = content.findViewById(R.id.et_password);
-        Button btnTogglePasswordVisibility = content.findViewById(R.id.btn_toggle_password_visibility);
-        EditText etReason = content.findViewById(R.id.et_reason);
-        Button btnSubmit = content.findViewById(R.id.btn_submit_checkin);
+                if (bottomSheet != null) {
+                    bottomSheet.setBackgroundResource(R.drawable.bg_bottom_sheet_rounded);
+                }
+            });
 
-        tvTitle.setText(item.title == null || item.title.isEmpty() ? "签到任务" : item.title);
-        tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
-        StudentCheckinTagComposeBinder.bind(composeRequiredTags, buildTagItems(item));
-        tvMethodHint.setText(resolveMethodHint(item));
-        cardLocationRequired.setVisibility(item.requiresLocation() ? View.VISIBLE : View.GONE);
-        if (item.requiresLocation() && item.locationRadiusM != null) {
-            tvLocationRequired.setText("本任务要求地理位置签到（半径 " + item.locationRadiusM + " 米），提交时将自动尝试定位。");
-        }
-        if (item.requiresLocation()) {
-            String lat = item.locationLat == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLat);
-            String lng = item.locationLng == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLng);
-            tvLocationCoords.setText("中心点: " + lat + ", " + lng);
-            btnOpenMapPreview.setOnClickListener(v -> openMapPreview(item));
-        }
+            View content = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_student_checkin_submit, null, false);
+            // ComposeView 在 BottomSheetDialog 中可能拿不到 owner，先给内容根视图绑定。
+            applyViewTreeOwners(content);
+            dialog.setContentView(content);
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setDimAmount(0.45f);
+                dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            }
+            if (recyclerView != null) {
+                recyclerView.setAlpha(0.82f);
+            }
+            dialog.setOnDismissListener(d -> {
+                if (recyclerView != null) recyclerView.setAlpha(1f);
+            });
 
-        etGesture.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
-        layoutPasswordRow.setVisibility(item.requiresPassword() ? View.VISIBLE : View.GONE);
-        composeGesturePad.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+            TextView tvTitle = content.findViewById(R.id.tv_task_title);
+            TextView tvTaskStatus = content.findViewById(R.id.tv_task_status);
+            TextView tvMethodHint = content.findViewById(R.id.tv_method_hint);
+            TextView tvLocationRequired = content.findViewById(R.id.tv_location_required);
+            TextView tvLocationCoords = content.findViewById(R.id.tv_location_coords);
+            ComposeView composeRequiredTags = content.findViewById(R.id.compose_required_tags);
+            View cardLocationRequired = content.findViewById(R.id.card_location_required);
+            Button btnOpenMapPreview = content.findViewById(R.id.btn_open_map_preview);
+            ComposeView composeGesturePad = content.findViewById(R.id.compose_gesture_pad);
+            EditText etGesture = content.findViewById(R.id.et_gesture);
+            LinearLayout layoutPasswordRow = content.findViewById(R.id.layout_password_row);
+            EditText etPassword = content.findViewById(R.id.et_password);
+            Button btnTogglePasswordVisibility = content.findViewById(R.id.btn_toggle_password_visibility);
+            EditText etReason = content.findViewById(R.id.et_reason);
+            Button btnSubmit = content.findViewById(R.id.btn_submit_checkin);
 
-        if (readonly) {
-            etGesture.setText(item.submission == null || item.submission.gestureInput == null ? "" : item.submission.gestureInput);
-            etPassword.setText(item.submission == null || item.submission.passwordInput == null ? "" : item.submission.passwordInput);
-            etReason.setText(item.submission == null || item.submission.reason == null ? "" : item.submission.reason);
-            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            etGesture.setEnabled(false);
-            etPassword.setEnabled(false);
-            etReason.setEnabled(false);
-            boolean[] passwordVisible = new boolean[] { false };
-            if (item.requiresPassword()) {
-                btnTogglePasswordVisibility.setVisibility(View.VISIBLE);
-                btnTogglePasswordVisibility.setText("显示");
-                btnTogglePasswordVisibility.setOnClickListener(v -> {
-                    passwordVisible[0] = !passwordVisible[0];
-                    if (passwordVisible[0]) {
-                        etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-                        btnTogglePasswordVisibility.setText("隐藏");
-                    } else {
-                        etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                        btnTogglePasswordVisibility.setText("显示");
-                    }
-                    etPassword.setSelection(etPassword.getText() == null ? 0 : etPassword.getText().length());
-                });
+            if (tvTitle == null || tvTaskStatus == null || tvMethodHint == null || tvLocationRequired == null
+                    || tvLocationCoords == null || composeRequiredTags == null || cardLocationRequired == null
+                    || btnOpenMapPreview == null || composeGesturePad == null || etGesture == null
+                    || layoutPasswordRow == null || etPassword == null || btnTogglePasswordVisibility == null
+                    || etReason == null || btnSubmit == null) {
+                Toast.makeText(requireContext(), "打开签到表单失败，请重试", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                return;
+            }
+
+            tvTitle.setText(item.title == null || item.title.isEmpty() ? "签到任务" : item.title);
+            tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
+            tvMethodHint.setText(resolveMethodHint(item));
+            cardLocationRequired.setVisibility(item.requiresLocation() ? View.VISIBLE : View.GONE);
+            if (item.requiresLocation() && item.locationRadiusM != null) {
+                tvLocationRequired.setText("本任务要求地理位置签到（半径 " + item.locationRadiusM + " 米），提交时将自动尝试定位。");
+            }
+            if (item.requiresLocation()) {
+                String lat = item.locationLat == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLat);
+                String lng = item.locationLng == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLng);
+                tvLocationCoords.setText("中心点: " + lat + ", " + lng);
+                btnOpenMapPreview.setOnClickListener(v -> openMapPreview(item));
+            }
+
+            etGesture.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+            layoutPasswordRow.setVisibility(item.requiresPassword() ? View.VISIBLE : View.GONE);
+            composeGesturePad.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+
+            if (readonly) {
+                etGesture.setText(item.submission == null || item.submission.gestureInput == null ? "" : item.submission.gestureInput);
+                etPassword.setText(item.submission == null || item.submission.passwordInput == null ? "" : item.submission.passwordInput);
+                etReason.setText(item.submission == null || item.submission.reason == null ? "" : item.submission.reason);
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                etGesture.setEnabled(false);
+                etPassword.setEnabled(false);
+                etReason.setEnabled(false);
+                boolean[] passwordVisible = new boolean[] { false };
+                if (item.requiresPassword()) {
+                    btnTogglePasswordVisibility.setVisibility(View.VISIBLE);
+                    btnTogglePasswordVisibility.setText("显示");
+                    btnTogglePasswordVisibility.setOnClickListener(v -> {
+                        passwordVisible[0] = !passwordVisible[0];
+                        if (passwordVisible[0]) {
+                            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                            btnTogglePasswordVisibility.setText("隐藏");
+                        } else {
+                            etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                            btnTogglePasswordVisibility.setText("显示");
+                        }
+                        etPassword.setSelection(etPassword.getText() == null ? 0 : etPassword.getText().length());
+                    });
+                } else {
+                    btnTogglePasswordVisibility.setVisibility(View.GONE);
+                }
+                btnSubmit.setText("关闭");
+                btnSubmit.setOnClickListener(v -> dialog.dismiss());
             } else {
                 btnTogglePasswordVisibility.setVisibility(View.GONE);
+                btnSubmit.setOnClickListener(v -> submitCheckinTask(item, etGesture.getText().toString().trim(),
+                        etPassword.getText().toString().trim(),
+                        etReason.getText().toString().trim(), dialog));
             }
-            if (item.requiresGesture()) {
-                StudentCheckinComposeBinder.bindGesturePad(
-                        composeGesturePad,
-                        true,
-                        item.submission == null ? "" : item.submission.gestureInput,
-                        null
-                );
+
+            dialog.show();
+            // show 后 Material 会再包裹一层容器，需再次给窗口树补齐 owner。
+            if (dialog.getWindow() != null) {
+                View decor = dialog.getWindow().getDecorView();
+                applyViewTreeOwners(decor);
+                View contentRoot = decor.findViewById(android.R.id.content);
+                if (contentRoot != null) applyViewTreeOwners(contentRoot);
+                int containerId = requireContext().getResources().getIdentifier("container", "id", requireContext().getPackageName());
+                if (containerId != 0) {
+                    View container = decor.findViewById(containerId);
+                    if (container != null) applyViewTreeOwners(container);
+                }
             }
-            btnSubmit.setText("关闭");
-            btnSubmit.setOnClickListener(v -> dialog.dismiss());
-        } else {
-            btnTogglePasswordVisibility.setVisibility(View.GONE);
-            if (item.requiresGesture()) {
-                StudentCheckinComposeBinder.bindGesturePad(
-                        composeGesturePad,
-                        false,
-                        null,
-                        sequence -> etGesture.setText(sequence)
-                );
-            }
-            btnSubmit.setOnClickListener(v -> submitCheckinTask(item, etGesture.getText().toString().trim(),
-                    etPassword.getText().toString().trim(),
-                    etReason.getText().toString().trim(), dialog));
+            applyViewTreeOwners(composeRequiredTags);
+            applyViewTreeOwners(composeGesturePad);
+
+            content.post(() -> {
+                if (!isAdded() || !dialog.isShowing() || content.getWindowToken() == null) return;
+                try {
+                    StudentCheckinTagComposeBinder.bind(composeRequiredTags, buildTagItems(item));
+                } catch (Exception e) {
+                    composeRequiredTags.setVisibility(View.GONE);
+                }
+                if (item.requiresGesture()) {
+                    try {
+                        StudentCheckinComposeBinder.bindGesturePad(
+                                composeGesturePad,
+                                readonly,
+                                readonly && item.submission != null ? item.submission.gestureInput : null,
+                                readonly ? null : sequence -> {
+                                    etGesture.setText(sequence);
+                                    return kotlin.Unit.INSTANCE;
+                                }
+                        );
+                    } catch (Exception e) {
+                        // 降级为文本输入，避免 Compose 初始化异常导致闪退
+                        composeGesturePad.setVisibility(View.GONE);
+                        etGesture.setVisibility(View.VISIBLE);
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            Toast.makeText(requireContext(), "打开签到表单失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
-        dialog.show();
+    }
+
+    private void applyViewTreeOwners(View view) {
+        if (view == null || !isAdded()) return;
+        ViewTreeLifecycleOwner.set(view, getViewLifecycleOwner());
+        ViewTreeViewModelStoreOwner.set(view, this);
+        SavedStateRegistryOwner savedStateOwner = null;
+        if (getViewLifecycleOwner() instanceof SavedStateRegistryOwner) {
+            savedStateOwner = (SavedStateRegistryOwner) getViewLifecycleOwner();
+        } else if (this instanceof SavedStateRegistryOwner) {
+            savedStateOwner = this;
+        }
+        if (savedStateOwner != null) {
+            ViewTreeSavedStateRegistryOwner.set(view, savedStateOwner);
+        }
     }
 
     private void openMapPreview(SessionItem item) {
