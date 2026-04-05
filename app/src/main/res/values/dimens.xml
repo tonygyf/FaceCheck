@@ -22,4 +22,7 @@
     <dimen name="text_size_large">16sp</dimen>
     <dimen name="text_size_title">18sp</dimen>
     <dimen name="text_size_headline">24sp</dimen>
+
+    <!-- 班级考勤签到底部表：Compose 列表最大高度，避免 LazyColumn 在 BottomSheet 内无限高度测量崩溃 -->
+    <dimen name="classroom_checkin_status_compose_max_height">560dp</dimen>
 </resources>

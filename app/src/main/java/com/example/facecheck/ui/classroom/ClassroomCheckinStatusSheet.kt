@@ -3,12 +3,14 @@ package com.example.facecheck.ui.classroom
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,7 +51,13 @@ data class ClassTaskCheckinRow(
 object ClassroomCheckinStatusSheet {
 
     @JvmStatic
-    fun show(fragment: Fragment, classroom: Classroom, db: DatabaseHelper) {
+    @JvmOverloads
+    fun show(
+        fragment: Fragment,
+        classroom: Classroom,
+        db: DatabaseHelper,
+        dimBehind: View? = null,
+    ) {
         if (!fragment.isAdded) return
         val activity = fragment.activity ?: return
         showInternal(
@@ -58,6 +67,7 @@ object ClassroomCheckinStatusSheet {
             lifecycleOwner = fragment.viewLifecycleOwner,
             viewModelStoreOwner = fragment,
             savedStateRegistryOwner = fragment,
+            dimBehind = dimBehind,
         )
     }
 
@@ -70,6 +80,7 @@ object ClassroomCheckinStatusSheet {
             lifecycleOwner = activity,
             viewModelStoreOwner = activity,
             savedStateRegistryOwner = activity,
+            dimBehind = null,
         )
     }
 
@@ -80,6 +91,7 @@ object ClassroomCheckinStatusSheet {
         lifecycleOwner: LifecycleOwner,
         viewModelStoreOwner: ViewModelStoreOwner,
         savedStateRegistryOwner: SavedStateRegistryOwner,
+        dimBehind: View?,
     ) {
         if (activity.isFinishing || activity.isDestroyed) return
 
@@ -98,6 +110,18 @@ object ClassroomCheckinStatusSheet {
         val content = LayoutInflater.from(activity).inflate(R.layout.dialog_classroom_checkin_status, null, false)
         ComposeViewTreeOwnersHelper.apply(content, lifecycleOwner, viewModelStoreOwner, savedStateRegistryOwner)
         dialog.setContentView(content)
+// ✅ 关键修复：setContentView 之后 window 已存在，把 owners 补挂到 decorView
+        //    ComposeView.onAttachedToWindow 会向上遍历到 decorView，必须在那层也能找到 owner
+        dialog.window?.decorView?.let { decor ->
+            ComposeViewTreeOwnersHelper.apply(
+                decor, lifecycleOwner, viewModelStoreOwner, savedStateRegistryOwner
+            )
+        }
+        dimBehind?.alpha = 0.82f
+        dialog.setOnDismissListener {
+            dimBehind?.alpha = 1f
+        }
+
         dialog.window?.let { w ->
             w.setDimAmount(0.45f)
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
@@ -108,12 +132,11 @@ object ClassroomCheckinStatusSheet {
             dialog.dismiss()
             return
         }
-        ComposeViewTreeOwnersHelper.apply(compose, lifecycleOwner, viewModelStoreOwner, savedStateRegistryOwner)
         compose.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         compose.setContent {
             MaterialTheme {
                 Surface(color = Color.Transparent) {
-                    ClassroomCheckinStatusContent(
+                    ClassroomCheckinStatusSheetBody(
                         className = classroom.getName() ?: "",
                         year = classroom.getYear(),
                         studentCount = studentCap,
@@ -152,57 +175,67 @@ object ClassroomCheckinStatusSheet {
         }
         return out
     }
-
 }
 
 @Composable
-private fun ClassroomCheckinStatusContent(
+private fun ClassroomCheckinStatusSheetBody(
     className: String,
     year: Int,
     studentCount: Int,
     rows: List<ClassTaskCheckinRow>,
 ) {
-    Column(
+    val config = LocalConfiguration.current
+    val maxFromScreen = (config.screenHeightDp * 0.58f).dp
+    val maxListHeight = minOf(maxFromScreen, 560.dp)
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .heightIn(max = maxListHeight),
+        contentPadding = PaddingValues(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "考勤签到情况",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = buildString {
-                append(className)
-                append(" · ")
-                append(year)
-                append("级")
-                if (studentCount > 0) {
-                    append(" · 班级人数 ")
-                    append(studentCount)
-                }
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF64748B),
-            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-        )
-        HorizontalDivider(color = Color(0xFFE2E8F0))
+        item(key = "header") {
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    text = "考勤签到情况",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = buildString {
+                        append(className)
+                        append(" · ")
+                        append(year)
+                        append("级")
+                        if (studentCount > 0) {
+                            append(" · 班级人数 ")
+                            append(studentCount)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 12.dp),
+                    color = Color(0xFFE2E8F0),
+                )
+            }
+        }
         if (rows.isEmpty()) {
-            Text(
-                text = "暂无考勤任务。发布任务并同步后，将在此显示各任务签到人数。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF64748B),
-                modifier = Modifier.padding(top = 16.dp),
-            )
+            item(key = "empty") {
+                Text(
+                    text = "暂无考勤任务。发布任务并同步后，将在此显示各任务签到人数。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(rows, key = { it.taskId }) { row ->
-                    ClassTaskCheckinCard(row = row, classStudentCount = studentCount)
-                }
+            items(rows, key = { it.taskId }) { row ->
+                ClassTaskCheckinCard(row = row, classStudentCount = studentCount)
             }
         }
     }
@@ -212,14 +245,17 @@ private fun ClassroomCheckinStatusContent(
 private fun ClassTaskCheckinCard(row: ClassTaskCheckinRow, classStudentCount: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFF)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, Color(0xFFC7D2FE)),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Column(Modifier.padding(14.dp)) {
             Text(
                 text = row.title.ifBlank { "未命名任务" },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(8.dp))
             AttendanceTaskStatusChips(status = row.status, startAt = row.startAt)

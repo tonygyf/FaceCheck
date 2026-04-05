@@ -20,7 +20,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.example.facecheck.R;
 import com.example.facecheck.adapters.ClassroomAdapter;
 import com.example.facecheck.data.model.Classroom;
 import com.example.facecheck.database.DatabaseHelper;
@@ -36,6 +35,11 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
+import static com.example.facecheck.R.id.fab_add_classroom;
+import static com.example.facecheck.R.id.recycler_classrooms;
+import static com.example.facecheck.R.id.swipe_refresh_classroom;
+import static com.example.facecheck.R.layout.fragment_classroom;
+
 public class ClassroomFragment extends Fragment {
 
     private RecyclerView recyclerView;
@@ -48,7 +52,7 @@ public class ClassroomFragment extends Fragment {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_classroom, container, false);
+        View view = inflater.inflate(fragment_classroom, container, false);
 
         sessionManager = new SessionManager(requireContext());
         databaseHelper = new DatabaseHelper(requireContext().getApplicationContext());
@@ -56,7 +60,7 @@ public class ClassroomFragment extends Fragment {
         setupRecyclerView(view);
         setupViewModel();
         setupFab(view);
-        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_classroom);
+        swipeRefreshLayout = view.findViewById(swipe_refresh_classroom);
         if (swipeRefreshLayout != null) {
             swipeRefreshLayout.setOnRefreshListener(() -> viewModel.loadClassrooms(true));
         }
@@ -73,7 +77,7 @@ public class ClassroomFragment extends Fragment {
     }
 
     private void setupRecyclerView(View view) {
-        recyclerView = view.findViewById(R.id.recycler_classrooms);
+        recyclerView = view.findViewById(recycler_classrooms);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new ClassroomAdapter(new ArrayList<>(), databaseHelper);
         adapter.setOnItemClickListener(classroom -> {
@@ -81,8 +85,8 @@ public class ClassroomFragment extends Fragment {
             intent.putExtra("classroom_id", classroom.getId());
             startActivity(intent);
         });
-        adapter.setOnCheckinStatusClickListener(
-                classroom -> ClassroomCheckinStatusSheet.show(ClassroomFragment.this, classroom, databaseHelper));
+        adapter.setOnCheckinStatusClickListener(classroom -> ClassroomCheckinStatusSheet.show(
+                ClassroomFragment.this, classroom, databaseHelper, recyclerView));
         recyclerView.setAdapter(adapter);
     }
 
@@ -116,7 +120,7 @@ public class ClassroomFragment extends Fragment {
     }
 
     private void setupFab(View view) {
-        FloatingActionButton fabAddClassroom = view.findViewById(R.id.fab_add_classroom);
+        FloatingActionButton fabAddClassroom = view.findViewById(fab_add_classroom);
         TooltipCompat.setTooltipText(fabAddClassroom, "添加新班级");
         fabAddClassroom.setOnClickListener(v -> showAddClassroomDialog());
     }
