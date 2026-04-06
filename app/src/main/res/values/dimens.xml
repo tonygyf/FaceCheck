@@ -25,4 +25,5 @@
 
     <!-- 班级考勤签到底部表：Compose 列表最大高度，避免 LazyColumn 在 BottomSheet 内无限高度测量崩溃 -->
     <dimen name="classroom_checkin_status_compose_max_height">560dp</dimen>
+    <dimen name="student_checkin_submit_scroll_max_height">460dp</dimen>
 </resources>

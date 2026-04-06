@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.example.facecheck.data.model.Student;
@@ -21,6 +22,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
@@ -816,6 +818,52 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "FROM CheckinSubmission s INNER JOIN CheckinTask t ON s.taskId = t.id " +
                 "WHERE s.studentId = ? ORDER BY s.submittedAt DESC";
         return db.rawQuery(sql, new String[] { String.valueOf(studentId) });
+    }
+
+    public Cursor getLatestCheckinSubmissionsByStudent(long studentId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT id, taskId, submittedAt, finalResult, reason, gestureInput, passwordInput " +
+                "FROM CheckinSubmission WHERE studentId = ? AND isLatest = 1 ORDER BY submittedAt DESC, id DESC";
+        return db.rawQuery(sql, new String[] { String.valueOf(studentId) });
+    }
+
+    public void upsertLatestCheckinSubmissionFromApi(long submissionId, long taskId, long studentId, String submittedAt,
+            String finalResult, String reason, String gestureInput, String passwordInput) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        String normalizedFinalResult = TextUtils.isEmpty(finalResult)
+                ? "PENDING_REVIEW"
+                : finalResult.toUpperCase(Locale.ROOT);
+        String manualResult = null;
+        if ("APPROVED".equals(normalizedFinalResult)) {
+            manualResult = "APPROVED";
+        } else if ("REJECTED".equals(normalizedFinalResult)) {
+            manualResult = "REJECTED";
+        }
+        db.beginTransaction();
+        try {
+            db.execSQL("UPDATE CheckinSubmission SET isLatest = 0 WHERE taskId = ? AND studentId = ?",
+                    new Object[] { taskId, studentId });
+            ContentValues values = new ContentValues();
+            if (submissionId > 0) {
+                values.put("id", submissionId);
+            }
+            values.put("taskId", taskId);
+            values.put("studentId", studentId);
+            if (!TextUtils.isEmpty(submittedAt)) {
+                values.put("submittedAt", submittedAt);
+            }
+            values.put("gestureInput", gestureInput);
+            values.put("passwordInput", passwordInput);
+            values.put("autoResult", "APPROVED".equals(normalizedFinalResult) ? "PASS" : "FAIL");
+            values.put("manualResult", manualResult);
+            values.put("finalResult", normalizedFinalResult);
+            values.put("reason", reason);
+            values.put("isLatest", 1);
+            db.insertWithOnConflict("CheckinSubmission", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public String getClassNameById(long classId) {

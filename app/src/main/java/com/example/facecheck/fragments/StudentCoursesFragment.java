@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -22,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.core.content.ContextCompat;
+import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewTreeLifecycleOwner;
 import androidx.lifecycle.ViewTreeViewModelStoreOwner;
@@ -45,6 +47,7 @@ import com.example.facecheck.ui.task.MapPickerActivity;
 import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.card.MaterialCardView;
@@ -53,8 +56,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StudentCoursesFragment extends Fragment {
@@ -143,8 +148,11 @@ public class StudentCoursesFragment extends Fragment {
     private void refreshAllData(boolean forceRefresh) {
         if (!isAdded()) return;
         String refreshKey = "student_courses_" + studentId;
-        if (!forceRefresh && !RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS)) {
-            loadAttendanceSessions();
+        boolean shouldSync = forceRefresh
+                || RefreshPolicyManager.shouldRefresh(requireContext(), refreshKey, RefreshPolicyManager.TTL_HOME_MS);
+        loadSubmissionCacheFromLocal();
+        loadAttendanceSessions();
+        if (!shouldSync) {
             stopRefreshing();
             return;
         }
@@ -183,16 +191,28 @@ public class StudentCoursesFragment extends Fragment {
     }
 
     private void syncMySubmissionsFromApi(Runnable next) {
-        submissionMap.clear();
         apiService.getMySubmissions(sessionManager.getApiKey(), studentId).enqueue(new retrofit2.Callback<MySubmissionsResponse>() {
             @Override
             public void onResponse(retrofit2.Call<MySubmissionsResponse> call, retrofit2.Response<MySubmissionsResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().success && response.body().data != null) {
+                    submissionMap.clear();
+                    Set<Long> syncedTaskIds = new HashSet<>();
                     for (MySubmissionsResponse.Item item : response.body().data) {
-                        if (!submissionMap.containsKey(item.taskId)) {
+                        if (syncedTaskIds.add(item.taskId)) {
                             submissionMap.put(item.taskId, new SubmissionItem(item.id, item.finalResult, item.reason, item.gestureInput, item.passwordInput));
                         }
+                        dbHelper.upsertLatestCheckinSubmissionFromApi(
+                                item.id,
+                                item.taskId,
+                                studentId,
+                                item.submittedAt,
+                                item.finalResult,
+                                item.reason,
+                                item.gestureInput,
+                                item.passwordInput
+                        );
                     }
+                    loadSubmissionCacheFromLocal();
                 }
                 if (next != null) next.run();
             }
@@ -202,6 +222,29 @@ public class StudentCoursesFragment extends Fragment {
                 if (next != null) next.run();
             }
         });
+    }
+
+    private void loadSubmissionCacheFromLocal() {
+        submissionMap.clear();
+        if (studentId <= 0) return;
+        Cursor cursor = dbHelper.getLatestCheckinSubmissionsByStudent(studentId);
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                long taskId = cursor.getLong(cursor.getColumnIndexOrThrow("taskId"));
+                if (submissionMap.containsKey(taskId)) {
+                    continue;
+                }
+                long submissionId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                String finalResult = cursor.getString(cursor.getColumnIndexOrThrow("finalResult"));
+                String reason = cursor.getString(cursor.getColumnIndexOrThrow("reason"));
+                String gestureInput = cursor.getString(cursor.getColumnIndexOrThrow("gestureInput"));
+                String passwordInput = cursor.getString(cursor.getColumnIndexOrThrow("passwordInput"));
+                submissionMap.put(taskId, new SubmissionItem(submissionId, finalResult, reason, gestureInput, passwordInput));
+            } while (cursor.moveToNext());
+            cursor.close();
+        } else if (cursor != null) {
+            cursor.close();
+        }
     }
 
     private void loadAttendanceSessions() {
@@ -415,10 +458,14 @@ public class StudentCoursesFragment extends Fragment {
 
     private List<StudentCheckinTagComposeBinder.TagItem> buildTagItems(SessionItem item) {
         List<StudentCheckinTagComposeBinder.TagItem> tags = new ArrayList<>();
-        tags.add(new StudentCheckinTagComposeBinder.TagItem("基础签到", false));
-        if (item.requiresLocation()) tags.add(new StudentCheckinTagComposeBinder.TagItem("定位签到", true));
-        if (item.requiresGesture()) tags.add(new StudentCheckinTagComposeBinder.TagItem("手势签到", true));
-        if (item.requiresPassword()) tags.add(new StudentCheckinTagComposeBinder.TagItem("密码签到", true));
+        int methodCount = 0;
+        if (item.requiresLocation()) methodCount++;
+        if (item.requiresGesture()) methodCount++;
+        if (item.requiresPassword()) methodCount++;
+        tags.add(new StudentCheckinTagComposeBinder.TagItem(methodCount > 1 ? "混合签到" : "基础签到", false));
+        if (item.requiresLocation()) tags.add(new StudentCheckinTagComposeBinder.TagItem("定位", true));
+        if (item.requiresGesture()) tags.add(new StudentCheckinTagComposeBinder.TagItem("手势", true));
+        if (item.requiresPassword()) tags.add(new StudentCheckinTagComposeBinder.TagItem("密码", true));
         return tags;
     }
 
@@ -463,6 +510,10 @@ public class StudentCoursesFragment extends Fragment {
             }
             dialog.setOnDismissListener(d -> {
                 if (recyclerView != null) recyclerView.setAlpha(1f);
+                View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+                if (bottomSheet != null) {
+                    BottomSheetBehavior.from(bottomSheet).setDraggable(true);
+                }
             });
 
             TextView tvTitle = content.findViewById(R.id.tv_task_title);
@@ -474,6 +525,8 @@ public class StudentCoursesFragment extends Fragment {
             View cardLocationRequired = content.findViewById(R.id.card_location_required);
             Button btnOpenMapPreview = content.findViewById(R.id.btn_open_map_preview);
             ComposeView composeGesturePad = content.findViewById(R.id.compose_gesture_pad);
+            View dragHandle = content.findViewById(R.id.view_drag_handle);
+            NestedScrollView scrollCheckinMethods = content.findViewById(R.id.scroll_checkin_methods);
             EditText etGesture = content.findViewById(R.id.et_gesture);
             LinearLayout layoutPasswordRow = content.findViewById(R.id.layout_password_row);
             EditText etPassword = content.findViewById(R.id.et_password);
@@ -502,12 +555,33 @@ public class StudentCoursesFragment extends Fragment {
                 String lat = item.locationLat == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLat);
                 String lng = item.locationLng == null ? "-" : String.format(Locale.getDefault(), "%.6f", item.locationLng);
                 tvLocationCoords.setText("中心点: " + lat + ", " + lng);
+                btnOpenMapPreview.setText("查看签到范围（" + lat + ", " + lng + "）");
                 btnOpenMapPreview.setOnClickListener(v -> openMapPreview(item));
             }
 
-            etGesture.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+            etGesture.setVisibility(readonly && item.requiresGesture() ? View.VISIBLE : View.GONE);
             layoutPasswordRow.setVisibility(item.requiresPassword() ? View.VISIBLE : View.GONE);
             composeGesturePad.setVisibility(item.requiresGesture() ? View.VISIBLE : View.GONE);
+            composeGesturePad.setOnTouchListener((v, event) -> {
+                int action = event.getActionMasked();
+                boolean drawing = action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE;
+                boolean release = action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL;
+                if (scrollCheckinMethods != null) {
+                    if (drawing) {
+                        scrollCheckinMethods.requestDisallowInterceptTouchEvent(true);
+                    } else if (release) {
+                        scrollCheckinMethods.requestDisallowInterceptTouchEvent(false);
+                    }
+                }
+                View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+                if (bottomSheet != null) {
+                    BottomSheetBehavior<View> behavior = BottomSheetBehavior.from(bottomSheet);
+                    if (drawing) {
+                        behavior.setDraggable(false);
+                    }
+                }
+                return false;
+            });
 
             if (readonly) {
                 etGesture.setText(item.submission == null || item.submission.gestureInput == null ? "" : item.submission.gestureInput);
@@ -545,6 +619,24 @@ public class StudentCoursesFragment extends Fragment {
             }
 
             dialog.show();
+            View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (bottomSheet != null) {
+                BottomSheetBehavior<View> behavior = BottomSheetBehavior.from(bottomSheet);
+                behavior.setSkipCollapsed(true);
+                behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                behavior.setDraggable(false);
+                if (dragHandle != null) {
+                    dragHandle.setOnTouchListener((v, event) -> {
+                        int action = event.getActionMasked();
+                        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                            behavior.setDraggable(true);
+                        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                            v.post(() -> behavior.setDraggable(false));
+                        }
+                        return false;
+                    });
+                }
+            }
             // show 后 Material 会再包裹一层容器，需再次给窗口树补齐 owner。
             if (dialog.getWindow() != null) {
                 View decor = dialog.getWindow().getDecorView();

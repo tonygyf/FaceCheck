@@ -18,6 +18,7 @@
         android:paddingBottom="20dp">
 
         <View
+            android:id="@+id/view_drag_handle"
             android:layout_width="44dp"
             android:layout_height="5dp"
             android:layout_gravity="center_horizontal"
@@ -61,7 +62,7 @@
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/compose_gesture_pad"
             android:layout_width="match_parent"
-            android:layout_height="300dp"
+            android:layout_height="240dp"
             android:layout_marginTop="14dp"
             android:visibility="gone" />
 
@@ -74,83 +75,100 @@
             android:inputType="text"
             android:visibility="gone" />
 
-        <LinearLayout
-            android:id="@+id/layout_password_row"
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll_checkin_methods"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <EditText
-                android:id="@+id/et_password"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:hint="签到密码"
-                android:inputType="textPassword" />
-
-            <Button
-                android:id="@+id/btn_toggle_password_visibility"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:minWidth="0dp"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text="显示"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white" />
-        </LinearLayout>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/card_location_required"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/background_light"
-            app:cardCornerRadius="10dp"
-            app:strokeColor="@color/divider"
-            app:strokeWidth="1dp">
+            android:layout_marginTop="12dp"
+            android:fillViewport="true"
+            android:maxHeight="@dimen/student_checkin_submit_scroll_max_height"
+            android:overScrollMode="ifContentScrolls">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
+                android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tv_location_required"
+                <LinearLayout
+                    android:id="@+id/layout_password_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="本任务要求地理位置签到，提交时将自动尝试定位。"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
 
-                <TextView
-                    android:id="@+id/tv_location_coords"
+                    <EditText
+                        android:id="@+id/et_password"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:hint="签到密码"
+                        android:inputType="textPassword" />
+
+                    <Button
+                        android:id="@+id/btn_toggle_password_visibility"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="显示"
+                        android:textAllCaps="false"
+                        android:textColor="@android:color/white" />
+                </LinearLayout>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_location_required"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="坐标: -"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:layout_marginTop="10dp"
+                    android:visibility="gone"
+                    app:cardBackgroundColor="@color/background_light"
+                    app:cardCornerRadius="10dp"
+                    app:strokeColor="@color/divider"
+                    app:strokeWidth="1dp">
 
-                <Button
-                    android:id="@+id/btn_open_map_preview"
-                    android:layout_width="match_parent"
-                    android:layout_height="40dp"
-                    android:layout_marginTop="8dp"
-                    android:text="查看签到范围"
-                    android:textAllCaps="false"
-                    android:textColor="@android:color/white"
-                    android:backgroundTint="@color/primary" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="12dp">
 
+                        <TextView
+                            android:id="@+id/tv_location_required"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="本任务要求地理位置签到，提交时将自动尝试定位。"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tv_location_coords"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="坐标: -"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/btn_open_map_preview"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="@color/primary"
+                            android:text="查看签到范围"
+                            android:textAllCaps="false"
+                            android:textColor="@android:color/white" />
+
+                    </LinearLayout>
+
+                </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
 
-        </com.google.android.material.card.MaterialCardView>
+        </androidx.core.widget.NestedScrollView>
 
         <EditText
             android:id="@+id/et_reason"

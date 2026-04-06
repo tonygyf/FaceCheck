@@ -145,7 +145,7 @@ fun MapPickerScreen(
         val currentLatLng = LatLng(lat, lng)
         if (markAsSelected) {
             selectLocation(currentLatLng, moveCamera = true)
-        } else {
+        } else if (selectedLatLng == null) {
             aMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f))
         }
         return true
@@ -186,7 +186,7 @@ fun MapPickerScreen(
     ) { isGranted: Boolean ->
         if (isGranted) {
             aMap?.isMyLocationEnabled = true
-            locateCurrent(markAsSelected = true)
+            locateCurrent(markAsSelected = false)
         } else {
             Toast.makeText(context, "未授予定位权限，无法定位到当前位置", Toast.LENGTH_SHORT).show()
         }
@@ -225,7 +225,7 @@ fun MapPickerScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) -> {
                 if (!readonly) {
                     map.isMyLocationEnabled = true
-                    locateCurrent(markAsSelected = true)
+                    locateCurrent(markAsSelected = false)
                 }
             }
             else -> {
