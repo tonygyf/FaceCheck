@@ -27,7 +27,7 @@ import java.util.Locale;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "facecheck.db";
-    private static final int DATABASE_VERSION = 13; // 移除CheckinTask的NOT NULL约束
+    private static final int DATABASE_VERSION = 14; // 新增人脸签到任务字段
     private Context context;
 
     public DatabaseHelper(Context context) {
@@ -72,6 +72,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             Log.w(TAG, "Upgrading database from version " + oldVersion + " to " + newVersion + ", which will destroy all old data");
             dropAllTables(db);
             onCreate(db);
+            return;
+        }
+        if (oldVersion < 14) {
+            try {
+                db.execSQL("ALTER TABLE CheckinTask ADD COLUMN faceRequired INTEGER NOT NULL DEFAULT 0");
+            } catch (Throwable t) {
+                Log.w(TAG, "CheckinTask.faceRequired 迁移跳过: " + t.getMessage());
+            }
+            try {
+                db.execSQL("ALTER TABLE CheckinTask ADD COLUMN faceMinScore REAL");
+            } catch (Throwable t) {
+                Log.w(TAG, "CheckinTask.faceMinScore 迁移跳过: " + t.getMessage());
+            }
         }
     }
 
@@ -293,6 +306,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "locationRadiusM INTEGER, " +
                 "gestureSequence TEXT, " +
                 "passwordPlain TEXT, " +
+                "faceRequired INTEGER NOT NULL DEFAULT 0, " +
+                "faceMinScore REAL, " +
                 "createdAt TEXT DEFAULT (CURRENT_TIMESTAMP), " +
                 "FOREIGN KEY (classId) REFERENCES Classroom(id) ON DELETE CASCADE, " +
                 "FOREIGN KEY (teacherId) REFERENCES Teacher(id) ON DELETE CASCADE" +

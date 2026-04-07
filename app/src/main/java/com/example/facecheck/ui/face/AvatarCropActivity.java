@@ -27,6 +27,9 @@ import java.util.Locale;
 public class AvatarCropActivity extends AppCompatActivity {
 
     public static final String EXTRA_SOURCE_PATH = "extra_source_path";
+    public static final String EXTRA_CROP_SCENE = "extra_crop_scene";
+    public static final String CROP_SCENE_AVATAR = "avatar";
+    public static final String CROP_SCENE_CHECKIN = "checkin";
     public static final String RESULT_CROPPED_PATH = "result_cropped_path";
 
     private TouchImageView cropImageView;
@@ -46,6 +49,10 @@ public class AvatarCropActivity extends AppCompatActivity {
         cropImageView.setDrawingMode(false);
 
         String sourcePath = getIntent().getStringExtra(EXTRA_SOURCE_PATH);
+        String cropScene = getIntent().getStringExtra(EXTRA_CROP_SCENE);
+        if (cropScene == null || cropScene.trim().isEmpty()) {
+            cropScene = CROP_SCENE_AVATAR;
+        }
         if (sourcePath == null || sourcePath.trim().isEmpty()) {
             Toast.makeText(this, "图片路径无效", Toast.LENGTH_SHORT).show();
             finish();
@@ -66,10 +73,11 @@ public class AvatarCropActivity extends AppCompatActivity {
         });
 
         btnCancel.setOnClickListener(v -> finish());
-        btnConfirm.setOnClickListener(v -> confirmCrop());
+        String finalCropScene = cropScene;
+        btnConfirm.setOnClickListener(v -> confirmCrop(finalCropScene));
     }
 
-    private void confirmCrop() {
+    private void confirmCrop(String cropScene) {
         if (cropImageView.getDrawable() == null) {
             Toast.makeText(this, "裁剪失败：图片未加载", Toast.LENGTH_SHORT).show();
             return;
@@ -96,23 +104,28 @@ public class AvatarCropActivity extends AppCompatActivity {
 
         int size = Math.min(width, height);
         Bitmap square = Bitmap.createBitmap(displayBitmap, left, top, size, size);
-        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(output);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.WHITE);
-        canvas.drawColor(Color.TRANSPARENT);
-        float radius = size / 2f;
-        canvas.drawCircle(radius, radius, radius, paint);
-        paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
-        canvas.drawBitmap(square, 0, 0, paint);
-        paint.setXfermode(null);
-
-        File outDir = PhotoStorageManager.getAvatarPhotosDir(this);
+        boolean isCheckinScene = CROP_SCENE_CHECKIN.equalsIgnoreCase(cropScene);
+        File outDir = isCheckinScene ? PhotoStorageManager.getAttendancePhotosDir(this) : PhotoStorageManager.getAvatarPhotosDir(this);
         String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        File outFile = new File(outDir, "avatar_crop_" + ts + ".png");
-        boolean saved = ImageUtils.saveBitmapToPngFile(output, outFile);
+        File outFile = new File(outDir, (isCheckinScene ? "checkin_face_crop_" : "avatar_crop_") + ts + (isCheckinScene ? ".jpg" : ".png"));
+        boolean saved;
+        if (isCheckinScene) {
+            saved = ImageUtils.saveBitmapToFile(square, outFile);
+        } else {
+            Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(output);
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(Color.WHITE);
+            canvas.drawColor(Color.TRANSPARENT);
+            float radius = size / 2f;
+            canvas.drawCircle(radius, radius, radius, paint);
+            paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
+            canvas.drawBitmap(square, 0, 0, paint);
+            paint.setXfermode(null);
+            saved = ImageUtils.saveBitmapToPngFile(output, outFile);
+            output.recycle();
+        }
         square.recycle();
-        output.recycle();
         if (!saved) {
             Toast.makeText(this, "保存裁剪头像失败", Toast.LENGTH_SHORT).show();
             return;

@@ -21,6 +21,8 @@ public class CheckinTaskListResponse {
         @SerializedName("locationRadiusM") public Integer locationRadiusM;
         @SerializedName("gestureSequence") public String gestureSequence;
         @SerializedName("passwordPlain")   public String passwordPlain;
+        @SerializedName("faceRequired")    public Integer faceRequired;
+        @SerializedName("faceMinScore")    public Double faceMinScore;
         @SerializedName("createdAt")       public String createdAt;
     }
 }

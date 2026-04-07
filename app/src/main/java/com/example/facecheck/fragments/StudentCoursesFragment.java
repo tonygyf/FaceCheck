@@ -1,10 +1,12 @@
 package com.example.facecheck.fragments;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -23,6 +25,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewTreeLifecycleOwner;
@@ -35,6 +38,7 @@ import androidx.savedstate.ViewTreeSavedStateRegistryOwner;
 
 import com.example.facecheck.R;
 import com.example.facecheck.api.ApiService;
+import com.example.facecheck.api.CheckinPhotoUploadResponse;
 import com.example.facecheck.api.CheckinSubmitRequest;
 import com.example.facecheck.api.CheckinTaskListResponse;
 import com.example.facecheck.api.MySubmissionsResponse;
@@ -43,7 +47,11 @@ import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.ui.checkin.AttendanceTaskComposeBinder;
 import com.example.facecheck.ui.checkin.StudentCheckinComposeBinder;
 import com.example.facecheck.ui.checkin.StudentCheckinTagComposeBinder;
+import com.example.facecheck.ui.face.AvatarCropActivity;
 import com.example.facecheck.ui.task.MapPickerActivity;
+import com.example.facecheck.utils.Constants;
+import com.example.facecheck.utils.ImageUtils;
+import com.example.facecheck.utils.PhotoStorageManager;
 import com.example.facecheck.utils.RefreshPolicyManager;
 import com.example.facecheck.utils.SessionManager;
 import com.google.android.gms.location.LocationServices;
@@ -62,7 +70,19 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+
 public class StudentCoursesFragment extends Fragment {
+    private static final int REQUEST_CHECKIN_IMAGE_CAPTURE = 2111;
+    private static final int REQUEST_CHECKIN_IMAGE_PICK = 2112;
+    private static final int REQUEST_CHECKIN_FACE_CROP = 2113;
 
     private RecyclerView recyclerView;
     private TextView tvEmptyHint;
@@ -80,6 +100,10 @@ public class StudentCoursesFragment extends Fragment {
     private List<SessionItem> sessionItems = new ArrayList<>();
     private List<ClassItem> classItems = new ArrayList<>();
     private final HashMap<Long, SubmissionItem> submissionMap = new HashMap<>();
+    private final HashMap<Long, String> checkinFacePhotoPathMap = new HashMap<>();
+    private String pendingCheckinPhotoPath;
+    private long pendingCheckinPhotoTaskId = -1L;
+    private TextView activeFaceAttachmentStatusView;
 
     @Nullable
     @Override
@@ -276,9 +300,11 @@ public class StudentCoursesFragment extends Fragment {
                 Integer locationRadiusM = cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM"));
                 String gestureSequence = cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence"));
                 String passwordPlain = cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain"));
+                Integer faceRequired = getNullableInt(cursor, "faceRequired");
+                Double faceMinScore = getNullableDouble(cursor, "faceMinScore");
                 SubmissionItem submission = submissionMap.get(taskId);
                 SessionItem item = new SessionItem(taskId, taskClassId, title, status, startAt, endAt, submission,
-                        locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain);
+                        locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain, faceRequired, faceMinScore);
                 sessionItems.add(item);
             } while (cursor.moveToNext());
             cursor.close();
@@ -322,9 +348,12 @@ public class StudentCoursesFragment extends Fragment {
         Integer locationRadiusM;
         String gestureSequence;
         String passwordPlain;
+        Integer faceRequired;
+        Double faceMinScore;
 
         SessionItem(long taskId, long classId, String title, String status, String startAt, String endAt, SubmissionItem submission,
-                    Double locationLat, Double locationLng, Integer locationRadiusM, String gestureSequence, String passwordPlain) {
+                    Double locationLat, Double locationLng, Integer locationRadiusM, String gestureSequence, String passwordPlain,
+                    Integer faceRequired, Double faceMinScore) {
             this.taskId = taskId;
             this.classId = classId;
             this.title = title;
@@ -337,6 +366,8 @@ public class StudentCoursesFragment extends Fragment {
             this.locationRadiusM = locationRadiusM;
             this.gestureSequence = gestureSequence;
             this.passwordPlain = passwordPlain;
+            this.faceRequired = faceRequired;
+            this.faceMinScore = faceMinScore;
         }
 
         boolean requiresLocation() {
@@ -349,6 +380,10 @@ public class StudentCoursesFragment extends Fragment {
 
         boolean requiresPassword() {
             return passwordPlain != null && !passwordPlain.trim().isEmpty();
+        }
+
+        boolean requiresFace() {
+            return faceRequired != null && faceRequired == 1;
         }
     }
 
@@ -462,10 +497,12 @@ public class StudentCoursesFragment extends Fragment {
         if (item.requiresLocation()) methodCount++;
         if (item.requiresGesture()) methodCount++;
         if (item.requiresPassword()) methodCount++;
+        if (item.requiresFace()) methodCount++;
         tags.add(new StudentCheckinTagComposeBinder.TagItem(methodCount > 1 ? "混合签到" : "基础签到", false));
         if (item.requiresLocation()) tags.add(new StudentCheckinTagComposeBinder.TagItem("定位", true));
         if (item.requiresGesture()) tags.add(new StudentCheckinTagComposeBinder.TagItem("手势", true));
         if (item.requiresPassword()) tags.add(new StudentCheckinTagComposeBinder.TagItem("密码", true));
+        if (item.requiresFace()) tags.add(new StudentCheckinTagComposeBinder.TagItem("人脸", true));
         return tags;
     }
 
@@ -510,6 +547,7 @@ public class StudentCoursesFragment extends Fragment {
             }
             dialog.setOnDismissListener(d -> {
                 if (recyclerView != null) recyclerView.setAlpha(1f);
+                activeFaceAttachmentStatusView = null;
                 View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
                 if (bottomSheet != null) {
                     BottomSheetBehavior.from(bottomSheet).setDraggable(true);
@@ -523,6 +561,9 @@ public class StudentCoursesFragment extends Fragment {
             TextView tvLocationCoords = content.findViewById(R.id.tv_location_coords);
             ComposeView composeRequiredTags = content.findViewById(R.id.compose_required_tags);
             View cardLocationRequired = content.findViewById(R.id.card_location_required);
+            View cardFaceAttachment = content.findViewById(R.id.card_face_attachment);
+            TextView tvFaceAttachmentStatus = content.findViewById(R.id.tv_face_attachment_status);
+            Button btnFaceAttachment = content.findViewById(R.id.btn_face_attachment);
             Button btnOpenMapPreview = content.findViewById(R.id.btn_open_map_preview);
             ComposeView composeGesturePad = content.findViewById(R.id.compose_gesture_pad);
             View dragHandle = content.findViewById(R.id.view_drag_handle);
@@ -536,6 +577,7 @@ public class StudentCoursesFragment extends Fragment {
 
             if (tvTitle == null || tvTaskStatus == null || tvMethodHint == null || tvLocationRequired == null
                     || tvLocationCoords == null || composeRequiredTags == null || cardLocationRequired == null
+                    || cardFaceAttachment == null || tvFaceAttachmentStatus == null || btnFaceAttachment == null
                     || btnOpenMapPreview == null || composeGesturePad == null || etGesture == null
                     || layoutPasswordRow == null || etPassword == null || btnTogglePasswordVisibility == null
                     || etReason == null || btnSubmit == null) {
@@ -557,6 +599,15 @@ public class StudentCoursesFragment extends Fragment {
                 tvLocationCoords.setText("中心点: " + lat + ", " + lng);
                 btnOpenMapPreview.setText("查看签到范围（" + lat + ", " + lng + "）");
                 btnOpenMapPreview.setOnClickListener(v -> openMapPreview(item));
+            }
+
+            cardFaceAttachment.setVisibility(item.requiresFace() ? View.VISIBLE : View.GONE);
+            activeFaceAttachmentStatusView = item.requiresFace() ? tvFaceAttachmentStatus : null;
+            if (item.requiresFace()) {
+                String existingFacePhoto = checkinFacePhotoPathMap.get(item.taskId);
+                tvFaceAttachmentStatus.setText(TextUtils.isEmpty(existingFacePhoto) ? "尚未上传人脸签到附件" : ("已选择附件: " + new File(existingFacePhoto).getName()));
+                btnFaceAttachment.setVisibility(readonly ? View.GONE : View.VISIBLE);
+                btnFaceAttachment.setOnClickListener(v -> startCheckinFaceAttachFlow(item));
             }
 
             etGesture.setVisibility(readonly && item.requiresGesture() ? View.VISIBLE : View.GONE);
@@ -615,7 +666,7 @@ public class StudentCoursesFragment extends Fragment {
                 btnTogglePasswordVisibility.setVisibility(View.GONE);
                 btnSubmit.setOnClickListener(v -> submitCheckinTask(item, etGesture.getText().toString().trim(),
                         etPassword.getText().toString().trim(),
-                        etReason.getText().toString().trim(), dialog));
+                        etReason.getText().toString().trim(), checkinFacePhotoPathMap.get(item.taskId), dialog));
             }
 
             dialog.show();
@@ -713,10 +764,11 @@ public class StudentCoursesFragment extends Fragment {
         if (item.requiresLocation()) methods.add("定位");
         if (item.requiresGesture()) methods.add("手势");
         if (item.requiresPassword()) methods.add("密码");
+        if (item.requiresFace()) methods.add("人脸");
         return "本任务要求: " + android.text.TextUtils.join(" + ", methods);
     }
 
-    private void submitCheckinTask(SessionItem item, String gestureInput, String passwordInput, String reason, BottomSheetDialog dialog) {
+    private void submitCheckinTask(SessionItem item, String gestureInput, String passwordInput, String reason, String facePhotoPath, BottomSheetDialog dialog) {
         if (item.requiresGesture() && TextUtils.isEmpty(gestureInput)) {
             Toast.makeText(requireContext(), "该任务要求手势签到，请先绘制手势", Toast.LENGTH_SHORT).show();
             return;
@@ -725,12 +777,28 @@ public class StudentCoursesFragment extends Fragment {
             Toast.makeText(requireContext(), "该任务要求签到密码，请先填写密码", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (item.requiresFace() && TextUtils.isEmpty(facePhotoPath)) {
+            Toast.makeText(requireContext(), "该任务要求人脸签到，请先上传人脸附件", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         CheckinSubmitRequest request = new CheckinSubmitRequest(studentId);
         request.gestureInput = gestureInput.isEmpty() ? null : gestureInput;
         request.passwordInput = passwordInput.isEmpty() ? null : passwordInput;
         request.reason = reason.isEmpty() ? null : reason;
+        if (item.requiresFace()) {
+            request.faceVerifyPassed = Boolean.FALSE;
+            request.faceVerifyScore = 0D;
+        }
 
+        if (item.requiresFace()) {
+            uploadCheckinFaceAttachmentThenSubmit(item, facePhotoPath, request, dialog);
+            return;
+        }
+        fillLocationThenSubmit(item, request, dialog);
+    }
+
+    private void fillLocationThenSubmit(SessionItem item, CheckinSubmitRequest request, BottomSheetDialog dialog) {
         AtomicBoolean hasSubmitted = new AtomicBoolean(false);
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationServices.getFusedLocationProviderClient(requireContext())
@@ -752,6 +820,149 @@ public class StudentCoursesFragment extends Fragment {
             return;
         }
         submitCheckinRequest(item, request, dialog);
+    }
+
+    private void uploadCheckinFaceAttachmentThenSubmit(SessionItem item, String facePhotoPath, CheckinSubmitRequest request, BottomSheetDialog dialog) {
+        File prepared = prepareFaceAttachmentUploadFile(facePhotoPath, item.taskId);
+        if (prepared == null || !prepared.exists()) {
+            Toast.makeText(requireContext(), "人脸附件处理失败，请重新上传", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String desiredKey = buildCheckinPhotoKey(item.taskId, studentId);
+        RequestBody taskIdBody = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(item.taskId));
+        RequestBody studentIdBody = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(studentId));
+        RequestBody keyBody = RequestBody.create(MediaType.parse("text/plain"), desiredKey);
+        RequestBody requestFile = RequestBody.create(MediaType.parse(detectImageMediaType(prepared.getAbsolutePath())), prepared);
+        MultipartBody.Part filePart = MultipartBody.Part.createFormData("file", prepared.getName(), requestFile);
+
+        apiService.uploadCheckinPhoto(sessionManager.getApiKey(), taskIdBody, studentIdBody, keyBody, filePart)
+                .enqueue(new retrofit2.Callback<CheckinPhotoUploadResponse>() {
+                    @Override
+                    public void onResponse(retrofit2.Call<CheckinPhotoUploadResponse> call, retrofit2.Response<CheckinPhotoUploadResponse> response) {
+                        CheckinPhotoUploadResponse body = response.body();
+                        if (response.isSuccessful() && body != null && body.isOk() && !TextUtils.isEmpty(body.getKey())) {
+                            request.photoKey = body.getKey();
+                            request.photoUri = Constants.CDN_BASE_URL + body.getKey();
+                            fillLocationThenSubmit(item, request, dialog);
+                            return;
+                        }
+                        String err = body != null ? body.getError() : null;
+                        if (TextUtils.isEmpty(err)) err = "上传失败";
+                        Toast.makeText(requireContext(), "人脸附件上传失败: " + err, Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onFailure(retrofit2.Call<CheckinPhotoUploadResponse> call, Throwable t) {
+                        Toast.makeText(requireContext(), "人脸附件上传异常: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void startCheckinFaceAttachFlow(SessionItem item) {
+        if (!isAdded()) return;
+        pendingCheckinPhotoTaskId = item.taskId;
+        new AlertDialog.Builder(requireContext())
+                .setTitle("选择人脸附件来源")
+                .setItems(new String[]{"拍照", "从相册选择"}, (d, which) -> {
+                    if (which == 0) {
+                        openCheckinCamera();
+                    } else {
+                        openCheckinGallery();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void openCheckinCamera() {
+        if (!isAdded()) return;
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(requireContext(), "请先授予相机权限", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            File photoFile = File.createTempFile(
+                    "checkin_face_" + System.currentTimeMillis(),
+                    ".jpg",
+                    PhotoStorageManager.getAttendancePhotosDir(requireContext())
+            );
+            pendingCheckinPhotoPath = photoFile.getAbsolutePath();
+            Uri photoUri = FileProvider.getUriForFile(requireContext(), requireContext().getPackageName() + ".fileprovider", photoFile);
+            Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, photoUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CHECKIN_IMAGE_CAPTURE);
+        } catch (Throwable t) {
+            Toast.makeText(requireContext(), "打开相机失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void openCheckinGallery() {
+        if (!isAdded()) return;
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        startActivityForResult(Intent.createChooser(intent, "选择人脸附件"), REQUEST_CHECKIN_IMAGE_PICK);
+    }
+
+    private void startCheckinFaceCrop(String sourcePath) {
+        if (!isAdded() || TextUtils.isEmpty(sourcePath)) return;
+        Intent intent = new Intent(requireContext(), AvatarCropActivity.class);
+        intent.putExtra(AvatarCropActivity.EXTRA_SOURCE_PATH, sourcePath);
+        intent.putExtra(AvatarCropActivity.EXTRA_CROP_SCENE, AvatarCropActivity.CROP_SCENE_CHECKIN);
+        startActivityForResult(intent, REQUEST_CHECKIN_FACE_CROP);
+    }
+
+    private String copyUriToTempImage(Uri uri) {
+        if (!isAdded()) return null;
+        try (InputStream inputStream = requireContext().getContentResolver().openInputStream(uri)) {
+            if (inputStream == null) return null;
+            File target = File.createTempFile(
+                    "checkin_face_pick_" + System.currentTimeMillis(),
+                    ".jpg",
+                    PhotoStorageManager.getAttendancePhotosDir(requireContext())
+            );
+            try (FileOutputStream outputStream = new FileOutputStream(target)) {
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, len);
+                }
+                return target.getAbsolutePath();
+            }
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private File prepareFaceAttachmentUploadFile(String sourcePath, long taskId) {
+        if (!isAdded() || TextUtils.isEmpty(sourcePath)) return null;
+        File src = new File(sourcePath);
+        if (!src.exists()) return null;
+        try {
+            android.graphics.Bitmap bitmap = ImageUtils.loadAndResizeBitmap(sourcePath, 1024, 1024);
+            if (bitmap == null) return src;
+            File out = new File(
+                    PhotoStorageManager.getAttendancePhotosDir(requireContext()),
+                    "checkin_face_upload_" + taskId + "_" + studentId + "_" + System.currentTimeMillis() + ".jpg"
+            );
+            boolean saved = ImageUtils.saveBitmapToFile(bitmap, out);
+            bitmap.recycle();
+            return saved ? out : src;
+        } catch (Throwable t) {
+            return src;
+        }
+    }
+
+    private String buildCheckinPhotoKey(long taskId, long studentId) {
+        return "records/" + taskId + "/" + studentId + "/face_" + System.currentTimeMillis() + ".jpg";
+    }
+
+    private String detectImageMediaType(String filePath) {
+        String lower = filePath == null ? "" : filePath.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".webp")) return "image/webp";
+        return "image/jpeg";
     }
 
     private void submitCheckinRequest(SessionItem item, CheckinSubmitRequest request, BottomSheetDialog dialog) {
@@ -783,6 +994,44 @@ public class StudentCoursesFragment extends Fragment {
                 });
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (!isAdded() || resultCode != Activity.RESULT_OK) return;
+
+        if (requestCode == REQUEST_CHECKIN_IMAGE_CAPTURE) {
+            if (!TextUtils.isEmpty(pendingCheckinPhotoPath)) {
+                startCheckinFaceCrop(pendingCheckinPhotoPath);
+            }
+            return;
+        }
+
+        if (requestCode == REQUEST_CHECKIN_IMAGE_PICK) {
+            if (data != null && data.getData() != null) {
+                String localPath = copyUriToTempImage(data.getData());
+                if (!TextUtils.isEmpty(localPath)) {
+                    startCheckinFaceCrop(localPath);
+                } else {
+                    Toast.makeText(requireContext(), "读取图片失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+            return;
+        }
+
+        if (requestCode == REQUEST_CHECKIN_FACE_CROP) {
+            if (data == null) return;
+            String croppedPath = data.getStringExtra(AvatarCropActivity.RESULT_CROPPED_PATH);
+            if (TextUtils.isEmpty(croppedPath) || pendingCheckinPhotoTaskId <= 0) {
+                return;
+            }
+            checkinFacePhotoPathMap.put(pendingCheckinPhotoTaskId, croppedPath);
+            if (activeFaceAttachmentStatusView != null) {
+                activeFaceAttachmentStatusView.setText("已选择附件: " + new File(croppedPath).getName());
+            }
+            Toast.makeText(requireContext(), "人脸附件已就绪", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void insertOrUpdateCheckinTask(CheckinTaskListResponse.CheckinTask task) {
         android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
         android.content.ContentValues values = new android.content.ContentValues();
@@ -798,8 +1047,22 @@ public class StudentCoursesFragment extends Fragment {
         values.put("locationRadiusM", task.locationRadiusM);
         values.put("gestureSequence", task.gestureSequence);
         values.put("passwordPlain", task.passwordPlain);
+        values.put("faceRequired", task.faceRequired != null ? task.faceRequired : 0);
+        values.put("faceMinScore", task.faceMinScore);
         values.put("createdAt", task.createdAt);
         db.insertWithOnConflict("CheckinTask", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    private Integer getNullableInt(Cursor cursor, String column) {
+        int idx = cursor.getColumnIndex(column);
+        if (idx < 0 || cursor.isNull(idx)) return null;
+        return cursor.getInt(idx);
+    }
+
+    private Double getNullableDouble(Cursor cursor, String column) {
+        int idx = cursor.getColumnIndex(column);
+        if (idx < 0 || cursor.isNull(idx)) return null;
+        return cursor.getDouble(idx);
     }
 
     private void loadStudentInfo() {

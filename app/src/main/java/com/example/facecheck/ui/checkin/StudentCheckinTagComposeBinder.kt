@@ -58,6 +58,7 @@ private fun resolveTagColors(tag: StudentCheckinTagComposeBinder.TagItem): Pair<
         "定位" -> Pair(Color(0xFFDCFCE7), Color(0xFF166534))
         "手势" -> Pair(Color(0xFFFFEDD5), Color(0xFF9A3412))
         "密码" -> Pair(Color(0xFFFCE7F3), Color(0xFF9D174D))
+        "人脸" -> Pair(Color(0xFFE0F2FE), Color(0xFF0C4A6E))
         else -> if (tag.required) {
             Pair(Color(0xFFDBEAFE), Color(0xFF1D4ED8))
         } else {

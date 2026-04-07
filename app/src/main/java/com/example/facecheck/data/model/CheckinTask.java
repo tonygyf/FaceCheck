@@ -39,6 +39,12 @@ public class CheckinTask {
     @SerializedName("passwordPlain")
     private String passwordPlain;
 
+    @SerializedName("faceRequired")
+    private Integer faceRequired;
+
+    @SerializedName("faceMinScore")
+    private Double faceMinScore;
+
     @SerializedName("createdAt")
     private String createdAt;
 
@@ -67,6 +73,10 @@ public class CheckinTask {
     public void setGestureSequence(String gestureSequence) { this.gestureSequence = gestureSequence; }
     public String getPasswordPlain() { return passwordPlain; }
     public void setPasswordPlain(String passwordPlain) { this.passwordPlain = passwordPlain; }
+    public Integer getFaceRequired() { return faceRequired; }
+    public void setFaceRequired(Integer faceRequired) { this.faceRequired = faceRequired; }
+    public Double getFaceMinScore() { return faceMinScore; }
+    public void setFaceMinScore(Double faceMinScore) { this.faceMinScore = faceMinScore; }
     public String getCreatedAt() { return createdAt; }
     public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
 }
