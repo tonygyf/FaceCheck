@@ -225,6 +225,11 @@ public class TouchImageView extends AppCompatImageView {
         return faceRects;
     }
 
+    public RectF mapViewRectToBitmapRect(RectF viewRect) {
+        if (viewRect == null) return null;
+        return mapRectToBitmap(new RectF(viewRect));
+    }
+
     public void setMaxZoom(float x) {
         maxScale = x;
     }

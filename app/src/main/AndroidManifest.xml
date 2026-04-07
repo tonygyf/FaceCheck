@@ -136,6 +136,12 @@
             android:label="手动裁切人脸" />
 
         <activity
+            android:name=".ui.face.AvatarCropActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FaceCheck.NoActionBar"
+            android:label="头像裁剪" />
+
+        <activity
             android:name=".ui.student.StudentSignInActivity"
             android:exported="false"
             android:theme="@style/Theme.FaceCheck"

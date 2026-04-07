@@ -156,6 +156,15 @@ public class ImageUtils {
         }
     }
 
+    public static boolean saveBitmapToPngFile(Bitmap bitmap, File file) {
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            return bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (IOException e) {
+            Log.e(TAG, "Error saving PNG bitmap", e);
+            return false;
+        }
+    }
+
     public static Bitmap resizeBitmapIfNeeded(Bitmap bitmap) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();

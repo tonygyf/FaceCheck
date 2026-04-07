@@ -56,6 +56,14 @@ public interface ApiService {
             @Part("key") RequestBody key,
             @Part MultipartBody.Part file);
 
+    @Multipart
+    @POST("student/profile/avatar")
+    Call<ApiResponse> uploadStudentAvatar(
+            @Header("X-API-Key") String apiKey,
+            @Part("studentId") RequestBody studentId,
+            @Part("key") RequestBody key,
+            @Part MultipartBody.Part file);
+
     // ===== 新增：学生接口 =====
 
     @GET("students")

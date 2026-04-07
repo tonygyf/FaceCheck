@@ -41,6 +41,7 @@ import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.data.model.Student;
 import com.example.facecheck.ui.auth.LoginActivity;
+import com.example.facecheck.ui.face.AvatarCropActivity;
 import com.example.facecheck.utils.ImageLoader;
 import com.example.facecheck.utils.PhotoStorageManager;
 
@@ -62,6 +63,7 @@ public class ProfileFragment extends Fragment {
     private static final String TAG = "ProfileFragment";
     private static final int REQUEST_IMAGE_CAPTURE = 1;
     private static final int REQUEST_PICK_IMAGE = 2;
+    private static final int REQUEST_AVATAR_CROP = 3;
     
     private CircleImageView profileImageView;
     private TextView usernameTextView;
@@ -165,7 +167,8 @@ public class ProfileFragment extends Fragment {
                     if (avatarUri != null && !avatarUri.isEmpty() && profileImageView != null) {
                         ImageLoader.loadAvatar(getContext(), avatarUri, profileImageView, String.valueOf(updatedAt));
                     }
-                    if (changePhotoButton != null) { changePhotoButton.setEnabled(false); }
+                    if (profileImageView != null) { profileImageView.setEnabled(true); }
+                    if (changePhotoButton != null) { changePhotoButton.setEnabled(true); }
                     if (changeUsernameButton != null) { changeUsernameButton.setVisibility(View.VISIBLE); }
                     if (changePasswordButton != null) { changePasswordButton.setVisibility(View.VISIBLE); }
                     if (itemChangeUsername != null) { itemChangeUsername.setVisibility(View.VISIBLE); }
@@ -187,6 +190,8 @@ public class ProfileFragment extends Fragment {
                     if (currentTeacher.getAvatarUri() != null && !currentTeacher.getAvatarUri().isEmpty()) {
                         ImageLoader.loadAvatar(getContext(), currentTeacher.getAvatarUri(), profileImageView, String.valueOf(currentTeacher.getUpdatedAt()));
                     }
+                    if (profileImageView != null) { profileImageView.setEnabled(true); }
+                    if (changePhotoButton != null) { changePhotoButton.setEnabled(true); }
                 }
             } else {
                 Toast.makeText(requireContext(), "教师信息加载失败", Toast.LENGTH_SHORT).show();
@@ -453,13 +458,18 @@ public class ProfileFragment extends Fragment {
 
         if (requestCode == REQUEST_IMAGE_CAPTURE) {
             if (currentPhotoPath != null) {
-                updateProfileImage(currentPhotoPath);
+                startAvatarCrop(currentPhotoPath);
             }
         } else if (requestCode == REQUEST_PICK_IMAGE && data != null && data.getData() != null) {
             Uri imageUri = data.getData();
             String filePath = copyUriToFile(imageUri);
             if (filePath != null) {
-                updateProfileImage(filePath);
+                startAvatarCrop(filePath);
+            }
+        } else if (requestCode == REQUEST_AVATAR_CROP && data != null) {
+            String croppedPath = data.getStringExtra(AvatarCropActivity.RESULT_CROPPED_PATH);
+            if (!TextUtils.isEmpty(croppedPath)) {
+                updateProfileImage(croppedPath);
             }
         }
     }
@@ -484,8 +494,21 @@ public class ProfileFragment extends Fragment {
     }
     
     private void updateProfileImage(String photoPath) {
+        if (isStudentRole()) {
+            progressBar.setVisibility(View.VISIBLE);
+            profileViewModel.uploadStudentAvatar(photoPath);
+            return;
+        }
+
         progressBar.setVisibility(View.VISIBLE);
         profileViewModel.uploadAvatar(photoPath);
+    }
+
+    private void startAvatarCrop(String sourcePath) {
+        if (TextUtils.isEmpty(sourcePath) || getActivity() == null) return;
+        Intent intent = new Intent(requireContext(), AvatarCropActivity.class);
+        intent.putExtra(AvatarCropActivity.EXTRA_SOURCE_PATH, sourcePath);
+        startActivityForResult(intent, REQUEST_AVATAR_CROP);
     }
 
     @Override

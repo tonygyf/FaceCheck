@@ -12,6 +12,9 @@ public class ApiResponse {
     @SerializedName("error")
     private String error;
 
+    @SerializedName("data")
+    private Data data;
+
     public boolean isSuccess() {
         return success;
     }
@@ -22,5 +25,24 @@ public class ApiResponse {
 
     public String getError() {
         return error;
+    }
+
+    public Data getData() {
+        return data;
+    }
+
+    public static class Data {
+        @SerializedName("id")
+        private long id;
+        @SerializedName("avatarUri")
+        private String avatarUri;
+
+        public long getId() {
+            return id;
+        }
+
+        public String getAvatarUri() {
+            return avatarUri;
+        }
     }
 }

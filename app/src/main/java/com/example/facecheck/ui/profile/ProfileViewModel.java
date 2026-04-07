@@ -126,6 +126,28 @@ public class ProfileViewModel extends AndroidViewModel {
         });
     }
 
+    public void uploadStudentAvatar(String filePath) {
+        long studentId = getApplication().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                .getLong("student_id", -1L);
+        if (studentId <= 0) {
+            _errorMessage.postValue("Student not logged in.");
+            return;
+        }
+
+        profileRepository.uploadStudentAvatar(studentId, filePath, new ApiCallback<ApiResponse>() {
+            @Override
+            public void onSuccess(ApiResponse data) {
+                _avatarUploadSuccess.postValue(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                _errorMessage.postValue(message);
+                _avatarUploadSuccess.postValue(false);
+            }
+        });
+    }
+
     public void changeStudentPassword(String oldPassword, String newPassword) {
         long studentId = getApplication().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
                 .getLong("student_id", -1L);
