@@ -94,6 +94,8 @@ fun PublishTaskScreen(
 
     var passwordEnabled by remember { mutableStateOf(false) }
     var passwordText by remember { mutableStateOf("") }
+    var faceEnabled by remember { mutableStateOf(false) }
+    var faceMinScoreText by remember { mutableStateOf("0.55") }
 
     var classrooms by remember { mutableStateOf<List<Classroom>>(emptyList()) }
     var selectedClassroom by remember { mutableStateOf<Classroom?>(null) }
@@ -360,6 +362,28 @@ fun PublishTaskScreen(
 
             HorizontalDivider()
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("人脸签到", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = faceEnabled, onCheckedChange = { faceEnabled = it })
+            }
+
+            if (faceEnabled) {
+                OutlinedTextField(
+                    value = faceMinScoreText,
+                    onValueChange = { faceMinScoreText = it },
+                    label = { Text("人脸阈值 (0~1)") },
+                    supportingText = { Text("建议默认 0.55") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
+            HorizontalDivider()
+
             Button(
                 onClick = {
                     if (isPublishing) return@Button
@@ -381,6 +405,11 @@ fun PublishTaskScreen(
                     }
                     if (locationEnabled && (locationLat == null || locationLng == null)) {
                         Toast.makeText(context, "已开启地理位置签到，请先在地图中确认有效位置", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    val faceMinScoreValue = if (faceEnabled) faceMinScoreText.toDoubleOrNull() else null
+                    if (faceEnabled && (faceMinScoreValue == null || faceMinScoreValue < 0.0 || faceMinScoreValue > 1.0)) {
+                        Toast.makeText(context, "人脸阈值必须是 0 到 1 之间的数字", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     val finalEndTime = if (endTime.isBlank()) {
@@ -406,6 +435,8 @@ fun PublishTaskScreen(
                         this.locationRadiusM = if (locationEnabled) locationRadius else null
                         this.gestureSequence = if (gestureEnabled) gestureSequence else null
                         this.passwordPlain = if (passwordEnabled && passwordText.isNotBlank()) passwordText else null
+                        this.faceRequired = faceEnabled
+                        this.faceMinScore = if (faceEnabled) faceMinScoreValue else null
                     }
 
                     isPublishing = true

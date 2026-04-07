@@ -15,4 +15,6 @@ public class CheckinTaskRequest {
     @SerializedName("locationRadiusM") public Integer locationRadiusM;
     @SerializedName("gestureSequence") public String gestureSequence;
     @SerializedName("passwordPlain")   public String passwordPlain;
+    @SerializedName("faceRequired")    public Boolean faceRequired;
+    @SerializedName("faceMinScore")    public Double faceMinScore;
 }
