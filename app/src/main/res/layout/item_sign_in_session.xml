@@ -16,6 +16,7 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- 标题行（保持不变） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -39,39 +40,42 @@
 
         </LinearLayout>
 
+        <!-- 【优化后】时间范围部分 - 只改这一段 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
+            <!-- 开始时间：固定宽度包裹内容，不再用 weight 拉伸 -->
             <TextView
                 android:id="@+id/tv_session_start"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:background="@drawable/bg_tag_outline_blue"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:paddingStart="8dp"
-                android:paddingTop="4dp"
-                android:paddingEnd="8dp"
-                android:paddingBottom="4dp"
+                android:paddingStart="10dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="5dp"
                 android:text="2026-04-08 09:00"
                 android:textColor="@android:color/holo_blue_dark"
-                android:textSize="12sp" />
+                android:textSize="13sp" />
 
+            <!-- 中间连接符 -->
             <TextView
                 android:id="@+id/tv_session_arrow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:text="->"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:text="→"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp" />
+                android:textSize="16sp" />
 
+            <!-- 结束时间：固定宽度包裹内容 -->
             <TextView
                 android:id="@+id/tv_session_end"
                 android:layout_width="wrap_content"
@@ -79,21 +83,24 @@
                 android:background="@drawable/bg_tag_outline_blue"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:paddingStart="8dp"
-                android:paddingTop="4dp"
-                android:paddingEnd="8dp"
-                android:paddingBottom="4dp"
+                android:paddingStart="10dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="5dp"
                 android:text="09:30"
                 android:textColor="@android:color/holo_blue_dark"
-                android:textSize="12sp" />
+                android:textSize="13sp" />
+
         </LinearLayout>
 
+        <!-- 签到方式标签（保持不变） -->
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/compose_method_tags"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp" />
 
+        <!-- 状态 + 按钮行（保持不变） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

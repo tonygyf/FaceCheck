@@ -45,7 +45,12 @@ public class ImageLoader {
         if (model instanceof String) {
             String path = (String) model;
             if (!path.startsWith("http") && !path.startsWith("/") && !path.startsWith("file://")) {
-                loadableModel = Constants.CDN_BASE_URL + path;
+                path = Constants.CDN_BASE_URL + path;
+            }
+            if (path.startsWith("http")) {
+                loadableModel = appendCacheBuster(path, signature);
+            } else {
+                loadableModel = path;
             }
         }
 
@@ -53,6 +58,12 @@ public class ImageLoader {
                 .load(loadableModel)
                 .apply(options)
                 .into(target);
+    }
+
+    private static String appendCacheBuster(String url, String signature) {
+        if (signature == null || signature.trim().isEmpty()) return url;
+        String sep = url.contains("?") ? "&" : "?";
+        return url + sep + "v=" + signature.trim();
     }
 
     /**

@@ -159,13 +159,13 @@ public class ProfileFragment extends Fragment {
                 String name = c.getString(c.getColumnIndexOrThrow("name"));
                 String sid = c.getString(c.getColumnIndexOrThrow("sid"));
                 String avatarUri = c.getString(c.getColumnIndexOrThrow("avatarUri"));
-                long updatedAt = c.getLong(c.getColumnIndexOrThrow("updatedAt"));
+                String updatedAt = c.getString(c.getColumnIndexOrThrow("updatedAt"));
                 c.close();
                 if (isAdded()) {
                     if (usernameTextView != null) usernameTextView.setText(name);
                     if (emailTextView != null) emailTextView.setText(sid);
                     if (avatarUri != null && !avatarUri.isEmpty() && profileImageView != null) {
-                        ImageLoader.loadAvatar(getContext(), avatarUri, profileImageView, String.valueOf(updatedAt));
+                        ImageLoader.loadAvatar(getContext(), avatarUri, profileImageView, updatedAt);
                     }
                     if (profileImageView != null) { profileImageView.setEnabled(true); }
                     if (changePhotoButton != null) { changePhotoButton.setEnabled(true); }

@@ -23,6 +23,8 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.TimeZone;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
@@ -688,11 +690,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     cursor.getString(cursor.getColumnIndexOrThrow("username")),
                     cursor.getString(cursor.getColumnIndexOrThrow("password")),
                     cursor.getString(cursor.getColumnIndexOrThrow("avatarUri")),
-                    cursor.getLong(cursor.getColumnIndexOrThrow("createdAt")),
-                    cursor.getLong(cursor.getColumnIndexOrThrow("updatedAt")));
+                    parseDbTimeToMillis(cursor.getString(cursor.getColumnIndexOrThrow("createdAt"))),
+                    parseDbTimeToMillis(cursor.getString(cursor.getColumnIndexOrThrow("updatedAt"))));
             cursor.close();
         }
         return teacher;
+    }
+
+    private long parseDbTimeToMillis(String raw) {
+        if (TextUtils.isEmpty(raw)) return 0L;
+        String value = raw.trim();
+        if (value.isEmpty()) return 0L;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException ignored) {
+            // fallback to datetime parsing
+        }
+        String[] patterns = new String[] { "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" };
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.US);
+                sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+                java.util.Date parsed = sdf.parse(value);
+                if (parsed != null) return parsed.getTime();
+            } catch (Exception ignored) {
+            }
+        }
+        return value.hashCode();
     }
 
     public Cursor getCheckinTasksByDate(String date) {
