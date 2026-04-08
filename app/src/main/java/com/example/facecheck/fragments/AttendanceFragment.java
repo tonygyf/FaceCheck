@@ -323,6 +323,8 @@ public class AttendanceFragment extends Fragment {
                     task.setLocationRadiusM(cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM")));
                     task.setGestureSequence(cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence")));
                     task.setPasswordPlain(cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain")));
+                    task.setFaceRequired(cursor.isNull(cursor.getColumnIndexOrThrow("faceRequired")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("faceRequired")));
+                    task.setFaceMinScore(cursor.isNull(cursor.getColumnIndexOrThrow("faceMinScore")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("faceMinScore")));
 
                     if (!groupedTasks.containsKey(className)) {
                         groupedTasks.put(className, new java.util.ArrayList<>());
@@ -339,7 +341,7 @@ public class AttendanceFragment extends Fragment {
                     boolean canViewDetail = "teacher".equals(role) && teacherId > 0 && task.getTeacherId() == teacherId;
                     String detailText = buildTaskDetailText(task.getStartAt(), task.getEndAt(), task.getStatus(),
                             task.getLocationLat(), task.getLocationLng(), task.getLocationRadiusM(),
-                            task.getGestureSequence(), task.getPasswordPlain());
+                            task.getGestureSequence(), task.getPasswordPlain(), task.getFaceRequired(), task.getFaceMinScore());
                     items.add(AttendanceDayAdapter.Item.task(task.getTitle(), task.getStatus(), task.getStartAt(), canViewDetail, detailText));
                 }
             }
@@ -378,9 +380,11 @@ public class AttendanceFragment extends Fragment {
                     Integer locationRadiusM = cursor.isNull(cursor.getColumnIndexOrThrow("locationRadiusM")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("locationRadiusM"));
                     String gestureSequence = cursor.getString(cursor.getColumnIndexOrThrow("gestureSequence"));
                     String passwordPlain = cursor.getString(cursor.getColumnIndexOrThrow("passwordPlain"));
+                    Integer faceRequired = cursor.isNull(cursor.getColumnIndexOrThrow("faceRequired")) ? null : cursor.getInt(cursor.getColumnIndexOrThrow("faceRequired"));
+                    Double faceMinScore = cursor.isNull(cursor.getColumnIndexOrThrow("faceMinScore")) ? null : cursor.getDouble(cursor.getColumnIndexOrThrow("faceMinScore"));
                     String day = extractDay(startAt);
                     boolean canViewDetail = "teacher".equals(role) && teacherId > 0 && taskTeacherId == teacherId;
-                    String detailText = buildTaskDetailText(startAt, endAt, status, locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain);
+                    String detailText = buildTaskDetailText(startAt, endAt, status, locationLat, locationLng, locationRadiusM, gestureSequence, passwordPlain, faceRequired, faceMinScore);
                     TaskRow row = new TaskRow(day + " " + title, status, startAt, canViewDetail, detailText);
 
                     if ("ACTIVE".equalsIgnoreCase(status)) {
@@ -450,7 +454,8 @@ public class AttendanceFragment extends Fragment {
 
     private String buildTaskDetailText(String startAt, String endAt, String status,
                                        Double locationLat, Double locationLng, Integer locationRadiusM,
-                                       String gestureSequence, String passwordPlain) {
+                                       String gestureSequence, String passwordPlain,
+                                       Integer faceRequired, Double faceMinScore) {
         StringBuilder sb = new StringBuilder();
         sb.append("状态：").append(status == null ? "-" : status).append("\n");
         sb.append("开始时间：").append(startAt == null ? "-" : startAt).append("\n");
@@ -472,6 +477,17 @@ public class AttendanceFragment extends Fragment {
             sb.append("- 密码签到：").append(passwordPlain).append("\n");
         } else {
             sb.append("- 密码签到：关闭\n");
+        }
+        boolean faceEnabled = faceMinScore != null || (faceRequired != null && faceRequired != 0);
+        if (faceEnabled) {
+            sb.append("- 人脸签到：开启\n");
+            if (faceMinScore != null) {
+                sb.append("  阈值：").append(String.format(java.util.Locale.getDefault(), "%.2f", faceMinScore)).append("\n");
+            } else {
+                sb.append("  阈值：未设置\n");
+            }
+        } else {
+            sb.append("- 人脸签到：关闭\n");
         }
         return sb.toString();
     }

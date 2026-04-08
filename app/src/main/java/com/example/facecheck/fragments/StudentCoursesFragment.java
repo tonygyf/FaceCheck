@@ -60,8 +60,10 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.card.MaterialCardView;
 
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -406,8 +408,6 @@ public class StudentCoursesFragment extends Fragment {
     private class SignInSessionAdapter extends RecyclerView.Adapter<SignInSessionAdapter.ViewHolder> {
         private static final int TYPE_EMPTY = 100;
 
-        private final SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
-
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -427,12 +427,10 @@ public class StudentCoursesFragment extends Fragment {
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             if (getItemViewType(position) == TYPE_EMPTY) return;
             SessionItem item = sessionItems.get(position);
-            String displayTime = item.startAt != null && item.startAt.length() >= 16
-                    ? item.startAt.substring(5, 16).replace("T", " ")
-                    : sdf.format(new Date());
-            holder.tvTime.setText(displayTime);
-            holder.tvNote.setText(item.title == null || item.title.isEmpty() ? "老师发布了签到任务" : item.title);
-            AttendanceTaskComposeBinder.bind(holder.composeTaskMeta, item.status, item.startAt);
+            holder.tvTime.setText(item.title == null || item.title.isEmpty() ? "老师发布了签到任务" : item.title);
+            holder.tvStart.setText(formatTaskDateTime(item.startAt));
+            holder.tvEnd.setText(formatTaskEndTime(item.startAt, item.endAt));
+            AttendanceTaskComposeBinder.bind(holder.composeTaskMeta, item.status, null);
             StudentCheckinTagComposeBinder.bind(holder.composeMethodTags, buildTagItems(item));
 
             MaterialCardView card = (MaterialCardView) holder.itemView;
@@ -474,7 +472,7 @@ public class StudentCoursesFragment extends Fragment {
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
-            TextView tvTime, tvNote, tvStatus;
+            TextView tvTime, tvStart, tvEnd, tvStatus;
             Button btnSignIn;
             ComposeView composeTaskMeta;
             ComposeView composeMethodTags;
@@ -482,13 +480,67 @@ public class StudentCoursesFragment extends Fragment {
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
                 tvTime = itemView.findViewById(R.id.tv_session_time);
-                tvNote = itemView.findViewById(R.id.tv_session_note);
+                tvStart = itemView.findViewById(R.id.tv_session_start);
+                tvEnd = itemView.findViewById(R.id.tv_session_end);
                 tvStatus = itemView.findViewById(R.id.tv_session_status);
                 composeTaskMeta = itemView.findViewById(R.id.compose_task_meta);
                 btnSignIn = itemView.findViewById(R.id.btn_sign_in);
                 composeMethodTags = itemView.findViewById(R.id.compose_method_tags);
             }
         }
+    }
+
+    private String formatTaskDateTime(String raw) {
+        Date d = parseTaskDate(raw);
+        if (d == null) return "-";
+        SimpleDateFormat to = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+        return to.format(d);
+    }
+
+    private String formatTaskEndTime(String startRaw, String endRaw) {
+        Date start = parseTaskDate(startRaw);
+        Date end = parseTaskDate(endRaw);
+        if (end == null) return "-";
+        if (start == null) {
+            return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(end);
+        }
+
+        Calendar startCal = Calendar.getInstance();
+        startCal.setTime(start);
+        Calendar endCal = Calendar.getInstance();
+        endCal.setTime(end);
+        if (startCal.get(Calendar.YEAR) != endCal.get(Calendar.YEAR)) {
+            return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(end);
+        }
+        if (startCal.get(Calendar.MONTH) != endCal.get(Calendar.MONTH)) {
+            return new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(end);
+        }
+        if (startCal.get(Calendar.DAY_OF_MONTH) != endCal.get(Calendar.DAY_OF_MONTH)) {
+            return new SimpleDateFormat("dd HH:mm", Locale.getDefault()).format(end);
+        }
+        return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(end);
+    }
+
+    private Date parseTaskDate(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return null;
+        String normalized = raw.trim().replace("T", " ");
+        if (normalized.endsWith("Z")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (normalized.contains(".")) {
+            normalized = normalized.substring(0, normalized.indexOf('.'));
+        }
+        SimpleDateFormat from = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat fromMinute = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+        try {
+            return from.parse(normalized);
+        } catch (ParseException ignored) {
+        }
+        try {
+            return fromMinute.parse(normalized);
+        } catch (ParseException ignored) {
+        }
+        return null;
     }
 
     private List<StudentCheckinTagComposeBinder.TagItem> buildTagItems(SessionItem item) {
@@ -764,7 +816,13 @@ public class StudentCoursesFragment extends Fragment {
         if (item.requiresLocation()) methods.add("定位");
         if (item.requiresGesture()) methods.add("手势");
         if (item.requiresPassword()) methods.add("密码");
-        if (item.requiresFace()) methods.add("人脸");
+        if (item.requiresFace()) {
+            if (item.faceMinScore != null) {
+                methods.add("人脸(阈值" + String.format(Locale.getDefault(), "%.2f", item.faceMinScore) + ")");
+            } else {
+                methods.add("人脸");
+            }
+        }
         return "本任务要求: " + android.text.TextUtils.join(" + ", methods);
     }
 

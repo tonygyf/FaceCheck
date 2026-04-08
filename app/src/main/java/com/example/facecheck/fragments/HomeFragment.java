@@ -9,7 +9,6 @@ import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 import android.widget.Button;
 import android.widget.Toast;
 import android.util.Log;
@@ -18,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
+import androidx.compose.ui.platform.ComposeView;
 import androidx.appcompat.widget.TooltipCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -32,6 +32,7 @@ import com.example.facecheck.ui.attendance.AttendanceActivity;
 import com.example.facecheck.activity.FaceCorrectionActivity;
 import com.example.facecheck.ui.face.FaceEnhancementActivity;
 import com.example.facecheck.ui.verify.VerifyFeatureConsistencyActivity;
+import com.example.facecheck.ui.home.HomeStatsComposeBinder;
 import com.example.facecheck.utils.SessionManager;
 import com.example.facecheck.data.repository.ClassroomRepository; // Add this import
 import com.example.facecheck.data.repository.ClassroomRepositoryImpl; // Add this import
@@ -40,7 +41,6 @@ import com.example.facecheck.data.model.Classroom; // Add this import for syncAl
 import com.example.facecheck.utils.RefreshPolicyManager;
 
 import java.util.List; // Add this import
-import androidx.appcompat.widget.TooltipCompat;
 
 public class HomeFragment extends Fragment {
 
@@ -48,9 +48,15 @@ public class HomeFragment extends Fragment {
     private SessionManager sessionManager;
     private ClassroomRepository classroomRepository;
     private ApiService apiService;
-    private TextView tvClassCount, tvStudentCount, tvAttendanceCount;
+    private ComposeView composeHomeStats;
     private Button btnSync;
     private SwipeRefreshLayout swipeRefreshLayout;
+    private String statOneLabel = "班级数量";
+    private String statTwoLabel = "学生数量";
+    private String statThreeLabel = "进行中任务";
+    private String statOneValue = "0";
+    private String statTwoValue = "0";
+    private String statThreeValue = "0";
     private static final int PICK_IMAGE_REQUEST = 1001;
     private android.widget.ImageView bannerImage;
     private final int[] bannerRes = new int[] {
@@ -90,9 +96,8 @@ public class HomeFragment extends Fragment {
 
         // 初始化视图
         bannerImage = view.findViewById(R.id.bannerImage);
-        tvClassCount = view.findViewById(R.id.tv_class_count);
-        tvStudentCount = view.findViewById(R.id.tv_student_count);
-        tvAttendanceCount = view.findViewById(R.id.tv_attendance_count);
+        composeHomeStats = view.findViewById(R.id.compose_home_stats);
+        renderHomeStats();
 
         btnSync = view.findViewById(R.id.btn_sync);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_home);
@@ -197,11 +202,10 @@ public class HomeFragment extends Fragment {
             return;
         }
 
+        setTeacherHomeLabels();
         if (teacherId == -1) {
             // 如果未登录，显示0
-            tvClassCount.setText("0");
-            tvStudentCount.setText("0");
-            tvAttendanceCount.setText("0");
+            setHomeStats("0", "0", "0");
             if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
             return;
         }
@@ -242,12 +246,7 @@ public class HomeFragment extends Fragment {
                         }
                         int activeCheckinTaskCount = getCheckinTaskCountByTeacher(teacherId);
 
-                        tvClassCount.setText(String.valueOf(classCount));
-                        tvStudentCount.setText(String.valueOf(studentCount));
-                        tvAttendanceCount.setText(String.valueOf(activeCheckinTaskCount));
-
-                        // 更新标签
-                        updateLabel(((ViewGroup) tvAttendanceCount.getParent().getParent()), "进行任务");
+                        setHomeStats(String.valueOf(classCount), String.valueOf(studentCount), String.valueOf(activeCheckinTaskCount));
                         RefreshPolicyManager.markRefreshed(requireContext(), refreshKey);
                         if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     }
@@ -286,12 +285,7 @@ public class HomeFragment extends Fragment {
         int activeCheckinTaskCount = getCheckinTaskCountByTeacher(teacherId);
 
         // 更新UI
-        tvClassCount.setText(String.valueOf(classCount));
-        tvStudentCount.setText(String.valueOf(studentCount));
-        tvAttendanceCount.setText(String.valueOf(activeCheckinTaskCount));
-
-        // 更新标签
-        updateLabel(((ViewGroup) tvAttendanceCount.getParent().getParent()), "进行中任务");
+        setHomeStats(String.valueOf(classCount), String.valueOf(studentCount), String.valueOf(activeCheckinTaskCount));
     }
 //下面不用teacherid筛了
     private int getCheckinTaskCountByTeacher(long teacherId) {
@@ -309,19 +303,15 @@ public class HomeFragment extends Fragment {
     }
 
     private void updateStudentHomeUI() {
-        ViewGroup statsLayout = (ViewGroup) tvClassCount.getParent().getParent().getParent();
-        if (statsLayout != null && statsLayout.getChildCount() >= 3) {
-            updateLabel(statsLayout.getChildAt(0), "我的班级");
-            updateLabel(statsLayout.getChildAt(1), "签到完成率");
-            updateLabel(statsLayout.getChildAt(2), "本月签到");
-        }
+        statOneLabel = "我的班级";
+        statTwoLabel = "签到完成率";
+        statThreeLabel = "本月签到";
+        renderHomeStats();
     }
 
     private void loadStudentStatistics(long studentId) {
         if (studentId <= 0) {
-            tvClassCount.setText("0");
-            tvStudentCount.setText("0%");
-            tvAttendanceCount.setText("0");
+            setHomeStats("0", "0%", "0");
             return;
         }
         long classId = dbHelper.getClassIdByStudentId(studentId);
@@ -369,9 +359,7 @@ public class HomeFragment extends Fragment {
             monthCursor.close();
         }
         int rate = totalTasks <= 0 ? 0 : Math.min(100, Math.max(0, (signedTasks * 100) / totalTasks));
-        tvClassCount.setText(String.valueOf(classCount));
-        tvStudentCount.setText(rate + "%");
-        tvAttendanceCount.setText(String.valueOf(monthSigned));
+        setHomeStats(String.valueOf(classCount), rate + "%", String.valueOf(monthSigned));
     }
 
     private void syncStudentSubmissionsFromApi(long studentId, Runnable next) {
@@ -423,35 +411,31 @@ public class HomeFragment extends Fragment {
         }
     }
 
-    private void updateLabel(View card, String text) {
-        if (card instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) card;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                View child = vg.getChildAt(i);
-                if (child instanceof ViewGroup) {
-                    updateLabel(child, text);
-                } else if (child instanceof TextView) {
-                    TextView tv = (TextView) child;
-                    if (!tv.getText().toString().matches("\\d+.*")) {
-                        tv.setText(text);
-                    }
-                }
-            }
-        }
+    private void setTeacherHomeLabels() {
+        statOneLabel = "班级数量";
+        statTwoLabel = "学生数量";
+        statThreeLabel = "进行中任务";
+        renderHomeStats();
     }
 
-    private void findAndSetText(ViewGroup vg, String text) {
-        for (int i = 0; i < vg.getChildCount(); i++) {
-            View child = vg.getChildAt(i);
-            if (child instanceof TextView) {
-                TextView tv = (TextView) child;
-                if ("考勤记录".equals(tv.getText().toString())) {
-                    tv.setText(text);
-                }
-            } else if (child instanceof ViewGroup) {
-                findAndSetText((ViewGroup) child, text);
-            }
-        }
+    private void setHomeStats(String one, String two, String three) {
+        statOneValue = one == null ? "0" : one;
+        statTwoValue = two == null ? "0" : two;
+        statThreeValue = three == null ? "0" : three;
+        renderHomeStats();
+    }
+
+    private void renderHomeStats() {
+        if (composeHomeStats == null) return;
+        HomeStatsComposeBinder.bind(
+                composeHomeStats,
+                statOneValue,
+                statOneLabel,
+                statTwoValue,
+                statTwoLabel,
+                statThreeValue,
+                statThreeLabel
+        );
     }
 
     @Override

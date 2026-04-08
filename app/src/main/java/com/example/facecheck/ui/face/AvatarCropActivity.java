@@ -67,8 +67,11 @@ public class AvatarCropActivity extends AppCompatActivity {
         }
         cropImageView.setImageBitmap(sourceBitmap);
 
+        String finalCropScene1 = cropScene;
         cropImageView.post(() -> {
-            int size = (int) (Math.min(cropImageView.getWidth(), cropImageView.getHeight()) * 0.72f);
+            // 签到附件通常来自多种比例图片，默认裁剪框略小，便于在长图里拖拽取景。
+            float sizeFactor = CROP_SCENE_CHECKIN.equalsIgnoreCase(finalCropScene1) ? 0.62f : 0.72f;
+            int size = (int) (Math.min(cropImageView.getWidth(), cropImageView.getHeight()) * sizeFactor);
             overlayView.setCropSize(size);
         });
 
