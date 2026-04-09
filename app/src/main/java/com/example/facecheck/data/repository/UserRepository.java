@@ -65,6 +65,16 @@ public class UserRepository {
             public void onResponse(Call<TeacherLoginResponse> call, Response<TeacherLoginResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
                     TeacherLoginResponse.TeacherData data = response.body().getData();
+                    Teacher teacher = new Teacher(
+                        data.getId(),
+                        data.getName(),
+                        data.getUsername(),
+                        "", // 登录响应不返回密码，本地仅用于资料展示与缓存
+                        data.getAvatarUri(),
+                        System.currentTimeMillis(),
+                        System.currentTimeMillis()
+                    );
+                    databaseHelper.addOrUpdateTeacher(teacher);
                     UserLoginResult result = new UserLoginResult(
                         data.getId(),
                         data.getRole(),
@@ -112,7 +122,7 @@ public class UserRepository {
                         data.getRole(),
                         data.getSid(), // Using sid as username for consistency
                         data.getName(),
-                       null, // Student avatar  is not in this response
+                        data.getAvatarUri(),
                         data.getAccessToken(),
                         data.getRefreshToken()
                     );
