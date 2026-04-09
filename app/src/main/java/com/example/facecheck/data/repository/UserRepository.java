@@ -12,6 +12,7 @@ import com.example.facecheck.api.StudentLoginResponse;
 import com.example.facecheck.api.TeacherLoginRequest;
 import com.example.facecheck.api.TeacherLoginResponse;
 import com.example.facecheck.api.TeacherRegisterRequest;
+import com.example.facecheck.data.model.Student;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.data.model.Teacher;
 import com.example.facecheck.utils.SessionManager;
@@ -93,12 +94,25 @@ public class UserRepository {
             public void onResponse(Call<StudentLoginResponse> call, Response<StudentLoginResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
                     StudentLoginResponse.StudentData data = response.body().getData();
+
+                    // 登录成功后把学生基本信息写入本地数据库
+                    Student student = new Student(
+                            data.getId(),
+                            data.getClassId(),
+                            data.getName(),
+                            data.getSid(),
+                            null,   // gender
+                            data.getAvatarUri(),   // avatarUri
+                            null    // createdAt
+                    );
+                    databaseHelper.insertOrUpdateStudent(student);
+
                     UserLoginResult result = new UserLoginResult(
                         data.getId(),
                         data.getRole(),
                         data.getSid(), // Using sid as username for consistency
                         data.getName(),
-                        null, // Student avatar is not in this response
+                       null, // Student avatar  is not in this response
                         data.getAccessToken(),
                         data.getRefreshToken()
                     );

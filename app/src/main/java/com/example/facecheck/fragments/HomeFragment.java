@@ -163,6 +163,9 @@ public class HomeFragment extends Fragment {
         long teacherId = sessionManager.getTeacherId();
         long studentId = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getLong("student_id", -1);
 
+//        // 加这两行显示报错
+//        Toast.makeText(getContext(), "role=" + role + " studentId=" + studentId, Toast.LENGTH_LONG).show();
+
         if ("student".equals(role)) {
             updateStudentHomeUI();
             // P0: 先本地秒开，再后台增量刷新，避免首页首屏等待远端返回。
@@ -195,6 +198,7 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onError(String message) {
                     if (!isAdded()) return;
+//                    Toast.makeText(getContext(), "详细错误: " + message, Toast.LENGTH_LONG).show(); // 改这里
                     loadStudentStatistics(studentId);
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 }
@@ -474,6 +478,17 @@ public class HomeFragment extends Fragment {
 
     private void syncDatabase() {
         View overlay = showUploadingOverlayWithTimeout();
+
+        String role = requireActivity()
+                .getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+                .getString("user_role", "teacher");
+
+        if ("student".equals(role)) {
+            loadStatistics(true);
+            dismissUploadingOverlay(overlay);
+            return;
+        }
+
         long teacherId = sessionManager.getTeacherId();
         if (teacherId == -1) {
             Toast.makeText(getContext(), "请先登录", Toast.LENGTH_SHORT).show();

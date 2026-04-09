@@ -38,8 +38,13 @@ public class SessionManager {
      * 检查用户是否已登录（这里仅检查教师）
      * @return true if a teacher is logged in, false otherwise.
      */
+    // 改为
     public boolean isLoggedIn() {
-        return getTeacherId() != -1; // We don't need to check API Key for login status
+        String role = preferences.getString("user_role", "");
+        if ("student".equals(role)) {
+            return preferences.getLong("student_id", -1L) != -1L;
+        }
+        return getTeacherId() != -1;
     }
 
     /**

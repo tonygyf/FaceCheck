@@ -40,7 +40,12 @@ public class StudentLoginResponse {
 
         @SerializedName("refreshToken")
         private String refreshToken;
+        @SerializedName("avatarUri")
+        private String avatarUri;
 
+        public String getAvatarUri() {
+            return avatarUri;
+        }
         // Getters for all fields
         public long getId() {
             return id;
