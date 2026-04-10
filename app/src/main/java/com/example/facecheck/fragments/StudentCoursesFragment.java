@@ -439,7 +439,11 @@ public class StudentCoursesFragment extends Fragment {
                 lp.setMargins(0, lp.topMargin, 0, lp.bottomMargin);
                 card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), R.color.surface));
                 holder.tvStatus.setText(resolveSubmissionText(item.submission));
-                holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_blue_dark));
+                if ("REJECTED".equalsIgnoreCase(item.submission.finalResult)) {
+                    holder.tvStatus.setTextColor(android.graphics.Color.parseColor("#F44336")); // 红色字体
+                } else {
+                    holder.tvStatus.setTextColor(holder.itemView.getContext().getColor(android.R.color.holo_blue_dark));
+                }
                 holder.btnSignIn.setText("查看");
                 holder.btnSignIn.setVisibility(View.VISIBLE);
                 holder.btnSignIn.setOnClickListener(v -> showSubmitBottomSheet(item, true));
@@ -566,9 +570,24 @@ public class StudentCoursesFragment extends Fragment {
             return submission.reason == null || submission.reason.isEmpty() ? "待审核" : "待审核：" + submission.reason;
         }
         if ("REJECTED".equalsIgnoreCase(submission.finalResult)) {
-            return submission.reason == null || submission.reason.isEmpty() ? "未通过，可申诉" : "未通过：" + submission.reason;
+            String translatedReason = translateRejectReason(submission.reason);
+            return translatedReason == null || translatedReason.isEmpty() ? "未通过，可申诉" : "未通过：" + translatedReason;
         }
         return "已提交";
+    }
+
+    private String translateRejectReason(String reason) {
+        if (reason == null) return "";
+        String r = reason.trim();
+        if (r.contains("Gesture mismatch")) return "手势错误";
+        if (r.contains("Password mismatch")) return "密码错误";
+        if (r.contains("Location out of range")) return "不在签到范围内";
+        if (r.contains("Face verification failed") || r.contains("No face detected")) return "人脸校验失败";
+        if (r.contains("Location information missing")) return "未获取到定位";
+        if (r.length() > 15) {
+            return r.substring(0, 15) + "...";
+        }
+        return r;
     }
 
     private void showSubmitBottomSheet(SessionItem item, boolean readonly) {
@@ -640,6 +659,11 @@ public class StudentCoursesFragment extends Fragment {
 
             tvTitle.setText(item.title == null || item.title.isEmpty() ? "签到任务" : item.title);
             tvTaskStatus.setText(item.submission == null ? "待签到" : resolveSubmissionText(item.submission));
+            if (item.submission != null && "REJECTED".equalsIgnoreCase(item.submission.finalResult)) {
+                tvTaskStatus.setTextColor(android.graphics.Color.parseColor("#F44336")); // 红色字体
+            } else {
+                tvTaskStatus.setTextColor(getResources().getColor(R.color.text_secondary, null));
+            }
             tvMethodHint.setText(resolveMethodHint(item));
             cardLocationRequired.setVisibility(item.requiresLocation() ? View.VISIBLE : View.GONE);
             if (item.requiresLocation() && item.locationRadiusM != null) {

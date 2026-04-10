@@ -400,7 +400,17 @@ public class HomeFragment extends Fragment {
         // 切换到班级管理页面
         if (getActivity() != null && getActivity() instanceof MainActivity) {
             MainActivity mainActivity = (MainActivity) getActivity();
-            mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_classroom);
+            String role = requireActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getString("user_role", "teacher");
+            if ("student".equals(role)) {
+                // 学生端跳转到学生班级列表
+                mainActivity.getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, new StudentCoursesFragment())
+                        .addToBackStack(null)
+                        .commit();
+                // 由于学生没有底部导航对应的班级tab，保持当前选中的tab或者置空
+            } else {
+                mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_classroom);
+            }
         }
     }
 
@@ -413,7 +423,16 @@ public class HomeFragment extends Fragment {
         // 切换到考勤管理页面
         if (getActivity() != null && getActivity() instanceof MainActivity) {
             MainActivity mainActivity = (MainActivity) getActivity();
-            mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_attendance);
+            String role = requireActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getString("user_role", "teacher");
+            if ("student".equals(role)) {
+                // 学生端跳转到考勤(班级列表/考勤签到页)
+                mainActivity.getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, new StudentCoursesFragment())
+                        .addToBackStack(null)
+                        .commit();
+            } else {
+                mainActivity.getBottomNavigationView().setSelectedItemId(R.id.nav_attendance);
+            }
         }
     }
 
