@@ -101,11 +101,7 @@ dependencies {
 
     implementation("com.airbnb.android:lottie:6.4.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
-//    人脸依赖库即将剔除，全部迁移到网页端
-    implementation("com.google.mlkit:face-detection:16.1.6")
-    implementation("org.tensorflow:tensorflow-lite:2.12.0")
-    // 如果模型能跑，建议尝试注释掉下面这一行来进一步减小体积
-    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0")
+    // Face embedding/detection local stacks removed; recognition is server-side
 
 
 

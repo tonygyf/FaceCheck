@@ -2,6 +2,4 @@
 -dontwarn org.xmlpull.v1.**
 -keep class org.xmlpull.v1.** { *; }
 
-# 防止机器学习库的代码被误删
--keep class org.tensorflow.lite.** { *; }
--keep class com.google.mlkit.** { *; }
+# 本地检测相关库已移除

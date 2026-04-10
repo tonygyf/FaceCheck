@@ -67,7 +67,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView tvStatus;
     private Spinner spinnerModel;
-    // 移除检测下拉栏，固定使用 ML Kit 进行检测
+    // 移除检测下拉栏，固定使用本地兜底框选进行检测
 
     // 模型选择相关：仅保留 MobileFaceNet（FaceNet 已删除）
     private String[] modelOptions = {
@@ -154,7 +154,7 @@ public class AttendanceActivity extends AppCompatActivity {
             }
         });
 
-        // 检测模型固定为 ML Kit，不再提供选择下拉栏
+        // 检测模型固定为本地兜底框选，不再提供选择下拉栏
 
         btnTakePhoto.setOnClickListener(v -> checkCameraPermissionAndTakePhoto());
         btnPickImage.setOnClickListener(v -> pickImageFromGallery());
@@ -477,9 +477,9 @@ public class AttendanceActivity extends AppCompatActivity {
         // 显示进度条
         progressBar.setVisibility(View.VISIBLE);
         btnStartRecognition.setEnabled(false);
-        // 固定使用 ML Kit 进行人脸位置检测（不再展示检测选项）
+        // 固定使用本地兜底框选进行人脸位置检测（不再展示检测选项）
         tvStatus.setText("正在识别 - 模型: " + selectedModel);
-        performMLKitFaceDetection();
+        performFaceDetection();
     }
 
     // 删除：YuNet 检测 + MobileFaceNet 嵌入识别流程（已废弃）
@@ -491,10 +491,10 @@ public class AttendanceActivity extends AppCompatActivity {
                 .setTitle(modelName + " 模型未找到")
                 .setMessage(msg)
                 .setPositiveButton("我知道了", (d, w) -> d.dismiss())
-                .setNegativeButton("改用 ML Kit", (d, w) -> {
+                .setNegativeButton("继续", (d, w) -> {
                     d.dismiss();
                     selectedModel = "MobileFaceNet";
-                    performMLKitFaceDetection();
+                    performFaceDetection();
                 })
                 .show();
     }
@@ -544,12 +544,12 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     /**
-     * 使用Google ML Kit进行人脸检测
+     * 使用本地兜底框选进行人脸检测
      */
-    private void performMLKitFaceDetection() {
+    private void performFaceDetection() {
         faceDetectionManager.detectFacesFromUri(currentPhotoUri, new FaceDetectionManager.FaceDetectionCallback() {
             @Override
-            public void onSuccess(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps) {
+            public void onSuccess(List<Rect> faces, List<Bitmap> faceBitmaps) {
                 runOnUiThread(() -> {
                     if (faces.isEmpty()) {
                         progressBar.setVisibility(View.GONE);
@@ -589,188 +589,24 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     /**
-     * 使用 YuNet(TFLite) 进行人脸检测，并走统一嵌入与比对流程
+     * 旧本地检测流程占位（已停用）
      */
     private void performYuNetFaceDetection(boolean singlePrecision) {
-        new Thread(() -> {
-            try {
-                Bitmap src = originalOrientedBitmap;
-                if (src == null) {
-                    src = ImageUtils.loadAndResizeBitmap(AttendanceActivity.this, currentPhotoUri, 1600, 1600);
-                    originalOrientedBitmap = src;
-                }
-                if (src == null) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        btnStartRecognition.setEnabled(true);
-                        tvStatus.setText("图片加载失败");
-                    });
-                    return;
-                }
-
-                // 资产检查
-                final String assetPath = singlePrecision ? "models/yunet_fp32_single.tflite"
-                        : "models/yunet_fp16_multi.tflite";
-                if (!assetExists(assetPath)) {
-                    runOnUiThread(() -> showMissingModelDialog("YuNet TFLite", assetPath));
-                    return;
-                }
-
-                YuNetTFLiteDetector.ModelVariant variant = singlePrecision
-                        ? YuNetTFLiteDetector.ModelVariant.SINGLE_FACE
-                        : YuNetTFLiteDetector.ModelVariant.MULTI_FACE;
-                YuNetTFLiteDetector detector = new YuNetTFLiteDetector(AttendanceActivity.this, 320, 0.6f, 0.5f,
-                        variant);
-                List<Rect> rects = detector.detect(src);
-
-                if (rects == null || rects.isEmpty()) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        btnStartRecognition.setEnabled(true);
-                        tvStatus.setText("未检测到人脸(YuNet)");
-                        Toast.makeText(AttendanceActivity.this, "未检测到人脸(YuNet)", Toast.LENGTH_SHORT).show();
-                    });
-                    return;
-                }
-
-                // 生成分割位图并保存临时文件
-                List<Bitmap> faceBitmaps = new ArrayList<>();
-                List<String> facePaths = new ArrayList<>();
-                for (int i = 0; i < rects.size(); i++) {
-                    Rect r = rects.get(i);
-                    Bitmap fb = cropFaceWithMargin(src, r, 0.25f);
-                    if (fb != null) {
-                        faceBitmaps.add(fb);
-                        String p = imageStorageManager.saveTempImage(fb, "yunet_face_" + sessionId + "_" + i + ".jpg");
-                        if (p != null)
-                            facePaths.add(p);
-                    }
-                }
-
-                runOnUiThread(() -> {
-                    // 简化版分割结果提示
-                    showFaceSegmentationResultsSimple(rects.size(), faceBitmaps, facePaths);
-                    tvStatus.setText("检测到 " + rects.size() + " 个人脸(YuNet)，正在提取向量...");
-                });
-
-                // 提取嵌入向量
-                List<float[]> embeddings = new ArrayList<>();
-                for (Rect r : rects) {
-                    float[] vec = faceRecognitionManager.extractFaceFeatures(src, r);
-                    if (vec != null)
-                        embeddings.add(vec);
-                }
-
-                if (embeddings.isEmpty()) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        btnStartRecognition.setEnabled(true);
-                        tvStatus.setText("向量提取失败(YuNet)");
-                        Toast.makeText(AttendanceActivity.this, "向量提取失败(YuNet)", Toast.LENGTH_SHORT).show();
-                    });
-                    return;
-                }
-
-                runOnUiThread(() -> {
-                    tvStatus.setText("已生成向量(YuNet)，待确认后继续比对");
-                    showEmbeddingsDialog(embeddings, () -> {
-                        if (isImportedPhoto && rects.size() > 1) {
-                            new Thread(() -> {
-                                persistAttendanceResultsAllPresent(sessionId);
-                                runOnUiThread(() -> {
-                                    tvStatus.setText("识别完成 - 检测到 " + rects.size() + " 个人脸");
-                                    openAttendanceResult(rects.size(), rects.size(),
-                                            new ArrayList<>(), true);
-                                });
-                            }).start();
-                            return;
-                        }
-                        new Thread(() -> {
-                            try {
-                                List<FaceRecognitionManager.RecognitionResult> results = faceRecognitionManager
-                                        .recognizeImportedVectorsWithinClass(embeddings, classroomId);
-
-                                persistAttendanceResultsForSession(sessionId, embeddings, results);
-
-                                int recognizedCountTmp = 0;
-                                List<String> recognizedNamesTmp = new ArrayList<>();
-                                for (FaceRecognitionManager.RecognitionResult r : results) {
-                                    if (r.isSuccess()) {
-                                        recognizedCountTmp++;
-                                        recognizedNamesTmp.add(getStudentNameById(r.getStudentId()));
-                                    }
-                                }
-
-                                final int finalRecognizedCount = recognizedCountTmp;
-                                final ArrayList<String> finalRecognizedNames = new ArrayList<>(recognizedNamesTmp);
-
-                                runOnUiThread(() -> {
-                                    tvStatus.setText("识别完成 - 模型: " + selectedModel +
-                                            "；检测到 " + rects.size() + " 个人脸，识别出 " + finalRecognizedCount + " 个学生");
-
-                                    openAttendanceResult(rects.size(), finalRecognizedCount,
-                                            finalRecognizedNames, false);
-                                });
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                runOnUiThread(() -> {
-                                    progressBar.setVisibility(View.GONE);
-                                    btnStartRecognition.setEnabled(true);
-                                    tvStatus.setText("识别失败(YuNet)");
-                                    Toast.makeText(this, "识别失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                });
-                            }
-                        }).start();
-                    });
-                });
-            } catch (Throwable t) {
-                t.printStackTrace();
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    btnStartRecognition.setEnabled(true);
-                    tvStatus.setText("YuNet 检测异常");
-                    Toast.makeText(this, "YuNet 检测异常: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-        }).start();
+        Log.w(TAG, "Local face inference removed. Starting face check using server endpoint.");
     }
 
     /**
      * 处理检测到的人脸
      */
-    private void processDetectedFaces(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+    private void processDetectedFaces(List<Rect> faces, List<Bitmap> faceBitmaps,
             List<String> faceImagePaths) {
-        // 对每个人脸进行标准化处理
-        for (int i = 0; i < faceBitmaps.size(); i++) {
-            Bitmap faceBitmap = faceBitmaps.get(i);
-
-            // 标准化人脸图像到224x224
-            Bitmap normalizedFace = FaceImageProcessor.normalizeFaceImage(faceBitmap, 224);
-
-            // 检查图像质量
-            float quality = FaceImageProcessor.calculateImageQuality(normalizedFace);
-            if (quality < 0.6f) {
-                // 质量较差的人脸，进行增强处理
-                normalizedFace = FaceImageProcessor.enhanceImage(normalizedFace, 1.2f, 10f);
-
-                // 保存增强后的图像用于后续对比
-                String enhancedImagePath = imageStorageManager.saveTempImage(normalizedFace,
-                        "enhanced_face_" + sessionId + "_" + i + ".jpg");
-
-                if (enhancedImagePath != null) {
-                    Log.d(TAG, "Enhanced face image saved: " + enhancedImagePath);
-                }
-            }
-
-            // 更新faceBitmaps中的图像
-            faceBitmaps.set(i, normalizedFace);
-        }
+        // Local FaceImageProcessor removed
     }
 
     /**
      * 执行人脸识别比对
      */
-    private void performFaceRecognition(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+    private void performFaceRecognition(List<Rect> faces, List<Bitmap> faceBitmaps,
             List<String> faceImagePaths) {
         new Thread(() -> {
             try {
@@ -1010,7 +846,7 @@ public class AttendanceActivity extends AppCompatActivity {
     /**
      * 显示人脸分割结果
      */
-    private void showFaceSegmentationResults(List<com.google.mlkit.vision.face.Face> faces, List<Bitmap> faceBitmaps,
+    private void showFaceSegmentationResults(List<Rect> faces, List<Bitmap> faceBitmaps,
             List<String> faceImagePaths) {
         // 创建对话框显示分割结果
         AlertDialog.Builder builder = new AlertDialog.Builder(this);

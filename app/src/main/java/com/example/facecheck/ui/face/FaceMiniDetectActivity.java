@@ -24,8 +24,6 @@ import com.example.facecheck.adapter.FaceSegmentationAdapter;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.ImageStorageManager;
 import com.example.facecheck.utils.PhotoStorageManager;
-import com.example.facecheck.utils.RetinaFaceTFLiteDetector;
-import com.example.facecheck.utils.YuNetTFLiteDetector;
 
 import java.io.File;
 import java.io.IOException;
@@ -154,38 +152,10 @@ public class FaceMiniDetectActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 Bitmap bitmap = com.example.facecheck.utils.ImageUtils.loadAndResizeBitmap(FaceMiniDetectActivity.this, uri, 1600, 1600);
-                List<Rect> rects = null;
-                try {
-                    RetinaFaceTFLiteDetector det = new RetinaFaceTFLiteDetector(FaceMiniDetectActivity.this, RetinaFaceTFLiteDetector.Precision.F16);
-                    rects = det.detect(bitmap);
-                } catch (Throwable ignore) {}
-                if (rects == null || rects.isEmpty()) {
-                    YuNetTFLiteDetector y = new YuNetTFLiteDetector(FaceMiniDetectActivity.this);
-                    rects = y.detect(bitmap);
-                }
-                if (rects == null || rects.isEmpty()) {
-                    runOnUiThread(() -> {
-                        progress.setVisibility(View.GONE);
-                        tvStatus.setText("未检测到人脸");
-                        Toast.makeText(FaceMiniDetectActivity.this, "未检测到人脸", Toast.LENGTH_SHORT).show();
-                    });
-                    return;
-                }
-                List<String> paths = new ArrayList<>();
-                for (int i = 0; i < rects.size(); i++) {
-                    Rect r = rects.get(i);
-                    Bitmap fb = crop(bitmap, r, 0.25f);
-                    if (fb != null) {
-                        String p = imageStorageManager.saveTempImage(fb, "retina_face_" + i);
-                        if (p != null) paths.add(p);
-                    }
-                }
+                // Local inference removed
                 runOnUiThread(() -> {
-                    facePaths.clear();
-                    facePaths.addAll(paths);
-                    adapter.notifyDataSetChanged();
+                    tvStatus.setText("本地推理已移除，请走后端识别链路");
                     progress.setVisibility(View.GONE);
-                    tvStatus.setText("检测到 " + paths.size() + " 个人脸");
                 });
             } catch (Throwable t) {
                 runOnUiThread(() -> {

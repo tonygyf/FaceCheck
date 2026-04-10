@@ -17,9 +17,9 @@ import com.example.facecheck.R;
 import com.example.facecheck.utils.FaceDetectionManager;
 import com.example.facecheck.utils.FaceRecognitionManager;
 import com.example.facecheck.utils.ImageUtils;
-import com.google.mlkit.vision.face.Face;
 
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 
 import java.util.List;
 
@@ -75,13 +75,13 @@ public class VerifyFeatureConsistencyActivity extends AppCompatActivity {
             // 先进行一次人脸检测，获取 Face 对象与其在原图上的坐标
             detectionManager.detectFacesFromUri(imageUri, new FaceDetectionManager.FaceDetectionCallback() {
                 @Override
-                public void onSuccess(List<Face> faces, List<Bitmap> faceBitmaps) {
+                public void onSuccess(List<Rect> faces, List<Bitmap> faceBitmaps) {
                     if (faces == null || faces.isEmpty()) {
                         runOnUiThread(() -> tvResult.setText("未检测到人脸，请换一张图片"));
                         return;
                     }
 
-                    Face face = faces.get(0); // 取第一张人脸
+                    Rect face = faces.get(0); // 取第一张人脸框
 
                     // 使用同一张原图 orientedBitmap + 同一个 Face 对象，连续两次提取
                     float[] f1 = recognitionManager.extractFaceFeatures(orientedBitmap, face);

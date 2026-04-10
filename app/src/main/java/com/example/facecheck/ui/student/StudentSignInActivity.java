@@ -29,7 +29,6 @@ import com.example.facecheck.R;
 import com.example.facecheck.database.DatabaseHelper;
 import com.example.facecheck.utils.FaceDetectionManager;
 import com.example.facecheck.utils.FaceRecognitionManager;
-import com.google.mlkit.vision.face.Face;
 
 import java.io.File;
 import java.io.InputStream;
@@ -206,7 +205,7 @@ public class StudentSignInActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 // 1. 人脸检测
-                List<Face> faces = faceDetectionManager.detectFacesSync(currentBitmap);
+                List<Rect> faces = faceDetectionManager.detectFacesSync(currentBitmap);
 
                 if (faces == null || faces.isEmpty()) {
                     runOnUiThread(() -> {
@@ -228,7 +227,7 @@ public class StudentSignInActivity extends AppCompatActivity {
                     return;
                 }
 
-                Face face = faces.get(0);
+                Rect face = faces.get(0);
 
                 // 2. 人脸验证（1:1 比对）
                 FaceRecognitionManager.RecognitionResult result = faceRecognitionManager

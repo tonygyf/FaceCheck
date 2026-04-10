@@ -7,35 +7,25 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.net.Uri;
-import android.provider.MediaStore;
 import android.util.Log;
 
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.face.Face;
-import com.google.mlkit.vision.face.FaceDetection;
-import com.google.mlkit.vision.face.FaceDetector;
-import com.google.mlkit.vision.face.FaceDetectorOptions;
-
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 人脸检测管理器
- * 使用Google ML Kit进行多人脸检测和分割
+ * 本地检测引擎已移除，当前仅提供基于整图的兜底框选能力。
  */
 public class FaceDetectionManager {
 
     private static final String TAG = "FaceDetectionManager";
-    private final FaceDetector faceDetector;
     private final Context context;
     private final ImageStorageManager storageManager;
 
     // 人脸检测结果回调
     public interface FaceDetectionCallback {
-        void onSuccess(List<Face> faces, List<Bitmap> faceBitmaps);
+        void onSuccess(List<Rect> faces, List<Bitmap> faceBitmaps);
 
         void onFailure(Exception e);
     }
@@ -43,17 +33,6 @@ public class FaceDetectionManager {
     public FaceDetectionManager(Context context) {
         this.context = context;
         this.storageManager = new ImageStorageManager(context);
-
-        // 配置人脸检测器选项
-        FaceDetectorOptions options = new FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-                .enableTracking()
-                .build();
-
-        faceDetector = FaceDetection.getClient(options);
     }
 
     /**
@@ -61,21 +40,14 @@ public class FaceDetectionManager {
      */
     public void detectFacesFromUri(Uri imageUri, FaceDetectionCallback callback) {
         try {
-            // 加载并按EXIF旋转纠正位图，使用较大的目标尺寸以避免过度缩小
             Bitmap orientedBitmap = ImageUtils.loadAndResizeBitmap(context, imageUri, 1600, 1600);
             if (orientedBitmap == null) {
                 callback.onFailure(new IOException("无法加载原始图片用于检测"));
                 return;
             }
-
-            // 使用与裁剪一致的位图进行检测，确保坐标对齐
-            InputImage image = InputImage.fromBitmap(orientedBitmap, 0);
-            faceDetector.process(image)
-                    .addOnSuccessListener(faces -> {
-                        List<Bitmap> faceBitmaps = extractFaceBitmaps(orientedBitmap, faces);
-                        callback.onSuccess(faces, faceBitmaps);
-                    })
-                    .addOnFailureListener(callback::onFailure);
+            List<Rect> faces = detectFacesSync(orientedBitmap);
+            List<Bitmap> faceBitmaps = extractFaceBitmaps(orientedBitmap, faces);
+            callback.onSuccess(faces, faceBitmaps);
         } catch (Exception e) {
             callback.onFailure(e);
         }
@@ -85,57 +57,43 @@ public class FaceDetectionManager {
      * 从Bitmap检测人脸
      */
     public void detectFacesFromBitmap(Bitmap bitmap, FaceDetectionCallback callback) {
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-
-        faceDetector.process(image)
-                .addOnSuccessListener(faces -> {
-                    // 成功检测到人脸
-                    List<Bitmap> faceBitmaps = extractFaceBitmaps(bitmap, faces);
-                    callback.onSuccess(faces, faceBitmaps);
-                })
-                .addOnFailureListener(callback::onFailure);
+        try {
+            List<Rect> faces = detectFacesSync(bitmap);
+            List<Bitmap> faceBitmaps = extractFaceBitmaps(bitmap, faces);
+            callback.onSuccess(faces, faceBitmaps);
+        } catch (Exception e) {
+            callback.onFailure(e);
+        }
     }
 
     /**
      * 同步版人脸检测（阻塞当前线程，需在工作线程调用）
      */
-    public List<Face> detectFacesSync(Bitmap bitmap) {
+    public List<Rect> detectFacesSync(Bitmap bitmap) {
         if (bitmap == null)
-            return null;
-
-        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        final List<Face>[] resultHolder = new List[1];
-
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-        faceDetector.process(image)
-                .addOnSuccessListener(faces -> {
-                    resultHolder[0] = faces;
-                    latch.countDown();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "detectFacesSync failed: " + e.getMessage(), e);
-                    resultHolder[0] = null;
-                    latch.countDown();
-                });
-
-        try {
-            latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Log.e(TAG, "detectFacesSync interrupted", e);
-            return null;
+            return new ArrayList<>();
+        List<Rect> result = new ArrayList<>();
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        if (w <= 0 || h <= 0) {
+            return result;
         }
-
-        return resultHolder[0];
+        // 无本地检测时，默认返回整图中心区域作为单人脸兜底框。
+        int bw = (int) (w * 0.7f);
+        int bh = (int) (h * 0.7f);
+        int left = (w - bw) / 2;
+        int top = (h - bh) / 2;
+        result.add(new Rect(left, top, left + bw, top + bh));
+        return result;
     }
 
     /**
      * 从人脸区域提取单个人脸Bitmap
      */
-    private List<Bitmap> extractFaceBitmaps(Bitmap originalBitmap, List<Face> faces) {
+    private List<Bitmap> extractFaceBitmaps(Bitmap originalBitmap, List<Rect> faces) {
         List<Bitmap> faceBitmaps = new ArrayList<>();
 
-        for (Face face : faces) {
-            Rect bounds = face.getBoundingBox();
+        for (Rect bounds : faces) {
 
             // 确保边界在图片范围内
             int left = Math.max(0, bounds.left);
@@ -175,7 +133,7 @@ public class FaceDetectionManager {
     /**
      * 在Bitmap上绘制人脸边界框
      */
-    public Bitmap drawFaceBounds(Bitmap bitmap, List<Face> faces) {
+    public Bitmap drawFaceBounds(Bitmap bitmap, List<Rect> faces) {
         Bitmap mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
         Canvas canvas = new Canvas(mutableBitmap);
         Paint paint = new Paint();
@@ -190,8 +148,7 @@ public class FaceDetectionManager {
         textPaint.setStyle(Paint.Style.FILL);
 
         int faceIndex = 1;
-        for (Face face : faces) {
-            Rect bounds = face.getBoundingBox();
+        for (Rect bounds : faces) {
             canvas.drawRect(bounds, paint);
 
             // 绘制人脸编号
@@ -259,6 +216,6 @@ public class FaceDetectionManager {
      * 清理释放资源
      */
     public void cleanup() {
-        faceDetector.close();
+        Log.i(TAG, "cleanup: no-op after local detector removal");
     }
 }

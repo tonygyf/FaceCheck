@@ -2,23 +2,17 @@ package com.example.facecheck.fragments;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.Toast;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 import androidx.compose.ui.platform.ComposeView;
-import androidx.appcompat.widget.TooltipCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.facecheck.R;
@@ -29,9 +23,6 @@ import com.example.facecheck.api.MySubmissionsResponse;
 import com.example.facecheck.api.RetrofitClient;
 import com.example.facecheck.ui.classroom.ClassroomSelectionActivity;
 import com.example.facecheck.ui.attendance.AttendanceActivity;
-import com.example.facecheck.activity.FaceCorrectionActivity;
-import com.example.facecheck.ui.face.FaceEnhancementActivity;
-import com.example.facecheck.ui.verify.VerifyFeatureConsistencyActivity;
 import com.example.facecheck.ui.home.HomeStatsComposeBinder;
 import com.example.facecheck.utils.SessionManager;
 import com.example.facecheck.data.repository.ClassroomRepository; // Add this import
@@ -41,6 +32,9 @@ import com.example.facecheck.data.model.Classroom; // Add this import for syncAl
 import com.example.facecheck.utils.RefreshPolicyManager;
 
 import java.util.List; // Add this import
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class HomeFragment extends Fragment {
 
@@ -49,7 +43,6 @@ public class HomeFragment extends Fragment {
     private ClassroomRepository classroomRepository;
     private ApiService apiService;
     private ComposeView composeHomeStats;
-    private Button btnSync;
     private SwipeRefreshLayout swipeRefreshLayout;
     private String statOneLabel = "班级数量";
     private String statTwoLabel = "学生数量";
@@ -57,30 +50,8 @@ public class HomeFragment extends Fragment {
     private String statOneValue = "0";
     private String statTwoValue = "0";
     private String statThreeValue = "0";
-    private static final int PICK_IMAGE_REQUEST = 1001;
-    private android.widget.ImageView bannerImage;
-    private final int[] bannerRes = new int[] {
-            R.drawable.logo_bright,
-            R.drawable.facecheck,
-            R.drawable.fclogo
-    };
-    private int bannerIndex = 0;
-    private final android.os.Handler bannerHandler = new android.os.Handler();
-    private final Runnable bannerRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (getContext() != null && bannerImage != null) {
-                try {
-                    com.bumptech.glide.Glide.with(HomeFragment.this)
-                            .load(bannerRes[bannerIndex % bannerRes.length])
-                            .into(bannerImage);
-                    bannerIndex++;
-                } catch (Throwable ignore) {
-                }
-                bannerHandler.postDelayed(this, 4000);
-            }
-        }
-    };
+    private String roleLabel = "教师首页";
+    private String syncHint = "下拉或点击同步按钮刷新最新数据";
 
     @Nullable
     @Override
@@ -95,53 +66,16 @@ public class HomeFragment extends Fragment {
         apiService = RetrofitClient.getApiService();
 
         // 初始化视图
-        bannerImage = view.findViewById(R.id.bannerImage);
         composeHomeStats = view.findViewById(R.id.compose_home_stats);
         renderHomeStats();
 
-        btnSync = view.findViewById(R.id.btn_sync);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_home);
         if (swipeRefreshLayout != null) {
             swipeRefreshLayout.setOnRefreshListener(() -> loadStatistics(true));
         }
 
-        // 人脸修复增强入口
-        CardView cardFaceEnhancement = view.findViewById(R.id.card_face_enhancement);
-        if (cardFaceEnhancement != null) {
-            cardFaceEnhancement.setOnClickListener(v -> {
-                Intent intent = new Intent(getActivity(), FaceEnhancementActivity.class);
-                startActivity(intent);
-            });
-        }
-
-        // 验证特征一致性入口
-        CardView cardVerifyConsistency = view.findViewById(R.id.card_verify_consistency);
-        if (cardVerifyConsistency != null) {
-            cardVerifyConsistency.setOnClickListener(v -> {
-                Intent intent = new Intent(getActivity(), VerifyFeatureConsistencyActivity.class);
-                startActivity(intent);
-            });
-        }
-
-        btnSync.setOnClickListener(v -> syncDatabase());
-
-        // 添加Tooltip提示
-        TooltipCompat.setTooltipText(btnSync, "与云端同步数据");
-
         // 加载统计数据
         loadStatistics(false);
-        if (bannerImage != null) {
-            try {
-                bannerImage.setImageResource(bannerRes[bannerIndex % bannerRes.length]);
-                com.bumptech.glide.Glide.with(HomeFragment.this)
-                        .load(bannerRes[bannerIndex % bannerRes.length])
-                        .into(bannerImage);
-            } catch (Throwable ignore) {
-            }
-            bannerHandler.removeCallbacks(bannerRunnable);
-            bannerHandler.post(bannerRunnable);
-            setupBannerSwipe();
-        }
 
         return view;
     }
@@ -151,10 +85,6 @@ public class HomeFragment extends Fragment {
         super.onResume();
         // 每次恢复时刷新统计数据
         loadStatistics(false);
-        if (bannerImage != null) {
-            bannerHandler.removeCallbacks(bannerRunnable);
-            bannerHandler.post(bannerRunnable);
-        }
     }
 
     private void loadStatistics(boolean forceRefresh) {
@@ -167,6 +97,7 @@ public class HomeFragment extends Fragment {
 //        Toast.makeText(getContext(), "role=" + role + " studentId=" + studentId, Toast.LENGTH_LONG).show();
 
         if ("student".equals(role)) {
+            roleLabel = "学生首页";
             updateStudentHomeUI();
             // P0: 先本地秒开，再后台增量刷新，避免首页首屏等待远端返回。
             loadStudentStatistics(studentId);
@@ -191,6 +122,7 @@ public class HomeFragment extends Fragment {
                         if (!isAdded()) return;
                         loadStudentStatistics(studentId);
                         RefreshPolicyManager.markRefreshed(requireContext(), studentRefreshKey);
+                        markSyncSuccess("学生任务与提交已同步");
                         if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     });
                 }
@@ -200,16 +132,20 @@ public class HomeFragment extends Fragment {
                     if (!isAdded()) return;
 //                    Toast.makeText(getContext(), "详细错误: " + message, Toast.LENGTH_LONG).show(); // 改这里
                     loadStudentStatistics(studentId);
+                    markSyncFailed("学生同步失败，已显示本地统计");
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 }
             });
             return;
         }
 
+        roleLabel = "教师首页";
         setTeacherHomeLabels();
         if (teacherId == -1) {
             // 如果未登录，显示0
             setHomeStats("0", "0", "0");
+            syncHint = "未登录，无法同步";
+            renderHomeStats();
             if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
             return;
         }
@@ -252,6 +188,7 @@ public class HomeFragment extends Fragment {
 
                         setHomeStats(String.valueOf(classCount), String.valueOf(studentCount), String.valueOf(activeCheckinTaskCount));
                         RefreshPolicyManager.markRefreshed(requireContext(), refreshKey);
+                        markSyncSuccess("班级和签到任务已同步");
                         if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     }
 
@@ -262,6 +199,7 @@ public class HomeFragment extends Fragment {
                             Toast.makeText(getContext(), "任务同步失败: " + message, Toast.LENGTH_SHORT).show();
                             // 即使任务同步失败，也尝试用本地数据更新UI
                             updateStatisticsFromLocalDb(teacherId);
+                            markSyncFailed("任务同步失败，已显示本地统计");
                             if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         }
                     }
@@ -275,6 +213,7 @@ public class HomeFragment extends Fragment {
                     // 远程同步失败，从本地数据库获取统计数据并更新UI
                     updateStatisticsFromLocalDb(teacherId);
                     Toast.makeText(getContext(), "同步失败，加载本地数据: " + message, Toast.LENGTH_SHORT).show();
+                    markSyncFailed("远端同步失败，已回退本地数据");
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 }
             }
@@ -438,14 +377,23 @@ public class HomeFragment extends Fragment {
                 statTwoValue,
                 statTwoLabel,
                 statThreeValue,
-                statThreeLabel
+                statThreeLabel,
+                roleLabel,
+                syncHint,
+                this::navigateToClassroom,
+                this::navigateToAttendance,
+                this::syncDatabase
         );
     }
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        bannerHandler.removeCallbacks(bannerRunnable);
+    private void markSyncSuccess(String message) {
+        syncHint = message + " · " + new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        renderHomeStats();
+    }
+
+    private void markSyncFailed(String message) {
+        syncHint = message;
+        renderHomeStats();
     }
 
     private void navigateToClassroom() {
@@ -485,6 +433,7 @@ public class HomeFragment extends Fragment {
 
         if ("student".equals(role)) {
             loadStatistics(true);
+            markSyncSuccess("学生数据已触发刷新");
             dismissUploadingOverlay(overlay);
             return;
         }
@@ -492,6 +441,7 @@ public class HomeFragment extends Fragment {
         long teacherId = sessionManager.getTeacherId();
         if (teacherId == -1) {
             Toast.makeText(getContext(), "请先登录", Toast.LENGTH_SHORT).show();
+            markSyncFailed("请先登录后再同步");
             dismissUploadingOverlay(overlay);
             return;
         }
@@ -507,6 +457,7 @@ public class HomeFragment extends Fragment {
                 }
                 // Refresh UI
                 loadStatistics(true);
+                markSyncSuccess("手动同步完成");
                 Toast.makeText(getContext(), "同步成功", Toast.LENGTH_SHORT).show();
                 dismissUploadingOverlay(overlay);
             }
@@ -514,6 +465,7 @@ public class HomeFragment extends Fragment {
             @Override
             public void onError(String message) {
                 if (getContext() == null) return;
+                markSyncFailed("手动同步失败: " + message);
                 Toast.makeText(getContext(), "同步失败: " + message, Toast.LENGTH_SHORT).show();
                 dismissUploadingOverlay(overlay);
             }
@@ -542,15 +494,6 @@ public class HomeFragment extends Fragment {
     private void deleteAllCheckinTasks() {
         android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
         db.delete("CheckinTask", null, null);
-    }
-
-    /**
-     * 打开图片选择器
-     */
-    private void openImagePicker() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        intent.setType("image/*");
-        startActivityForResult(intent, PICK_IMAGE_REQUEST);
     }
 
     private View showUploadingOverlayWithTimeout() {
@@ -603,74 +546,4 @@ public class HomeFragment extends Fragment {
         root.removeView(overlay);
     }
 
-    @SuppressWarnings("ClickableViewAccessibility")
-    private void setupBannerSwipe() {
-        if (bannerImage == null)
-            return;
-        bannerImage.setOnTouchListener(new View.OnTouchListener() {
-            float downX;
-
-            @Override
-            public boolean onTouch(View v, android.view.MotionEvent event) {
-                switch (event.getAction()) {
-                    case android.view.MotionEvent.ACTION_DOWN:
-                        downX = event.getX();
-                        return true;
-                    case android.view.MotionEvent.ACTION_UP:
-                        float dx = event.getX() - downX;
-                        if (Math.abs(dx) > 50) {
-                            if (dx < 0)
-                                bannerIndex++;
-                            else
-                                bannerIndex = (bannerIndex - 1 + bannerRes.length) % bannerRes.length;
-                            try {
-                                com.bumptech.glide.Glide.with(HomeFragment.this)
-                                        .load(bannerRes[bannerIndex % bannerRes.length])
-                                        .into(bannerImage);
-                            } catch (Throwable ignore) {
-                            }
-                        }
-                        return true;
-                }
-                return false;
-            }
-        });
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == PICK_IMAGE_REQUEST && resultCode == getActivity().RESULT_OK && data != null) {
-            Uri selectedImageUri = data.getData();
-            if (selectedImageUri != null) {
-                // 获取图片的真实路径
-                String imagePath = getRealPathFromURI(selectedImageUri);
-                if (imagePath != null) {
-                    // 跳转到人脸修复界面
-                    Intent intent = new Intent(getActivity(), FaceCorrectionActivity.class);
-                    intent.putExtra("image_path", imagePath);
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(getContext(), "无法获取图片路径", Toast.LENGTH_SHORT).show();
-                }
-            }
-        }
-    }
-
-    /**
-     * 从URI获取真实文件路径
-     */
-    private String getRealPathFromURI(Uri uri) {
-        String[] projection = { MediaStore.Images.Media.DATA };
-        android.database.Cursor cursor = getActivity().getContentResolver().query(uri, projection, null, null, null);
-        if (cursor != null) {
-            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-            cursor.moveToFirst();
-            String path = cursor.getString(column_index);
-            cursor.close();
-            return path;
-        }
-        return null;
-    }
 }
