@@ -281,7 +281,7 @@ public class HomeFragment extends Fragment {
                     "SELECT COUNT(DISTINCT s.taskId) " +
                             "FROM CheckinSubmission s INNER JOIN CheckinTask t ON t.id = s.taskId " +
                             "WHERE s.studentId = ? AND t.classId = ? " +
-                            "AND (s.finalResult = 'APPROVED' OR s.finalResult = 'PENDING_REVIEW')",
+                            "AND s.isLatest = 1 AND s.finalResult = 'APPROVED'",
                 new String[] { String.valueOf(studentId), String.valueOf(classId) });
         if (signedCursor != null && signedCursor.moveToFirst()) {
             signedTasks = signedCursor.getInt(0);
@@ -293,7 +293,7 @@ public class HomeFragment extends Fragment {
                 "SELECT COUNT(DISTINCT s.taskId) " +
                         "FROM CheckinSubmission s INNER JOIN CheckinTask t ON t.id = s.taskId " +
                         "WHERE s.studentId = ? AND t.classId = ? AND s.submittedAt LIKE ? " +
-                        "AND (s.finalResult = 'APPROVED' OR s.finalResult = 'PENDING_REVIEW')",
+                        "AND s.isLatest = 1 AND s.finalResult = 'APPROVED'",
                 new String[] { String.valueOf(studentId), String.valueOf(classId), monthPrefix + "%" });
         if (monthCursor != null && monthCursor.moveToFirst()) {
             monthSigned = monthCursor.getInt(0);

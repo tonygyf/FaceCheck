@@ -7,12 +7,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -27,15 +30,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bumptech.glide.Glide
 import com.example.facecheck.data.model.Student
 import com.example.facecheck.ui.theme.FaceCheckTheme
+import com.example.facecheck.utils.Constants
 import de.hdodenhof.circleimageview.CircleImageView
+import java.io.File
 
 class ClassroomActivity : ComponentActivity() {
     private val studentViewModel: StudentViewModel by viewModels {
@@ -59,6 +66,19 @@ class ClassroomActivity : ComponentActivity() {
         setContent {
             FaceCheckTheme {
                 val students by studentViewModel.students.observeAsState(emptyList())
+                val actionResult by studentViewModel.actionResult.observeAsState()
+                val errorMessage by studentViewModel.errorMessage.observeAsState()
+                LaunchedEffect(actionResult) {
+                    if (actionResult == true) {
+                        Toast.makeText(this@ClassroomActivity, "学生信息已保存", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                LaunchedEffect(errorMessage) {
+                    val message = errorMessage?.trim().orEmpty()
+                    if (message.isNotEmpty()) {
+                        Toast.makeText(this@ClassroomActivity, message, Toast.LENGTH_SHORT).show()
+                    }
+                }
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -73,6 +93,9 @@ class ClassroomActivity : ComponentActivity() {
                 ) { padding ->
                     ClassroomShowcaseContent(
                         students = students,
+                        onUpdateStudent = { studentId, name, sid, gender ->
+                            studentViewModel.updateStudent(studentId, classroomId, name, sid, gender, "")
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding)
@@ -84,8 +107,13 @@ class ClassroomActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ClassroomShowcaseContent(students: List<Student>, modifier: Modifier = Modifier) {
+private fun ClassroomShowcaseContent(
+    students: List<Student>,
+    onUpdateStudent: (studentId: Long, name: String, sid: String, gender: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val stats = remember(students) { buildStats(students) }
+    var selectedStudent by remember { mutableStateOf<Student?>(null) }
     val pageBrush = Brush.verticalGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
@@ -139,10 +167,27 @@ private fun ClassroomShowcaseContent(students: List<Student>, modifier: Modifier
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(students, key = { it.id }) { student ->
-                    StudentShowcaseCard(student = student)
+                    StudentShowcaseCard(
+                        student = student,
+                        onClick = { selectedStudent = student },
+                    )
                 }
             }
         }
+    }
+
+    selectedStudent?.let { student ->
+        StudentDetailDialog(
+            student = student,
+            onDismiss = { selectedStudent = null },
+            onSave = { newName, newSid, newGender ->
+                student.name = newName
+                student.sid = newSid
+                student.gender = newGender
+                onUpdateStudent(student.id, newName, newSid, newGender)
+                selectedStudent = null
+            },
+        )
     }
 }
 
@@ -218,9 +263,11 @@ private fun StatChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text
 }
 
 @Composable
-private fun StudentShowcaseCard(student: Student) {
+private fun StudentShowcaseCard(student: Student, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -281,21 +328,22 @@ private fun PillTag(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StudentAvatar(avatarUri: String?, name: String) {
+private fun StudentAvatar(avatarUri: String?, name: String, size: Dp = 44.dp) {
     val initial = name.trim().take(1).ifEmpty { "?" }
     val seed = (name.hashCode() and 0xFF)
     val hue = seed / 255f
     val fallbackBg = Color.hsv(hue * 360f, 0.25f, 0.95f)
+    val resolvedAvatarModel = remember(avatarUri) { resolveAvatarModel(avatarUri) }
 
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(size)
             .clip(CircleShape)
             .background(fallbackBg)
             .border(1.dp, Color.White.copy(alpha = 0.9f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        if (!avatarUri.isNullOrBlank()) {
+        if (resolvedAvatarModel != null) {
             AndroidView(
                 factory = { context ->
                     CircleImageView(context).apply {
@@ -304,7 +352,7 @@ private fun StudentAvatar(avatarUri: String?, name: String) {
                 },
                 update = { imageView ->
                     Glide.with(imageView.context)
-                        .load(avatarUri)
+                        .load(resolvedAvatarModel)
                         .centerCrop()
                         .into(imageView)
                 },
@@ -318,6 +366,135 @@ private fun StudentAvatar(avatarUri: String?, name: String) {
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+@Composable
+private fun StudentDetailDialog(
+    student: Student,
+    onDismiss: () -> Unit,
+    onSave: (name: String, sid: String, gender: String) -> Unit,
+) {
+    val context = LocalContext.current
+    var isEditing by remember(student.id) { mutableStateOf(false) }
+    var name by remember(student.id) { mutableStateOf(student.name ?: "") }
+    var sid by remember(student.id) { mutableStateOf(student.sid ?: "") }
+    var gender by remember(student.id) { mutableStateOf(student.gender ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isEditing) "编辑学生信息" else "学生详情") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                StudentAvatar(
+                    avatarUri = student.avatarUri,
+                    name = name.ifBlank { student.name ?: "?" },
+                    size = 116.dp,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (isEditing) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("姓名") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = sid,
+                        onValueChange = { sid = it },
+                        label = { Text("学号") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = gender,
+                        onValueChange = { gender = it },
+                        label = { Text("性别") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    StudentDetailInfo(label = "姓名", value = student.name ?: "未填写")
+                    StudentDetailInfo(label = "学号", value = student.sid ?: "未填写")
+                    StudentDetailInfo(label = "性别", value = normalizeGender(student.gender))
+                    StudentDetailInfo(
+                        label = "头像",
+                        value = if (student.avatarUri.isNullOrBlank()) "未上传" else "已上传",
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (isEditing) {
+                TextButton(onClick = {
+                    val trimmedName = name.trim()
+                    val trimmedSid = sid.trim()
+                    val trimmedGender = gender.trim().ifEmpty { "未知" }
+                    if (trimmedName.isEmpty() || trimmedSid.isEmpty()) {
+                        Toast.makeText(context, "姓名和学号不能为空", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onSave(trimmedName, trimmedSid, trimmedGender)
+                    }
+                }) {
+                    Text("保存")
+                }
+            } else {
+                TextButton(onClick = { isEditing = true }) {
+                    Text("编辑")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
+}
+
+@Composable
+private fun StudentDetailInfo(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+private fun resolveAvatarModel(avatarUri: String?): Any? {
+    val raw = avatarUri?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    return when {
+        raw.startsWith("http://", ignoreCase = true) -> raw
+        raw.startsWith("https://", ignoreCase = true) -> raw
+        raw.startsWith("file://", ignoreCase = true) -> raw
+        raw.startsWith("content://", ignoreCase = true) -> raw
+        raw.startsWith("/") -> File(raw)
+        else -> Constants.CDN_BASE_URL + raw.trimStart('/')
     }
 }
 

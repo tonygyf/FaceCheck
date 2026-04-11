@@ -438,7 +438,7 @@ public class StudentCoursesFragment extends Fragment {
             if (item.submission != null) {
                 lp.setMargins(0, lp.topMargin, 0, lp.bottomMargin);
                 card.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(holder.itemView.getContext(), R.color.surface));
-                holder.tvStatus.setText(resolveSubmissionText(item.submission));
+                holder.tvStatus.setText(truncateSessionStatusText(resolveSubmissionText(item.submission)));
                 if ("REJECTED".equalsIgnoreCase(item.submission.finalResult)) {
                     holder.tvStatus.setTextColor(android.graphics.Color.parseColor("#F44336")); // 红色字体
                 } else {
@@ -567,13 +567,23 @@ public class StudentCoursesFragment extends Fragment {
             return "已通过";
         }
         if ("PENDING_REVIEW".equalsIgnoreCase(submission.finalResult)) {
-            return submission.reason == null || submission.reason.isEmpty() ? "待审核" : "待审核：" + submission.reason;
+            String reason = translateRejectReason(submission.reason);
+            return reason == null || reason.isEmpty() ? "待审核" : "待审核：" + reason;
         }
         if ("REJECTED".equalsIgnoreCase(submission.finalResult)) {
             String translatedReason = translateRejectReason(submission.reason);
             return translatedReason == null || translatedReason.isEmpty() ? "未通过，可申诉" : "未通过：" + translatedReason;
         }
         return "已提交";
+    }
+
+    private String truncateSessionStatusText(String text) {
+        if (text == null) return "";
+        String value = text.trim();
+        if (value.length() <= 18) {
+            return value;
+        }
+        return value.substring(0, 18) + "...";
     }
 
     private String translateRejectReason(String reason) {
