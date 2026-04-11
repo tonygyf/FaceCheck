@@ -1,5 +1,6 @@
 # 忽略重复的 XML 解析库警告
 -dontwarn org.xmlpull.v1.**
 -keep class org.xmlpull.v1.** { *; }
-
+-keep class com.amap.api.location.** { *; }
+-dontwarn com.amap.api.**
 # 本地检测相关库已移除

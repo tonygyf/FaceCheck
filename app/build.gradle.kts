@@ -108,7 +108,7 @@ dependencies {
 // 高德地图
     implementation("com.amap.api:map2d:6.0.0")
     implementation("com.amap.api:search:9.7.0")
-
+    implementation("com.amap.api:location:6.4.0") // 👈 补这个
 
 
     testImplementation(libs.junit)
