@@ -116,6 +116,36 @@ Cloudflare D1
 - [网络接口规范](.trae/documents/网络接口规范.md)
 - [云端改造整体计划](.trae/documents/FaceCheck 云端改造整体计划.md)
 
+## 🧩 系统总体设计（更新）
+
+### 1) 角色定位（在三仓协同中的职责）
+
+- `FaceCheck`（本仓）负责 Android 端交互、任务执行、离线缓存与同步触发。
+- `omniattend-core` 提供业务 API（鉴权、班级/学生、签到任务、审核、统计、文件上传、模型配置）。
+- `mobilefacenet-server` 提供人脸向量提取能力（`/embed/*`），由后端调用完成模板注册与签到核验。
+
+### 2) Android 端核心数据流
+
+1. 登录：教师走 `auth/login`，学生走 `login/student`，均携带 `X-API-Key`。
+2. 拉取任务：学生端拉取 `checkin/tasks`，并拉取 `checkin/submissions/my` 同步个人最新提交状态。
+3. 本地落库：任务与提交写入 SQLite（`CheckinTask`、`CheckinSubmission`），支持离线查看与重进恢复。
+4. 发起签到：按任务约束收集手势/口令/定位；若启用人脸则先上传附件到 `checkin/photos/upload`。
+5. 提交结果：调用 `checkin/tasks/{id}/submit`，服务端补充人脸核验得分与通过状态。
+6. 状态回显：客户端刷新任务列表，展示 `APPROVED / PENDING_REVIEW / REJECTED` 并支持申诉。
+
+### 3) 本地存储与同步边界
+
+- 本地库作为“运行态缓存 + 弱离线能力”，不作为全局权威数据源。
+- 云端 D1 为最终权威源，客户端通过 API 拉取最新任务和提交结果。
+- 人脸签到附件本地暂存后上传，服务端返回 `photoKey`，客户端保存可访问 URI 用于后续提交。
+
+### 4) 关键实现说明（与当前代码一致）
+
+- 接口入口：`ApiService.BASE_URL = https://omni.gyf123.dpdns.org/api/`
+- 网络层：Retrofit + Gson，统一通过 `RetrofitClient` 创建实例。
+- 学生签到页：`StudentCoursesFragment` 已实现多方式混合签到（定位/手势/口令/人脸）与底部面板提交流程。
+- 数据层：`DatabaseHelper` 当前版本包含 `CheckinTask.faceRequired`、`CheckinTask.faceMinScore`，用于人脸门槛控制。
+
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
