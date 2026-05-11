@@ -20,21 +20,27 @@ android {
 
     }
 
-    // 【关键】分架构打包，将600MB的包拆分成小的APK
+    // 仅生成单一 universal APK（关闭 ABI 分包）
     splits {
         abi {
-            isEnable = true
+            isEnable = false
             reset()
-            include("armeabi-v7a", "arm64-v8a")
             isUniversalApk = false
         }
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
         release {
-            // 【关键】开启混淆和资源压缩，大幅减小体积
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // 让 release 尽量贴近 debug 运行环境，降低“仅 release 闪退”风险
+            initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
